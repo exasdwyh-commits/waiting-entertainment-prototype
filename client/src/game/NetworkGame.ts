@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { io } from "socket.io-client";
 import QRCode from "qrcode";
+import { TABLE_PUSH_GEOMETRY } from "@waiting/shared";
 import type { GameEvent, MatchSnapshot, PlayerSnapshot, PlayerState } from "@waiting/shared";
 import { createCharacterVisual, type CharacterVisual } from "./CharacterVisual";
 import { ImpactFx } from "./ImpactFx";
@@ -111,7 +112,12 @@ export class NetworkGame {
     this.scene.add(key);
 
     const table = new THREE.Mesh(
-      new THREE.CylinderGeometry(6, 6, 0.5, 64),
+      new THREE.CylinderGeometry(
+        TABLE_PUSH_GEOMETRY.arenaRadius,
+        TABLE_PUSH_GEOMETRY.arenaRadius,
+        0.5,
+        72,
+      ),
       new THREE.MeshStandardMaterial({ color: 0xf0b35b, roughness: 0.72 }),
     );
     table.position.y = -0.25;
@@ -119,7 +125,12 @@ export class NetworkGame {
     this.scene.add(table);
 
     const rim = new THREE.Mesh(
-      new THREE.TorusGeometry(5.92, 0.08, 10, 96),
+      new THREE.TorusGeometry(
+        TABLE_PUSH_GEOMETRY.rimRadius,
+        0.1,
+        10,
+        112,
+      ),
       new THREE.MeshStandardMaterial({ color: 0xffdf9b, emissive: 0x3a2200 }),
     );
     rim.rotation.x = Math.PI / 2;
@@ -136,7 +147,7 @@ export class NetworkGame {
 
     addRestaurantEnvironment(this.scene);
 
-    this.camera.position.set(0, 10.5, 11.5);
+    this.camera.position.set(0, 13.4, 15.2);
     this.camera.lookAt(0, 0.2, 0);
   }
 
@@ -631,11 +642,11 @@ export class NetworkGame {
       (cameraSnapshot?.timeLeftMs ?? 60_000) <= 10_000;
 
     const cameraTarget = this.replay?.closeCamera
-      ? new THREE.Vector3(centerX, 7.6, centerZ + 8.2)
+      ? new THREE.Vector3(centerX, 9.2, centerZ + 10.6)
       : new THREE.Vector3(
           centerX,
-          9.2 + spread * 0.32 - (tension ? 0.65 : 0),
-          centerZ + 9.6 + spread * 0.38 - (tension ? 0.8 : 0),
+          10.8 + spread * 0.42 - (tension ? 0.75 : 0),
+          centerZ + 11.8 + spread * 0.46 - (tension ? 0.95 : 0),
         );
 
     this.camera.position.lerp(cameraTarget, this.replay ? 0.075 : 0.045);
