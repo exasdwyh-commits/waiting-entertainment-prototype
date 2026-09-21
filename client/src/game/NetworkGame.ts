@@ -372,7 +372,7 @@ export class NetworkGame {
 
     this.views.set(player.id, view);
 
-    createCharacterVisual(tint, 1.7).then((visual) => {
+    createCharacterVisual(tint, 1.7, index).then((visual) => {
       if (this.views.get(player.id) !== view) return;
       root.clear();
       root.add(visual.root);
