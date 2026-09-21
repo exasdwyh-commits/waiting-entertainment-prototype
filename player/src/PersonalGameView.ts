@@ -33,11 +33,25 @@ export class PersonalGameView {
   private animationFrame = 0;
   private fovKick = 0;
   private hitStopUntil = 0;
+  private maxPixelRatio = 1.5;
+  private minPixelRatio = 0.85;
+  private currentPixelRatio = 1.5;
+  private measuredFps = 60;
+  private frameCounter = 0;
+  private fpsWindowStartedAt = performance.now();
+  private highFpsWindows = 0;
+  private lastWidth = 1;
+  private lastHeight = 1;
 
-  constructor(private readonly container: HTMLElement) {}
+  constructor(private readonly container: HTMLElement) {
+    const deviceRatio = Math.max(1, window.devicePixelRatio || 1);
+    this.maxPixelRatio = Math.min(deviceRatio, 1.5);
+    this.minPixelRatio = Math.min(this.maxPixelRatio, 0.85);
+    this.currentPixelRatio = this.maxPixelRatio;
+  }
 
   start() {
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+    this.renderer.setPixelRatio(this.currentPixelRatio);
     this.renderer.shadowMap.enabled = false;
     this.container.appendChild(this.renderer.domElement);
 
@@ -113,6 +127,8 @@ export class PersonalGameView {
     const resize = () => {
       const width = Math.max(1, this.container.clientWidth);
       const height = Math.max(1, this.container.clientHeight);
+      this.lastWidth = width;
+      this.lastHeight = height;
       this.renderer.setSize(width, height, false);
       this.camera.aspect = width / height;
       this.camera.updateProjectionMatrix();
@@ -125,6 +141,53 @@ export class PersonalGameView {
 
   setOwnedPlayer(playerId: string) {
     this.ownPlayerId = playerId;
+  }
+
+  getPerformanceStats() {
+    const quality =
+      this.currentPixelRatio <= this.minPixelRatio + 0.04
+        ? "low"
+        : this.currentPixelRatio < this.maxPixelRatio - 0.08
+          ? "balanced"
+          : "high";
+
+    return {
+      fps: Math.round(this.measuredFps),
+      pixelRatio: Number(this.currentPixelRatio.toFixed(2)),
+      quality,
+    };
+  }
+
+  private samplePerformance(now: number) {
+    this.frameCounter += 1;
+    const elapsed = now - this.fpsWindowStartedAt;
+    if (elapsed < 2_000) return;
+
+    const fps = (this.frameCounter * 1_000) / Math.max(1, elapsed);
+    this.measuredFps = this.measuredFps * 0.45 + fps * 0.55;
+
+    let nextRatio = this.currentPixelRatio;
+    if (fps < 44 && this.currentPixelRatio > this.minPixelRatio + 0.02) {
+      nextRatio = Math.max(this.minPixelRatio, this.currentPixelRatio - 0.15);
+      this.highFpsWindows = 0;
+    } else if (fps > 57 && this.currentPixelRatio < this.maxPixelRatio - 0.02) {
+      this.highFpsWindows += 1;
+      if (this.highFpsWindows >= 2) {
+        nextRatio = Math.min(this.maxPixelRatio, this.currentPixelRatio + 0.1);
+        this.highFpsWindows = 0;
+      }
+    } else {
+      this.highFpsWindows = 0;
+    }
+
+    if (Math.abs(nextRatio - this.currentPixelRatio) >= 0.04) {
+      this.currentPixelRatio = nextRatio;
+      this.renderer.setPixelRatio(this.currentPixelRatio);
+      this.renderer.setSize(this.lastWidth, this.lastHeight, false);
+    }
+
+    this.frameCounter = 0;
+    this.fpsWindowStartedAt = now;
   }
 
   addImpact(strength = 0.5, received = false) {
@@ -330,6 +393,7 @@ export class PersonalGameView {
     this.animationFrame = requestAnimationFrame(this.loop);
 
     const now = performance.now();
+    this.samplePerformance(now);
     const rawDelta = Math.min(this.clock.getDelta(), 0.05);
     const hitStopped = now < this.hitStopUntil;
     const delta = hitStopped ? 0 : rawDelta;
