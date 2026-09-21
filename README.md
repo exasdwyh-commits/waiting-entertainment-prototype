@@ -90,7 +90,7 @@ Priority order:
 7. Fast creation of additional games
 8. Commercial management systems
 
-See `docs/CORE_RECOMMENDATIONS.md` for the long-term product/game direction, plus `docs/RUNNING.md`, `docs/ARCHITECTURE.md`, `docs/TUNING.md`, and `docs/ROADMAP.md`.
+See `docs/CORE_RECOMMENDATIONS.md` for the long-term product/game direction and `docs/PHYSICS_PARTY_DIRECTION.md` for the physics-party gameplay roadmap, plus `docs/RUNNING.md`, `docs/ARCHITECTURE.md`, `docs/TUNING.md`, and `docs/ROADMAP.md`.
 
 
 ## Topology boundary
