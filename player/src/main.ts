@@ -32,7 +32,8 @@ let pushing = false;
 let activePointer: number | null = null;
 
 socket.on("connect", () => {
-  socket.emit("join", { name: `Player-${socket.id.slice(0, 4)}` }, () => {
+  const suffix = socket.id?.slice(0, 4) ?? "guest";
+  socket.emit("join", { name: `Player-${suffix}` }, () => {
     status.textContent = "已加入";
     status.classList.add("online");
   });
