@@ -113,3 +113,21 @@ h1 { margin: 4px 0 3px; font-size: clamp(28px, 4vw, 54px); }
 }
 
 .message:not(:empty) { animation: winner-pop .38s ease-out; }
+
+
+.timer.danger {
+  animation: final-ten-pulse .68s ease-in-out infinite alternate;
+}
+
+@keyframes final-ten-pulse {
+  from {
+    transform: scale(1);
+    color: #fff;
+    text-shadow: 0 0 0 rgba(239,68,68,0);
+  }
+  to {
+    transform: scale(1.08);
+    color: #fecaca;
+    text-shadow: 0 0 26px rgba(239,68,68,.7);
+  }
+}
