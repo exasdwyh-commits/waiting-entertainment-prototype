@@ -513,7 +513,11 @@ export class NetworkGame {
     const cameraSnapshot = this.displaySnapshot ?? this.latest;
     const allAlive = cameraSnapshot?.players.filter((player) => !player.eliminated) ?? [];
     const replayFocusIds = this.replay
-      ? new Set([this.replay.actorId, this.replay.targetId].filter(Boolean))
+      ? new Set<string>(
+          [this.replay.actorId, this.replay.targetId].filter(
+            (id): id is string => Boolean(id),
+          ),
+        )
       : undefined;
     const focused = replayFocusIds?.size
       ? allAlive.filter((player) => replayFocusIds.has(player.id))
