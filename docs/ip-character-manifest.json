@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "branch": "art/ip-character-reference-pack",
+  "purpose": "Original IP character references for later Rodin/Hyper3D image-to-3D production",
+  "characters": [
+    {
+      "id": "CH01",
+      "name_cn": "团团",
+      "slug": "wombat",
+      "species": "wombat",
+      "role": "waiter",
+      "bodyClass": "heavy",
+      "taskId": "9382904c-e921-42b8-9acb-128833ad1598",
+      "modelSheetTaskIds": {
+        "front": "2e32a298-a2bc-4b7f-8db3-21fb8bc9ac3e",
+        "side": "6ad319a0-ee76-4792-bb1e-5cddbcfbf2c9"
+      }
+    },
+    {
+      "id": "CH02",
+      "name_cn": "泡泡",
+      "slug": "axolotl",
+      "species": "axolotl",
+      "role": "kitchen-helper",
+      "bodyClass": "light",
+      "taskId": "cd984823-0378-48cb-b4f4-7c8885388718",
+      "modelSheetTaskIds": {
+        "front": "ff1ee24b-a26e-49be-9324-777365292836",
+        "side": "d509d789-51d7-43ef-94de-7aa4dc3c6d5a"
+      }
+    },
+    {
+      "id": "CH03",
+      "name_cn": "甲甲",
+      "slug": "pangolin",
+      "species": "pangolin",
+      "role": "grill-cook",
+      "bodyClass": "medium-heavy",
+      "taskId": "cb855e5b-f3f6-458e-94d7-4fdb2d70a429"
+    },
+    {
+      "id": "CH04",
+      "name_cn": "慢慢",
+      "slug": "capybara",
+      "species": "capybara",
+      "role": "floor-manager",
+      "bodyClass": "medium-heavy",
+      "taskId": "5724c76d-5a6e-4224-b1eb-f99fce4ddc95"
+    },
+    {
+      "id": "CH05",
+      "name_cn": "啵啵",
+      "slug": "duck",
+      "species": "duck",
+      "role": "dim-sum-chef",
+      "bodyClass": "light-medium",
+      "taskId": "fb5e26ee-120d-42be-9c4d-ef399d44076f"
+    },
+    {
+      "id": "CH06",
+      "name_cn": "尾尾",
+      "slug": "red-panda",
+      "species": "red-panda",
+      "role": "bartender",
+      "bodyClass": "medium-light",
+      "taskId": "d9f9ac1a-c022-4ff1-afd0-f5d21bb4b741",
+      "modelSheetTaskIds": {
+        "front": "504825ca-c5c6-47f1-a9a3-ff222db4232f",
+        "side": "7fc4c2cb-5ab2-443a-b6bf-04f7579f60c2"
+      }
+    },
+    {
+      "id": "CH07",
+      "name_cn": "鼻仔",
+      "slug": "tapir",
+      "species": "tapir",
+      "role": "dessert-cook",
+      "bodyClass": "heavy",
+      "taskId": "04bf2180-9368-499d-b8dc-91197bbaa8a4"
+    },
+    {
+      "id": "CH08",
+      "name_cn": "椒椒",
+      "slug": "gecko",
+      "species": "gecko",
+      "role": "prep-cook",
+      "bodyClass": "light",
+      "taskId": "d7e6c277-f944-4e36-87dc-e833ffe77d44",
+      "modelSheetTaskIds": {
+        "front": "820c1fb6-a4d8-47ef-86a2-9a4d1e26ba27",
+        "side": "28e26b38-03bf-4b50-a474-d95c41b94869"
+      }
+    }
+  ],
+  "referencePolicy": {
+    "canonicalHero": "Use taskId as canonical identity reference",
+    "derivedViews": "Front/side model-sheet task IDs are stored only after exact-identity reference generation",
+    "next": "Add back three-quarter only for tail/back-anatomy characters if Rodin reconstruction needs it"
+  }
+}
