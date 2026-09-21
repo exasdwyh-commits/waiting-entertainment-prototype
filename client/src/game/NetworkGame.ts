@@ -41,7 +41,7 @@ type Options = {
 };
 
 const REPLAY_SPEED = 0.45;
-const REPLAY_LOOKBACK_MS = 1_350;
+const REPLAY_LOOKBACK_MS = 1_050;
 const HISTORY_MS = 65_000;
 const MAX_HIGHLIGHTS = 2;
 
