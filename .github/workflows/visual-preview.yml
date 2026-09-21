@@ -2,6 +2,16 @@ name: Visual Preview
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "client/**"
+      - "player/**"
+      - "server/**"
+      - "shared/**"
+      - "scripts/capture-preview.mjs"
+      - ".github/workflows/visual-preview.yml"
 
 permissions:
   contents: write
@@ -51,7 +61,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/screenshots/big-screen.png docs/screenshots/phone-player.png
+          git add docs/screenshots/big-screen.png docs/screenshots/phone-player.png docs/screenshots/broadcast-replay.png
           if git diff --cached --quiet; then
             echo "Screenshots unchanged"
           else
