@@ -28,7 +28,9 @@ Implemented:
 - Player names on the big screen
 - Dynamic spectator camera + impact shake
 - Two-pass 0.45x slow-motion replay for the final elimination
-- Replaceable local CC0 low-poly GLB character model
+- Eight replaceable local CC0 low-poly GLB character variants
+- Centralized authoritative game-feel tuning config
+- Symptom-driven tuning guide for real-device feedback
 - Local physics tuning sandbox
 - CI build, server runtime smoke test, and Socket end-to-end test
 
@@ -88,7 +90,7 @@ Priority order:
 7. Fast creation of additional games
 8. Commercial management systems
 
-See `docs/RUNNING.md`, `docs/ARCHITECTURE.md`, and `docs/ROADMAP.md`.
+See `docs/RUNNING.md`, `docs/ARCHITECTURE.md`, `docs/TUNING.md`, and `docs/ROADMAP.md`.
 
 
 ## Topology boundary
