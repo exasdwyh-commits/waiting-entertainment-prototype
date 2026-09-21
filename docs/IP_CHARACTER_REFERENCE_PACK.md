@@ -1,3 +1,59 @@
+# Final IP direction lock
+
+This section overrides earlier exploratory style decisions.
+
+## Locked visual language
+
+The final character family should use a **soft plush-toy / stuffed-animal** language:
+
+- strongly juvenile / baby-like proportions
+- oversized round head
+- short chunky limbs
+- soft rounded belly
+- tiny paws / feet with clear paw-pad readability
+- short, dense plush-fur look rather than realistic strand fur
+- large glossy expressive eyes
+- small nose and mouth
+- warm, friendly, huggable silhouette
+- readable at small screen size and from a restaurant TV several meters away
+- costume accents should stay simple and close to the body so the plush silhouette remains primary
+
+The approved panda-style reference shared in the project conversation is the current art-direction anchor: **cute plush toy first, game fighter second**.
+
+## Differentiation / IP safety
+
+Keep the overall product in the physics-party genre, but do not reproduce another game's exact characters, costumes, face layouts, materials, UI or promotional compositions.
+
+Specific decision:
+
+- **do not use the corgi concept in the final launch roster**
+- avoid making any single character a close visual analogue of a recognizable competitor mascot
+- species can overlap with common animals, but face shape, markings, costume language and proportions should be original
+
+## Roster target
+
+- target launch roster: **10 selectable IP characters**
+- ten characters may mix earlier approved animals with newer original animals
+- each character must have a distinct silhouette at thumbnail size
+- heavy / medium / light-looking body types are visual personalities first; gameplay stats remain fair unless explicitly designed later
+- temporary CC0 GLBs may repeat during development, but production should eventually map ten slots to ten unique original characters
+
+## Modeling ownership
+
+Final 3D production will be handled separately by the project owner.
+
+This repository should preserve:
+
+- approved art-direction rules
+- canonical character concepts
+- reference-generation task IDs
+- front / side reference task IDs when available
+- rigging / topology / GLB integration requirements
+
+Do not spend additional project time generating final 3D models unless explicitly requested again.
+
+---
+
 # IP Character Reference Pack V1
 
 This pack defines the first original character roster for Waiting Entertainment / 餐桌推推王.
