@@ -11,6 +11,7 @@ type ActorView = {
   targetQuaternion: THREE.Quaternion;
   state: PlayerState;
   danger: number;
+  spawnProtected: boolean;
 };
 
 export class PersonalGameView {
@@ -323,6 +324,7 @@ export class PersonalGameView {
         actor.targetQuaternion.set(...player.rotation);
       }
       actor.state = player.state;
+      actor.spawnProtected = player.spawnProtectionLeftMs > 0;
       const radius = Math.hypot(player.position[0], player.position[2]);
       actor.danger = THREE.MathUtils.clamp(
         (radius - TABLE_PUSH_GEOMETRY.dangerStartRadius) /
@@ -390,6 +392,7 @@ export class PersonalGameView {
       targetQuaternion: new THREE.Quaternion(...player.rotation),
       state: player.state,
       danger: 0,
+      spawnProtected: player.spawnProtectionLeftMs > 0,
     };
     this.actors.set(player.id, actor);
 
@@ -489,14 +492,24 @@ export class PersonalGameView {
       const ringMaterial = actor.ring.material as THREE.MeshBasicMaterial;
       const urgent = actor.state === "edge_hang" || actor.state === "climbing";
       ringMaterial.color.setHex(
-        urgent ? 0xf97316 : actor.danger > 0.55 ? 0xef4444 : 0xffffff,
+        actor.spawnProtected
+          ? 0x67e8f9
+          : urgent
+            ? 0xf97316
+            : actor.danger > 0.55
+              ? 0xef4444
+              : 0xffffff,
       );
-      ringMaterial.opacity = urgent
-        ? 0.78 + Math.sin(now * 0.018) * 0.18
-        : 0.72 + actor.danger * 0.24;
-      const pulse = urgent
-        ? 1.12 + Math.sin(now * 0.014) * 0.08
-        : 1 + actor.danger * 0.15;
+      ringMaterial.opacity = actor.spawnProtected
+        ? 0.9
+        : urgent
+          ? 0.78 + Math.sin(now * 0.018) * 0.18
+          : 0.72 + actor.danger * 0.24;
+      const pulse = actor.spawnProtected
+        ? 1.12 + Math.sin(now * 0.02) * 0.08
+        : urgent
+          ? 1.12 + Math.sin(now * 0.014) * 0.08
+          : 1 + actor.danger * 0.15;
       actor.ring.scale.setScalar(pulse);
     }
 
