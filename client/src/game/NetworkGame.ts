@@ -233,17 +233,16 @@ export class NetworkGame {
       .reverse()
       .find((event) => event.type === "final_elimination");
 
-    const previous = [...eliminations]
-      .reverse()
-      .find(
-        (event) =>
-          event.type === "big_fall" &&
-          event.id !== finalEvent?.id,
-      );
+    const nonFinal = eliminations.filter(
+      (event) => event.type === "big_fall" && event.id !== finalEvent?.id,
+    );
+    const previous = nonFinal[nonFinal.length - 1];
 
-    const selected = [previous, finalEvent]
-      .filter((event): event is GameEvent => Boolean(event))
-      .slice(-MAX_HIGHLIGHTS);
+    const selected = finalEvent
+      ? [previous, finalEvent]
+          .filter((event): event is GameEvent => Boolean(event))
+          .slice(-MAX_HIGHLIGHTS)
+      : nonFinal.slice(-MAX_HIGHLIGHTS);
 
     return selected
       .map((event, index): ReplayClip | undefined => {
