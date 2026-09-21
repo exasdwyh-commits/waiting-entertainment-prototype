@@ -1,0 +1,66 @@
+name: Visual Preview
+
+on:
+  push:
+    branches:
+      - feat/visual-screenshots
+    paths-ignore:
+      - "docs/screenshots/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install project dependencies
+        run: npm install
+
+      - name: Install screenshot runtime
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Start Waiting Entertainment
+        run: |
+          npm run dev > /tmp/waiting-preview.log 2>&1 &
+          echo $! > /tmp/waiting-preview.pid
+
+      - name: Wait for local services
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:3001/health >/dev/null \
+              && curl -fsS http://127.0.0.1:5173 >/dev/null \
+              && curl -fsS http://127.0.0.1:5174 >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/waiting-preview.log
+          exit 1
+
+      - name: Capture big-screen and phone screenshots
+        run: node scripts/capture-preview.mjs
+
+      - name: Commit refreshed screenshots
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots/big-screen.png docs/screenshots/phone-player.png
+          if git diff --cached --quiet; then
+            echo "Screenshots unchanged"
+          else
+            git commit -m "docs: refresh visual screenshots"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi
