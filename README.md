@@ -28,8 +28,9 @@ Implemented:
 - Automatic winner selection and round restart
 - QR join flow
 - Player names on the big screen
-- Dynamic spectator camera + impact shake
-- Two-pass 0.45x slow-motion replay for the final elimination
+- TV-style automatic broadcast director with master/action/edge/duel/winner shots
+- Highlight selection across tosses, saves and eliminations
+- Multi-angle 0.45x replay package for decisive moments
 - Eight replaceable local CC0 low-poly GLB character variants
 - Centralized authoritative game-feel tuning config
 - Symptom-driven tuning guide for real-device feedback
@@ -92,7 +93,7 @@ Priority order:
 7. Fast creation of additional games
 8. Commercial management systems
 
-See `docs/CORE_RECOMMENDATIONS.md` for the long-term product/game direction and `docs/PHYSICS_PARTY_DIRECTION.md` for the physics-party gameplay roadmap, plus `docs/RUNNING.md`, `docs/ARCHITECTURE.md`, `docs/TUNING.md`, and `docs/ROADMAP.md`.
+See `docs/CORE_RECOMMENDATIONS.md` for the long-term product/game direction, `docs/PHYSICS_PARTY_DIRECTION.md` for the physics-party gameplay roadmap, and `docs/BROADCAST_DIRECTOR.md` for the TV-style camera/replay system, plus `docs/RUNNING.md`, `docs/ARCHITECTURE.md`, `docs/TUNING.md`, and `docs/ROADMAP.md`.
 
 
 ## Topology boundary
@@ -113,5 +114,9 @@ Current automated screenshots from the actual running build:
 ### Phone player view
 
 ![Table Push King phone-player preview](docs/screenshots/phone-player.png)
+
+### TV-style replay
+
+![Table Push King broadcast replay preview](docs/screenshots/broadcast-replay.png)
 
 These images are captured from the real Three.js/Socket.IO build rather than mockups. Refresh them through the `Visual Preview` GitHub Action after meaningful visual changes.
