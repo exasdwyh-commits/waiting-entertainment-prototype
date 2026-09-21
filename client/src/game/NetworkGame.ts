@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { io } from "socket.io-client";
 import QRCode from "qrcode";
-import type { MatchSnapshot, PlayerSnapshot, PlayerState } from "@waiting/shared";
+import type { GameEvent, MatchSnapshot, PlayerSnapshot, PlayerState } from "@waiting/shared";
 import { createCharacterVisual, type CharacterVisual } from "./CharacterVisual";
 
 type View = {
@@ -44,6 +44,8 @@ export class NetworkGame {
   private latest?: MatchSnapshot;
   private replay?: ReplayState;
   private animationFrame = 0;
+  private cameraImpulse = 0;
+  private readonly cameraLook = new THREE.Vector3();
 
   constructor(private readonly options: Options) {}
 
@@ -141,6 +143,15 @@ export class NetworkGame {
 
     socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
       this.receive(snapshot);
+    });
+
+    socket.on("game:event", (event: GameEvent) => {
+      const impulse =
+        event.type === "final_elimination" ? 0.52 :
+        event.type === "big_fall" ? 0.32 :
+        event.type === "push_hit" ? 0.12 + event.importance * 0.16 :
+        0.08;
+      this.cameraImpulse = Math.max(this.cameraImpulse, impulse);
     });
   }
 
@@ -355,12 +366,53 @@ export class NetworkGame {
       view.label.position.copy(view.root.position).add(new THREE.Vector3(0, 1.65, 0));
     }
 
-    const cameraTarget = this.replay?.closeCamera
-      ? new THREE.Vector3(0, 8.2, 9)
-      : new THREE.Vector3(0, 10.5, 11.5);
-    this.camera.position.lerp(cameraTarget, 0.04);
-    this.camera.lookAt(0, 0.15, 0);
+    const alive = this.latest?.players.filter((player) => !player.eliminated) ?? [];
+    let centerX = 0;
+    let centerZ = 0;
 
+    if (alive.length) {
+      centerX = alive.reduce((sum, player) => sum + player.position[0], 0) / alive.length;
+      centerZ = alive.reduce((sum, player) => sum + player.position[2], 0) / alive.length;
+    }
+
+    let spread = 4;
+    for (const player of alive) {
+      spread = Math.max(
+        spread,
+        Math.hypot(player.position[0] - centerX, player.position[2] - centerZ),
+      );
+    }
+
+    const hanging = alive.find((player) => player.state === "edge_hang");
+    if (hanging && !this.replay) {
+      centerX = centerX * 0.55 + hanging.position[0] * 0.45;
+      centerZ = centerZ * 0.55 + hanging.position[2] * 0.45;
+    }
+
+    const cameraTarget = this.replay?.closeCamera
+      ? new THREE.Vector3(centerX, 7.6, centerZ + 8.2)
+      : new THREE.Vector3(
+          centerX,
+          9.2 + spread * 0.32,
+          centerZ + 9.6 + spread * 0.38,
+        );
+
+    this.camera.position.lerp(cameraTarget, this.replay ? 0.075 : 0.045);
+    this.cameraLook.lerp(
+      new THREE.Vector3(centerX, hanging ? -0.1 : 0.15, centerZ),
+      hanging ? 0.11 : 0.07,
+    );
+
+    if (this.cameraImpulse > 0.002) {
+      const shake = this.cameraImpulse;
+      this.camera.position.x += Math.sin(now * 0.091) * shake;
+      this.camera.position.y += Math.cos(now * 0.077) * shake * 0.55;
+      this.cameraImpulse *= 0.86;
+    } else {
+      this.cameraImpulse = 0;
+    }
+
+    this.camera.lookAt(this.cameraLook);
     this.renderer.render(this.scene, this.camera);
   };
 }
