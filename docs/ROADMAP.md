@@ -77,6 +77,7 @@ Exit condition: real users confirm the physical reactions are fun, readable and 
 - QR join
 - Personal lightweight Three.js gameplay view
 - Follow camera focused on the player's own character
+- Camera-relative joystick mapping so controls remain intuitive when the personal camera moves
 - Mobile web controller overlay
 - Virtual joystick
 - Single push action + haptics
@@ -109,8 +110,11 @@ Implemented:
 - Live ranking
 - Result presentation
 - Rolling snapshot history
+- Full-round replay history
+- Automatic best-elimination highlight selection
+- Up to two post-match highlight clips
 - Final elimination slow-motion replay
-- Two-pass replay with second close camera
+- Final elimination two-pass replay with second close camera
 
 Implemented additionally:
 
