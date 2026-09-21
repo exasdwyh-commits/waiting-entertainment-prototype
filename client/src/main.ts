@@ -1,5 +1,4 @@
 import "./style.css";
-import { LocalPrototype } from "./game/LocalPrototype";
 import { NetworkGame } from "./game/NetworkGame";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
@@ -34,11 +33,12 @@ const common = {
 
 if (localMode) {
   document.querySelector<HTMLElement>("#join-panel")!.hidden = true;
-  const prototype = new LocalPrototype(common);
-  prototype.start().catch((error) => {
-    console.error(error);
-    common.message.textContent = "物理引擎初始化失败，请查看控制台";
-  });
+  import("./game/LocalPrototype")
+    .then(({ LocalPrototype }) => new LocalPrototype(common).start())
+    .catch((error) => {
+      console.error(error);
+      common.message.textContent = "物理引擎初始化失败，请查看控制台";
+    });
 } else {
   const game = new NetworkGame({
     ...common,
