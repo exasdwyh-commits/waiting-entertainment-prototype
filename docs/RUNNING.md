@@ -4,41 +4,83 @@
 
 - Node.js 22+
 - npm 10+
-- Same LAN for the big-screen computer and mobile controllers
+- Big-screen computer and phones on the same LAN
 
-## Install
+## Start
 
 ```bash
 npm install
-```
-
-## Run all services
-
-```bash
 npm run dev
 ```
 
-Default services:
+This starts four workspaces/services through the monorepo:
 
-- Big screen prototype: http://localhost:5173
-- Mobile controller: http://localhost:5174
-- Controller/server endpoint: http://localhost:3001
-- Server health: http://localhost:3001/health
+- Big screen: `http://<HOST-LAN-IP>:5173`
+- Phone controller: `http://<HOST-LAN-IP>:5174`
+- Authoritative server: `http://<HOST-LAN-IP>:3001`
+- Shared TypeScript protocol is built before development services start
 
-## Current playable mode
+Example:
 
-The first playable build is deliberately local-first:
+```text
+Big screen:       http://192.168.1.20:5173
+Phone controller: http://192.168.1.20:5174
+Server health:    http://192.168.1.20:3001/health
+```
 
-- Keyboard on the big-screen build controls the human character.
-- WASD or arrow keys move.
-- Space triggers a push burst.
-- R restarts.
-- Seven simple bots fill the table.
-- Falling below the arena eliminates a player.
-- Near-edge falls can enter a simplified ledge-hang recovery state.
+Use the LAN IP on the big-screen browser. If the screen is opened on `localhost`, the generated QR code will also contain `localhost` and will not work from another phone.
 
-The phone controller and authoritative room server are already runnable, but are not yet wired into the physics simulation. That integration is Phase 3/4 work.
+## Normal network mode
 
-## Replay foundation
+Open:
 
-The big-screen client stores a rolling snapshot buffer and marks elimination/final events. The buffer is the foundation for slow-motion highlight playback without video recording.
+```text
+http://<HOST-LAN-IP>:5173
+```
+
+The big screen connects to the authoritative server. Phones scan the QR code and automatically take over available Bot slots.
+
+Current loop:
+
+1. 3-second countdown
+2. 60-second match
+3. Push / knockdown / recovery / ledge catch / elimination
+4. Live score and ranking
+5. Final elimination highlight replayed twice at 0.45x
+6. Winner display
+7. Automatic next round
+
+Players may leave at any time. Their slot returns to Bot control.
+
+## Local physics sandbox
+
+Open:
+
+```text
+http://localhost:5173/?mode=local
+```
+
+Controls:
+
+- WASD / arrows: move
+- Space: push
+- R: restart
+
+This mode runs Rapier in the browser and exists only for rapid physics tuning. It is not the target multiplayer architecture.
+
+## Automated validation
+
+GitHub Actions currently verifies:
+
+- npm dependency installation
+- shared package build
+- big-screen client build
+- phone controller build
+- authoritative server build
+- compiled Node + Rapier server starts and passes `/health`
+- Socket observer receives the 8-player authoritative snapshot
+- a controller can join and replace a Bot
+- controller input is accepted
+- disconnect returns the slot to AI
+
+Real-device game-feel validation is still required.
