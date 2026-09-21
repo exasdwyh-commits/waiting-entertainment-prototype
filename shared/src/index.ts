@@ -11,6 +11,9 @@ export type PlayerState =
   | "idle"
   | "moving"
   | "pushing"
+  | "grabbing"
+  | "carried"
+  | "throwing"
   | "hit"
   | "ragdoll"
   | "recovering"
@@ -21,6 +24,7 @@ export type PlayerState =
 
 export type GameEventType =
   | "push_hit"
+  | "toss"
   | "big_fall"
   | "edge_save"
   | "final_elimination"
