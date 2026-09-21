@@ -16,8 +16,15 @@ type View = {
   state: PlayerState;
 };
 
-type ReplayState = {
+type ReplayClip = {
   frames: MatchSnapshot[];
+  label: string;
+  loops: number;
+  actorId?: string;
+  targetId?: string;
+};
+
+type ReplayState = ReplayClip & {
   startedAt: number;
   loopsRemaining: number;
   closeCamera: boolean;
@@ -34,7 +41,9 @@ type Options = {
 };
 
 const REPLAY_SPEED = 0.45;
-const REPLAY_LOOKBACK_MS = 1_800;
+const REPLAY_LOOKBACK_MS = 1_350;
+const HISTORY_MS = 65_000;
+const MAX_HIGHLIGHTS = 2;
 
 export class NetworkGame {
   private readonly scene = new THREE.Scene();
@@ -46,7 +55,12 @@ export class NetworkGame {
   private readonly fx = new ImpactFx(this.scene);
   private readonly audioFx = new AudioFx();
   private latest?: MatchSnapshot;
+  private displaySnapshot?: MatchSnapshot;
   private replay?: ReplayState;
+  private replayQueue: ReplayClip[] = [];
+  private highlightEvents: GameEvent[] = [];
+  private activeMatchId?: string;
+  private replayedMatchId?: string;
   private animationFrame = 0;
   private cameraImpulse = 0;
   private readonly cameraLook = new THREE.Vector3();
@@ -171,33 +185,120 @@ export class NetworkGame {
 
   private receive(snapshot: MatchSnapshot) {
     this.latest = snapshot;
+
+    if (this.activeMatchId !== snapshot.matchId) {
+      this.activeMatchId = snapshot.matchId;
+      this.history.length = 0;
+      this.highlightEvents = [];
+      this.replayQueue = [];
+      this.replay = undefined;
+      this.replayedMatchId = undefined;
+    }
+
     this.history.push(snapshot);
 
-    const cutoff = snapshot.serverTimeMs - 7_000;
+    for (const event of snapshot.events) {
+      if (
+        (event.type === "big_fall" || event.type === "final_elimination") &&
+        !this.highlightEvents.some((candidate) => candidate.id === event.id)
+      ) {
+        this.highlightEvents.push(event);
+      }
+    }
+
+    const cutoff = snapshot.serverTimeMs - HISTORY_MS;
     while (this.history.length && this.history[0].serverTimeMs < cutoff) {
       this.history.shift();
     }
 
-    const finalEvent = snapshot.events.find((event) => event.type === "final_elimination");
-    if (finalEvent && !this.replay) {
-      const frames = this.history.filter(
-        (frame) =>
-          frame.serverTimeMs >= finalEvent.atMs - REPLAY_LOOKBACK_MS &&
-          frame.serverTimeMs <= finalEvent.atMs,
-      );
-
-      if (frames.length >= 4) {
-        this.replay = {
-          frames,
-          startedAt: performance.now(),
-          loopsRemaining: 2,
-          closeCamera: false,
-        };
-        return;
-      }
+    if (
+      snapshot.phase === "finished" &&
+      this.replayedMatchId !== snapshot.matchId &&
+      !this.replay
+    ) {
+      this.replayedMatchId = snapshot.matchId;
+      this.replayQueue = this.buildHighlightQueue(snapshot);
+      if (this.startNextReplay()) return;
     }
 
     if (!this.replay) this.applySnapshot(snapshot);
+  }
+
+  private buildHighlightQueue(snapshot: MatchSnapshot) {
+    const eliminations = this.highlightEvents.filter(
+      (event) => event.type === "big_fall" || event.type === "final_elimination",
+    );
+
+    const finalEvent = [...eliminations]
+      .reverse()
+      .find((event) => event.type === "final_elimination");
+
+    const previous = [...eliminations]
+      .reverse()
+      .find(
+        (event) =>
+          event.type === "big_fall" &&
+          event.id !== finalEvent?.id,
+      );
+
+    const selected = [previous, finalEvent]
+      .filter((event): event is GameEvent => Boolean(event))
+      .slice(-MAX_HIGHLIGHTS);
+
+    return selected
+      .map((event, index): ReplayClip | undefined => {
+        const frames = this.history.filter(
+          (frame) =>
+            frame.matchId === snapshot.matchId &&
+            frame.serverTimeMs >= event.atMs - REPLAY_LOOKBACK_MS &&
+            frame.serverTimeMs <= event.atMs,
+        );
+
+        if (frames.length < 4) return undefined;
+
+        const reference = frames[frames.length - 1];
+        const actor = event.actorId
+          ? reference.players.find((player) => player.id === event.actorId)
+          : undefined;
+        const target = event.targetId
+          ? reference.players.find((player) => player.id === event.targetId)
+          : undefined;
+
+        const prefix =
+          event.type === "final_elimination"
+            ? "决胜击落"
+            : selected.length > 1
+              ? `精彩击落 ${index + 1}/${selected.length}`
+              : "精彩击落";
+
+        const label = actor && target
+          ? `${prefix} · ${actor.name} → ${target.name}`
+          : target
+            ? `${prefix} · ${target.name} 出局`
+            : prefix;
+
+        return {
+          frames,
+          label,
+          loops: event.type === "final_elimination" ? 2 : 1,
+          actorId: event.actorId,
+          targetId: event.targetId,
+        };
+      })
+      .filter((clip): clip is ReplayClip => Boolean(clip));
+  }
+
+  private startNextReplay(now = performance.now()) {
+    const clip = this.replayQueue.shift();
+    if (!clip) return false;
+
+    this.replay = {
+      ...clip,
+      startedAt: now,
+      loopsRemaining: clip.loops,
+      closeCamera: false,
+    };
+    return true;
   }
 
   private createView(player: PlayerSnapshot) {
@@ -279,6 +380,7 @@ export class NetworkGame {
   }
 
   private applySnapshot(snapshot: MatchSnapshot) {
+    this.displaySnapshot = snapshot;
     this.options.timer.textContent = String(Math.ceil(snapshot.timeLeftMs / 1000));
     this.options.timer.classList.toggle(
       "danger",
@@ -373,6 +475,8 @@ export class NetworkGame {
       }
 
       this.replay = undefined;
+      if (this.startNextReplay(now)) return;
+
       this.options.message.textContent = "";
       if (this.latest) this.applySnapshot(this.latest);
       return;
@@ -386,8 +490,8 @@ export class NetworkGame {
     }
 
     this.options.message.textContent = replay.closeCamera
-      ? "🎥 决胜回放 · 近景"
-      : "🎥 精彩回放 ×0.45";
+      ? `🎥 ${replay.label} · 近景`
+      : `🎥 ${replay.label} ×0.45`;
     this.applySnapshot(frame);
   }
 
@@ -407,7 +511,15 @@ export class NetworkGame {
       view.label.position.copy(view.root.position).add(new THREE.Vector3(0, 1.65, 0));
     }
 
-    const alive = this.latest?.players.filter((player) => !player.eliminated) ?? [];
+    const cameraSnapshot = this.displaySnapshot ?? this.latest;
+    const allAlive = cameraSnapshot?.players.filter((player) => !player.eliminated) ?? [];
+    const replayFocusIds = this.replay
+      ? new Set([this.replay.actorId, this.replay.targetId].filter(Boolean))
+      : undefined;
+    const focused = replayFocusIds?.size
+      ? allAlive.filter((player) => replayFocusIds.has(player.id))
+      : [];
+    const alive = focused.length ? focused : allAlive;
     let centerX = 0;
     let centerZ = 0;
 
@@ -433,8 +545,8 @@ export class NetworkGame {
     }
 
     const tension = !this.replay &&
-      this.latest?.phase === "playing" &&
-      (this.latest?.timeLeftMs ?? 60_000) <= 10_000;
+      cameraSnapshot?.phase === "playing" &&
+      (cameraSnapshot?.timeLeftMs ?? 60_000) <= 10_000;
 
     const cameraTarget = this.replay?.closeCamera
       ? new THREE.Vector3(centerX, 7.6, centerZ + 8.2)
