@@ -55,10 +55,10 @@ try {
   const initial = await waitForEvent(
     observer,
     "match:snapshot",
-    (snapshot) => Array.isArray(snapshot?.players) && snapshot.players.length === 8,
+    (snapshot) => Array.isArray(snapshot?.players) && snapshot.players.length === 10,
   );
 
-  assert.equal(initial.players.length, 8);
+  assert.equal(initial.players.length, 10);
   assert.ok(initial.players.every((entry) => entry.bot === true));
   assert.ok(
     initial.players.every(

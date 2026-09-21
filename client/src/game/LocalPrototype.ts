@@ -22,7 +22,7 @@ type PrototypeOptions = {
   message: HTMLElement;
 };
 
-const PLAYER_COUNT = 8;
+const PLAYER_COUNT = 10;
 const ROUND_MS = 180_000;
 const MOVE_ACCEL = 0.16;
 const MAX_SPEED = 4.2;
@@ -156,7 +156,7 @@ export class LocalPrototype {
   }
 
   private createActor(index: number): Actor {
-    const palette = [0x38bdf8, 0xfb7185, 0xa78bfa, 0x4ade80, 0xfacc15, 0xf97316, 0x22d3ee, 0xe879f9];
+    const palette = [0x38bdf8, 0xfb7185, 0xa78bfa, 0x4ade80, 0xfacc15, 0xf97316, 0x22d3ee, 0xe879f9, 0xf43f5e, 0x84cc16];
     const color = palette[index % palette.length];
     const angle = (index / PLAYER_COUNT) * Math.PI * 2;
     const radius = index === 0 ? 0 : TABLE_PUSH_GEOMETRY.spawnRadius;

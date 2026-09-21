@@ -554,7 +554,7 @@ export class NetworkGame {
 
   private createView(player: PlayerSnapshot) {
     const index = Number(player.id.split("-")[1] ?? 0);
-    const palette = [0x38bdf8, 0xfb7185, 0xa78bfa, 0x4ade80, 0xfacc15, 0xf97316, 0x22d3ee, 0xe879f9];
+    const palette = [ 0x38bdf8, 0xfb7185, 0xa78bfa, 0x4ade80, 0xfacc15, 0xf97316, 0x22d3ee, 0xe879f9, 0xf43f5e, 0x84cc16, ];
     const tint = palette[index % palette.length];
 
     const root = new THREE.Group();
