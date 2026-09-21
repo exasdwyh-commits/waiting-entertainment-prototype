@@ -21,6 +21,7 @@ type Slot = {
   bot: boolean;
   body: RAPIER.RigidBody;
   facingYaw: number;
+  balance: number;
   state: PlayerState;
   alive: boolean;
   pushReadyAt: number;
@@ -196,6 +197,7 @@ export class GameSession {
         bot: true,
         body,
         facingYaw: angleFromIndex(index),
+        balance: 1,
         state: "idle",
         alive: true,
         pushReadyAt: 0,
@@ -247,6 +249,7 @@ export class GameSession {
       );
       slot.body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
       slot.facingYaw = Math.atan2(-Math.cos(angle), -Math.sin(angle));
+      slot.balance = 1;
       slot.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
       slot.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
       slot.state = "idle";
@@ -340,14 +343,26 @@ export class GameSession {
   }
 
   private advanceRecovery(slot: Slot, now: number) {
-    if (slot.edgeHanging) return;
+    if (slot.edgeHanging || slot.state === "climbing") return;
 
     if ((slot.state === "hit" || slot.state === "ragdoll") && now >= slot.knockedUntil) {
       slot.state = "recovering";
-      slot.recoverUntil = now + 520;
+      slot.recoverUntil = now + 420 + (1 - slot.balance) * 360;
     }
 
-    if (slot.state === "recovering" && now >= slot.recoverUntil) {
+    const recovering = slot.state === "recovering";
+    const hardStunned =
+      (slot.state === "hit" || slot.state === "ragdoll") &&
+      now < slot.knockedUntil;
+    const recoveryPerSecond = recovering ? 0.9 : hardStunned ? 0 : 0.34;
+
+    slot.balance = clamp(
+      slot.balance + recoveryPerSecond / PHYSICS_HZ,
+      0,
+      1,
+    );
+
+    if (recovering && now >= slot.recoverUntil) {
       slot.state = "idle";
     }
   }
@@ -374,6 +389,7 @@ export class GameSession {
 
     if (t >= 1) {
       slot.body.setGravityScale(1, true);
+      slot.balance = Math.max(slot.balance, 0.52);
       slot.state = "recovering";
       slot.recoverUntil = now + 360;
       slot.climbFrom = undefined;
@@ -394,8 +410,16 @@ export class GameSession {
 
     if (tilt < 0.025) return;
 
-    const recoveryBoost = slot.state === "recovering" ? 1.9 : 1;
-    const strength = Math.min(0.11, tilt * 0.045) * recoveryBoost;
+    const p = slot.body.translation();
+    const radius = Math.hypot(p.x, p.z);
+    const edgeSupport = clamp((ARENA_RADIUS - radius + 0.12) / 0.9, 0.12, 1);
+    const balanceAssist = 0.22 + slot.balance * 0.78;
+    const recoveryBoost = slot.state === "recovering" ? 1.85 : 1;
+    const strength =
+      Math.min(0.11, tilt * 0.045) *
+      recoveryBoost *
+      balanceAssist *
+      edgeSupport;
 
     slot.body.applyTorqueImpulse(
       { x: -upZ * strength, y: 0, z: upX * strength },
@@ -491,7 +515,8 @@ export class GameSession {
     }
 
     const controlScale = slot.state === "recovering" ? 0.35 : attackLocked ? 0.72 : 1;
-    const moveScale = slot.bot ? slot.botMoveScale : 1;
+    const balanceControl = 0.52 + slot.balance * 0.48;
+    const moveScale = (slot.bot ? slot.botMoveScale : 1) * balanceControl;
     if (slot.state !== "recovering" && !attackLocked) slot.state = "moving";
     slot.facingYaw = Math.atan2(direction.x, direction.z);
     slot.body.applyImpulse(
@@ -576,16 +601,22 @@ export class GameSession {
       if (facing < 0.15) continue;
 
       const strength = Math.max(0.8, 3.0 * (1 - distance / 2.25));
+      const impact = clamp(strength / 3, 0, 1);
       target.body.applyImpulseAtPoint(
         { x: radial.x * strength, y: 0.65, z: radial.z * strength },
         { x: p.x, y: p.y + 0.55, z: p.z },
         true,
       );
+      target.balance = clamp(
+        target.balance - (0.26 + impact * 0.52),
+        0.08,
+        1,
+      );
       target.state = "hit";
-      target.knockedUntil = now + 650;
+      target.knockedUntil = now + 360 + impact * 460;
       target.lastHitBy = slot.id;
       target.lastHitAt = now;
-      this.emitEvent("push_hit", now, slot.id, target.id, Math.min(1, strength / 3));
+      this.emitEvent("push_hit", now, slot.id, target.id, impact);
     }
   }
 
@@ -604,6 +635,7 @@ export class GameSession {
     ) {
       slot.edgeHanging = true;
       slot.edgeHangUntil = now + 1_400;
+      slot.balance = Math.min(slot.balance, 0.3);
       slot.state = "edge_hang";
       slot.body.setGravityScale(0, true);
       slot.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -649,6 +681,7 @@ export class GameSession {
       if (now >= slot.edgeHangUntil) {
         slot.body.setGravityScale(1, true);
         slot.edgeHanging = false;
+        slot.balance = Math.min(slot.balance, 0.12);
         slot.state = "ragdoll";
         slot.knockedUntil = now + 420;
       }
@@ -728,6 +761,7 @@ export class GameSession {
           position: [p.x, p.y, p.z],
           rotation: [q.x, q.y, q.z, q.w],
           facingYaw: slot.facingYaw,
+          balance: slot.balance,
           velocity: [v.x, v.y, v.z],
           score: slot.score,
           pushCooldownLeftMs: Math.max(0, slot.pushReadyAt - now),
