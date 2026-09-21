@@ -109,6 +109,10 @@ Exit condition: real users confirm the physical reactions are fun, readable and 
 Implemented:
 
 - Big-screen player labels
+- Persistent color rings: humans emphasized, AI subdued
+- AI-to-human takeover pulse on the big screen
+- Live human/AI participant count
+- Phone player ring matches the same fighter color
 - Live ranking
 - Result presentation
 - Rolling snapshot history
