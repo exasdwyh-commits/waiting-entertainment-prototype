@@ -1,5 +1,5 @@
 import { io } from "socket.io-client";
-import type { MatchSnapshot } from "@waiting/shared";
+import type { GameEvent, MatchSnapshot } from "@waiting/shared";
 import { PersonalGameView } from "./PersonalGameView";
 import "./style.css";
 
@@ -111,6 +111,16 @@ socket.on("connect", () => {
 socket.on("disconnect", () => {
   status.textContent = "重连中…";
   status.classList.remove("online");
+});
+
+socket.on("game:event", (event: GameEvent) => {
+  if (!ownedPlayerId || !("vibrate" in navigator)) return;
+
+  if (event.targetId === ownedPlayerId) {
+    navigator.vibrate(event.type === "final_elimination" ? [55, 30, 80] : 42);
+  } else if (event.actorId === ownedPlayerId && event.type === "push_hit") {
+    navigator.vibrate(16);
+  }
 });
 
 socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
