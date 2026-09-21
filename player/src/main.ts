@@ -24,7 +24,27 @@ const stick = document.querySelector<HTMLDivElement>("#stick")!;
 const pushButton = document.querySelector<HTMLButtonElement>("#push")!;
 
 const endpoint = `${location.protocol}//${location.hostname}:3001`;
-const socket = io(endpoint, { transports: ["websocket", "polling"] });
+const socket = io(endpoint, {
+  transports: ["websocket", "polling"],
+  reconnection: true,
+  reconnectionDelay: 350,
+  reconnectionDelayMax: 1_500,
+});
+
+const SESSION_KEY = "waiting-entertainment.session-id";
+const NAME_KEY = "waiting-entertainment.player-name";
+
+function makeSessionId() {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return `guest-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+const sessionId = localStorage.getItem(SESSION_KEY) || makeSessionId();
+localStorage.setItem(SESSION_KEY, sessionId);
+
+const savedName = localStorage.getItem(NAME_KEY);
+const defaultName = savedName || `玩家${sessionId.replace(/-/g, "").slice(-4).toUpperCase()}`;
+localStorage.setItem(NAME_KEY, defaultName);
 
 let moveX = 0;
 let moveY = 0;
@@ -32,11 +52,22 @@ let pushing = false;
 let activePointer: number | null = null;
 
 socket.on("connect", () => {
-  const suffix = socket.id?.slice(0, 4) ?? "guest";
-  socket.emit("join", { name: `Player-${suffix}` }, () => {
-    status.textContent = "已加入";
-    status.classList.add("online");
-  });
+  status.textContent = "正在接管角色…";
+  socket.emit(
+    "join",
+    { sessionId, name: defaultName },
+    (response: { ok?: boolean; recovered?: boolean; sessionId?: string; reason?: string }) => {
+      if (!response?.ok) {
+        status.textContent = response?.reason === "session-full" ? "当前8位已满" : "加入失败";
+        status.classList.remove("online");
+        return;
+      }
+
+      if (response.sessionId) localStorage.setItem(SESSION_KEY, response.sessionId);
+      status.textContent = response.recovered ? "已恢复控制" : "已加入";
+      status.classList.add("online");
+    },
+  );
 });
 
 socket.on("disconnect", () => {
@@ -44,8 +75,12 @@ socket.on("disconnect", () => {
   status.classList.remove("online");
 });
 
+let inputSeq = 0;
+
 function sendInput() {
-  socket.emit("input", { moveX, moveY, push: pushing });
+  if (!socket.connected) return;
+  inputSeq += 1;
+  socket.emit("input", { seq: inputSeq, moveX, moveY, push: pushing });
 }
 
 function updateStick(clientX: number, clientY: number) {
@@ -92,6 +127,7 @@ joystick.addEventListener("pointercancel", releaseStick);
 pushButton.addEventListener("pointerdown", () => {
   pushing = true;
   pushButton.classList.add("active");
+  if ("vibrate" in navigator) navigator.vibrate(18);
   sendInput();
 });
 
@@ -104,3 +140,21 @@ function releasePush() {
 pushButton.addEventListener("pointerup", releasePush);
 pushButton.addEventListener("pointercancel", releasePush);
 pushButton.addEventListener("pointerleave", releasePush);
+
+
+function clearHeldInput() {
+  moveX = 0;
+  moveY = 0;
+  pushing = false;
+  activePointer = null;
+  stick.style.transform = "translate(0, 0)";
+  pushButton.classList.remove("active");
+  sendInput();
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) clearHeldInput();
+});
+
+window.addEventListener("pagehide", clearHeldInput);
+window.addEventListener("blur", clearHeldInput);
