@@ -75,10 +75,11 @@ Exit condition: real users confirm the physical reactions are fun, readable and 
 
 ## Phase 3 - Match loop
 
-**Status: Implemented**
+**Status: Implemented; combat-stage tuning pending**
 
 - 3-second countdown
-- Current timer implementation exists; target match duration is ~180 seconds with phased escalation
+- 180-second authoritative round
+- Opening / Brawl / Danger / Final Chaos stage broadcast
 - Elimination scoring
 - Ranking
 - Winner determination
@@ -106,8 +107,11 @@ Exit condition: real users confirm the physical reactions are fun, readable and 
 - Follow camera focused on the player's own character
 - Camera-relative joystick mapping so controls remain intuitive when the personal camera moves
 - Mobile web controller overlay
-- Virtual joystick
-- Single push action + haptics
+- Camera-relative virtual joystick with outer-zone Sprint
+- Server-authoritative Stamina HUD
+- Large contextual Attack button: Punch / Heavy Strike / Throw
+- Dedicated hold-to-Grab button with Carry state
+- Contextual haptics by attack class
 - Authoritative server-driven push cooldown indicator
 - Edge danger ring and dedicated ledge camera
 - Eliminated phone -> automatic spectator camera
@@ -130,6 +134,24 @@ Exit condition: real users confirm the physical reactions are fun, readable and 
 - Edge avoidance
 - Auto recovery from ledge
 - Human/Bot slot switching
+
+## Combat parity Phase A1
+
+**Status: Implemented in current combat branch; field tuning pending**
+
+- Sprint + Stamina
+- Punch / Sprint Heavy Strike
+- Persistent Grab / Carry
+- Manual directional Throw
+- Bot vulnerable-target grab behavior
+- 180-second staged match
+- Graded combat camera/haptics/audio
+- Heavy-hit smoke and squash/stretch V1
+
+Remaining Phase A:
+- Struggle / breakout
+- Jump / Kick / Headbutt / Dropkick
+- HP / KO / Wake-up
 
 ## Phase 7 - Spectator and game-feel polish
 
