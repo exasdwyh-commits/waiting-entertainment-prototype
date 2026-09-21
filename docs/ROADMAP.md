@@ -6,7 +6,7 @@ Waiting Entertainment is a public multiplayer entertainment system for restauran
 
 Core loop:
 
-**Scan QR -> phone controls character -> 60-second shared-screen match -> highlight replay -> next round.**
+**Scan QR -> phone controls character -> ~180-second shared-screen physics brawl -> highlight replay -> next round.**
 
 Commercial/admin systems remain lower priority than game quality.
 
@@ -29,6 +29,25 @@ Commercial/admin systems remain lower priority than game quality.
 - Build pipeline
 - Runtime smoke test
 - Socket end-to-end test
+
+## Combat parity program
+
+**Current strategic priority**
+
+See `docs/PARTY_ANIMALS_PARITY_MATRIX.md`.
+
+Before adding broad platform features, close the main physics-party combat gaps:
+
+- Sprint + Stamina
+- Punch / Heavy Strike
+- persistent Grab / Carry / directional Throw
+- Struggle / breakout
+- Jump / Kick / Headbutt / Dropkick
+- HP / KO / Wake-up
+- restaurant-themed weapons and pickup/throw
+- stronger active-ragdoll presentation
+- smoke / squash-stretch / trails / combat SFX
+- ~180-second staged brawl structure
 
 ## Phase 2 - Physics prototype
 
@@ -59,7 +78,7 @@ Exit condition: real users confirm the physical reactions are fun, readable and 
 **Status: Implemented**
 
 - 3-second countdown
-- 60-second timer
+- Current timer implementation exists; target match duration is ~180 seconds with phased escalation
 - Elimination scoring
 - Ranking
 - Winner determination
