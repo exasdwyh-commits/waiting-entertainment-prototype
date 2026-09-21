@@ -25,6 +25,8 @@ export type PlayerState =
 
 export type GameEventType =
   | "push_hit"
+  | "punch_hit"
+  | "heavy_hit"
   | "toss"
   | "big_fall"
   | "edge_save"
@@ -35,7 +37,11 @@ export interface PlayerInput {
   seq: number;
   moveX: number;
   moveY: number;
+  /** Legacy attack alias retained for older clients/tests. */
   push: boolean;
+  attack: boolean;
+  grab: boolean;
+  sprint: boolean;
 }
 
 export interface PlayerSnapshot {
@@ -45,9 +51,12 @@ export interface PlayerSnapshot {
   rotation: [number, number, number, number];
   facingYaw: number;
   balance: number;
+  stamina: number;
+  sprinting: boolean;
   velocity: [number, number, number];
   score: number;
   pushCooldownLeftMs: number;
+  grabTargetId?: PlayerId;
   state: PlayerState;
   eliminated: boolean;
   bot: boolean;
@@ -67,6 +76,7 @@ export interface MatchSnapshot {
   serverTimeMs: number;
   timeLeftMs: number;
   phase: "lobby" | "countdown" | "playing" | "finished";
+  matchStage: "opening" | "brawl" | "danger" | "final";
   countdownLeftMs?: number;
   players: PlayerSnapshot[];
   events: GameEvent[];
