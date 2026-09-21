@@ -63,6 +63,7 @@ export class NetworkGame {
   private replayedMatchId?: string;
   private animationFrame = 0;
   private cameraImpulse = 0;
+  private cameraFovKick = 0;
   private readonly cameraLook = new THREE.Vector3();
 
   constructor(private readonly options: Options) {}
@@ -170,6 +171,12 @@ export class NetworkGame {
         event.type === "push_hit" ? 0.12 + event.importance * 0.16 :
         0.08;
       this.cameraImpulse = Math.max(this.cameraImpulse, impulse);
+      const fovKick =
+        event.type === "final_elimination" ? 6 :
+        event.type === "big_fall" ? 4 :
+        event.type === "push_hit" ? 1.4 + event.importance * 2.2 :
+        1.2;
+      this.cameraFovKick = Math.max(this.cameraFovKick, fovKick);
       this.audioFx.play(event.type, event.importance);
 
       const subjectId = event.targetId ?? event.actorId;
@@ -573,6 +580,15 @@ export class NetworkGame {
     } else {
       this.cameraImpulse = 0;
     }
+
+    const targetFov = 50 + this.cameraFovKick;
+    const nextFov = THREE.MathUtils.lerp(this.camera.fov, targetFov, 0.22);
+    if (Math.abs(nextFov - this.camera.fov) > 0.01) {
+      this.camera.fov = nextFov;
+      this.camera.updateProjectionMatrix();
+    }
+    this.cameraFovKick *= 0.82;
+    if (this.cameraFovKick < 0.02) this.cameraFovKick = 0;
 
     this.camera.lookAt(this.cameraLook);
     this.renderer.render(this.scene, this.camera);
