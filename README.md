@@ -8,8 +8,8 @@ The first game is **餐桌推推王 / Table Push King**: guests scan a QR code, 
 
 Implemented:
 
-- 8 persistent player slots
-- 1-8 human players with automatic AI fill
+- 10 persistent player slots
+- 1-10 human players with automatic AI fill
 - Single local GameSession with server-authoritative Rapier3D physics
 - 60Hz host physics / 20Hz state snapshots
 - Three.js big-screen renderer
@@ -21,7 +21,7 @@ Implemented:
 - Sprint + authoritative Stamina + Punch / Sprint Heavy Strike
 - Persistent Grab / Carry / manual directional Throw with stamina drain
 - Simplified ledge catch and climb-back
-- Falling elimination
+- Pre-Final falls respawn after a short delay; Final Chaos uses permanent elimination
 - 3-second round countdown
 - ~180-second staged brawls: Opening / Brawl / Danger / Final Chaos
 - Elimination scoring and live ranking
@@ -31,7 +31,7 @@ Implemented:
 - TV-style automatic broadcast director with master/action/edge/duel/winner shots
 - Highlight selection across tosses, saves and eliminations
 - Multi-angle 0.45x replay package for decisive moments
-- Eight replaceable local CC0 low-poly GLB character variants
+- Replaceable local CC0 low-poly GLB character variants; original IP pack is archived separately
 - Centralized authoritative game-feel tuning config
 - Symptom-driven tuning guide for real-device feedback
 - Local physics tuning sandbox
