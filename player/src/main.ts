@@ -4,6 +4,8 @@ import { PersonalGameView } from "./PersonalGameView";
 import { AudioFx } from "./AudioFx";
 import "./style.css";
 
+const DEBUG_MODE = new URLSearchParams(location.search).get("debug") === "1";
+
 const root = document.querySelector<HTMLDivElement>("#app")!;
 root.innerHTML = `
   <main class="controller">
@@ -34,6 +36,7 @@ root.innerHTML = `
     </section>
 
     <div class="rotate-hint">横屏体验更好</div>
+    <aside class="debug-panel" id="debug-panel" hidden></aside>
   </main>
 `;
 
@@ -48,6 +51,8 @@ const pushButton = document.querySelector<HTMLButtonElement>("#push")!;
 const pushHint = pushButton.querySelector<HTMLElement>("small")!;
 const stage = document.querySelector<HTMLDivElement>("#personal-stage")!;
 const controllerEl = document.querySelector<HTMLElement>(".controller")!;
+const debugPanel = document.querySelector<HTMLElement>("#debug-panel")!;
+debugPanel.hidden = !DEBUG_MODE;
 
 const personalView = new PersonalGameView(stage);
 const audioFx = new AudioFx();
@@ -84,6 +89,10 @@ let activePointer: number | null = null;
 let inputSeq = 0;
 let pushCooldownLeftMs = 0;
 let eliminated = false;
+let rttMs = 0;
+let snapshotCounter = 0;
+let snapshotRate = 0;
+let snapshotWindowStartedAt = performance.now();
 
 socket.on("connect", () => {
   status.textContent = "正在接管角色…";
@@ -147,6 +156,15 @@ socket.on("game:event", (event: GameEvent) => {
 });
 
 socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
+  snapshotCounter += 1;
+  const snapshotNow = performance.now();
+  const snapshotElapsed = snapshotNow - snapshotWindowStartedAt;
+  if (snapshotElapsed >= 1_000) {
+    snapshotRate = (snapshotCounter * 1_000) / snapshotElapsed;
+    snapshotCounter = 0;
+    snapshotWindowStartedAt = snapshotNow;
+  }
+
   personalView.update(snapshot);
   timer.textContent = String(Math.ceil(snapshot.timeLeftMs / 1000));
   const tension = snapshot.phase === "playing" && snapshot.timeLeftMs <= 10_000;
@@ -286,3 +304,28 @@ document.addEventListener("visibilitychange", () => {
 
 window.addEventListener("pagehide", clearHeldInput);
 window.addEventListener("blur", clearHeldInput);
+
+
+if (DEBUG_MODE) {
+  window.setInterval(() => {
+    if (!socket.connected) return;
+    const startedAt = performance.now();
+    socket.emit("latency:ping", {}, () => {
+      rttMs = performance.now() - startedAt;
+    });
+  }, 2_000);
+
+  window.setInterval(() => {
+    const stats = personalView.getPerformanceStats();
+    const transport = socket.io.engine?.transport?.name ?? "unknown";
+
+    debugPanel.textContent = [
+      `FPS ${stats.fps}`,
+      `DPR ${stats.pixelRatio}`,
+      `QUALITY ${stats.quality}`,
+      `RTT ${Math.round(rttMs)}ms`,
+      `SNAP ${snapshotRate.toFixed(1)}/s`,
+      `NET ${transport}`,
+    ].join(" · ");
+  }, 500);
+}
