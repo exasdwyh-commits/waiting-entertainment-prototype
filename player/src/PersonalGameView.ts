@@ -9,6 +9,7 @@ type ActorView = {
   targetPosition: THREE.Vector3;
   targetQuaternion: THREE.Quaternion;
   state: PlayerState;
+  danger: number;
 };
 
 export class PersonalGameView {
@@ -91,8 +92,24 @@ export class PersonalGameView {
     for (const player of snapshot.players) {
       const actor = this.actors.get(player.id) ?? this.createActor(player);
       actor.targetPosition.set(...player.position);
-      actor.targetQuaternion.set(...player.rotation);
+      if (
+        (player.state === "idle" ||
+          player.state === "moving" ||
+          player.state === "pushing" ||
+          player.state === "climbing" ||
+          player.state === "celebrate") &&
+        isMostlyUpright(player.rotation)
+      ) {
+        actor.targetQuaternion.setFromAxisAngle(
+          new THREE.Vector3(0, 1, 0),
+          player.facingYaw,
+        );
+      } else {
+        actor.targetQuaternion.set(...player.rotation);
+      }
       actor.state = player.state;
+      const radius = Math.hypot(player.position[0], player.position[2]);
+      actor.danger = THREE.MathUtils.clamp((radius - 4.25) / 1.5, 0, 1);
       actor.visual?.setState(player.state);
 
       const visible = !player.eliminated;
@@ -146,6 +163,7 @@ export class PersonalGameView {
       targetPosition: new THREE.Vector3(...player.position),
       targetQuaternion: new THREE.Quaternion(...player.rotation),
       state: player.state,
+      danger: 0,
     };
     this.actors.set(player.id, actor);
 
@@ -169,16 +187,32 @@ export class PersonalGameView {
     if (!own) return;
 
     const ownPosition = this.tmp.set(...own.position);
-    const desired = new THREE.Vector3(
-      ownPosition.x,
-      ownPosition.y + 6.3,
-      ownPosition.z + 5.2,
-    );
+    const edgeMoment = own.state === "edge_hang" || own.state === "climbing";
+    const outward = new THREE.Vector3(ownPosition.x, 0, ownPosition.z);
+    if (outward.lengthSq() > 0.001) outward.normalize();
 
-    this.camera.position.lerp(desired, 0.12);
+    const desired = edgeMoment
+      ? new THREE.Vector3(
+          ownPosition.x + outward.x * 1.9,
+          ownPosition.y + 4.7,
+          ownPosition.z + outward.z * 1.9 + 3.4,
+        )
+      : new THREE.Vector3(
+          ownPosition.x,
+          ownPosition.y + 6.3,
+          ownPosition.z + 5.2,
+        );
+
+    this.camera.position.lerp(desired, edgeMoment ? 0.18 : 0.12);
     this.cameraLook.lerp(
-      new THREE.Vector3(ownPosition.x, Math.max(0.3, ownPosition.y), ownPosition.z - 1.1),
-      0.18,
+      edgeMoment
+        ? new THREE.Vector3(ownPosition.x, ownPosition.y + 0.2, ownPosition.z)
+        : new THREE.Vector3(
+            ownPosition.x,
+            Math.max(0.3, ownPosition.y),
+            ownPosition.z - 1.1,
+          ),
+      edgeMoment ? 0.24 : 0.18,
     );
     this.camera.lookAt(this.cameraLook);
   }
@@ -194,6 +228,19 @@ export class PersonalGameView {
       actor.visual?.update(delta);
       actor.ring.position.copy(actor.root.position);
       actor.ring.position.y = 0.04;
+
+      const ringMaterial = actor.ring.material as THREE.MeshBasicMaterial;
+      const urgent = actor.state === "edge_hang" || actor.state === "climbing";
+      ringMaterial.color.setHex(
+        urgent ? 0xf97316 : actor.danger > 0.55 ? 0xef4444 : 0xffffff,
+      );
+      ringMaterial.opacity = urgent
+        ? 0.78 + Math.sin(performance.now() * 0.018) * 0.18
+        : 0.72 + actor.danger * 0.24;
+      const pulse = urgent
+        ? 1.12 + Math.sin(performance.now() * 0.014) * 0.08
+        : 1 + actor.danger * 0.15;
+      actor.ring.scale.setScalar(pulse);
     }
 
     this.updateCamera();

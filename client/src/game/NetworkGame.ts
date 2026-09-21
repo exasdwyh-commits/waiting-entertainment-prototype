@@ -4,6 +4,7 @@ import QRCode from "qrcode";
 import type { GameEvent, MatchSnapshot, PlayerSnapshot, PlayerState } from "@waiting/shared";
 import { createCharacterVisual, type CharacterVisual } from "./CharacterVisual";
 import { ImpactFx } from "./ImpactFx";
+import { AudioFx } from "./AudioFx";
 
 type View = {
   root: THREE.Group;
@@ -43,6 +44,7 @@ export class NetworkGame {
   private readonly views = new Map<string, View>();
   private readonly history: MatchSnapshot[] = [];
   private readonly fx = new ImpactFx(this.scene);
+  private readonly audioFx = new AudioFx();
   private latest?: MatchSnapshot;
   private replay?: ReplayState;
   private animationFrame = 0;
@@ -154,6 +156,7 @@ export class NetworkGame {
         event.type === "push_hit" ? 0.12 + event.importance * 0.16 :
         0.08;
       this.cameraImpulse = Math.max(this.cameraImpulse, impulse);
+      this.audioFx.play(event.type, event.importance);
 
       const subjectId = event.targetId ?? event.actorId;
       const subject = subjectId
@@ -284,7 +287,11 @@ export class NetworkGame {
       this.refreshLabel(view, player);
       view.targetPosition.set(...player.position);
       if (
-        (player.state === "idle" || player.state === "moving" || player.state === "pushing") &&
+        (player.state === "idle" ||
+          player.state === "moving" ||
+          player.state === "pushing" ||
+          player.state === "climbing" ||
+          player.state === "celebrate") &&
         isMostlyUpright(player.rotation)
       ) {
         view.targetQuaternion.setFromAxisAngle(
@@ -307,7 +314,15 @@ export class NetworkGame {
       const winner = snapshot.players.find((player) => player.id === snapshot.winnerId);
       this.options.message.textContent = winner ? `🏆 ${winner.name} 获胜` : "本局结束";
     } else if (!this.replay && snapshot.phase === "playing") {
-      this.options.message.textContent = "";
+      const edgePlayer = snapshot.players.find(
+        (player) => player.state === "edge_hang" || player.state === "climbing",
+      );
+      this.options.message.textContent =
+        edgePlayer?.state === "edge_hang"
+          ? `⚠ ${edgePlayer.name} 抓住桌沿！`
+          : edgePlayer?.state === "climbing"
+            ? `↥ ${edgePlayer.name} 正在爬回来！`
+            : "";
     }
   }
 
@@ -405,7 +420,9 @@ export class NetworkGame {
       );
     }
 
-    const hanging = alive.find((player) => player.state === "edge_hang");
+    const hanging = alive.find(
+      (player) => player.state === "edge_hang" || player.state === "climbing",
+    );
     if (hanging && !this.replay) {
       centerX = centerX * 0.55 + hanging.position[0] * 0.45;
       centerZ = centerZ * 0.55 + hanging.position[2] * 0.45;

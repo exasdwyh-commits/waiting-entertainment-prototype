@@ -8,6 +8,7 @@ export type PlayerState =
   | "ragdoll"
   | "recovering"
   | "edge_hang"
+  | "climbing"
   | "celebrate"
   | "eliminated";
 
@@ -33,6 +34,7 @@ export interface PlayerSnapshot {
   facingYaw: number;
   velocity: [number, number, number];
   score: number;
+  pushCooldownLeftMs: number;
   state: PlayerState;
   eliminated: boolean;
   bot: boolean;

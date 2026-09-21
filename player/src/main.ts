@@ -1,6 +1,7 @@
 import { io } from "socket.io-client";
 import type { GameEvent, MatchSnapshot } from "@waiting/shared";
 import { PersonalGameView } from "./PersonalGameView";
+import { AudioFx } from "./AudioFx";
 import "./style.css";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
@@ -44,10 +45,12 @@ const statePill = document.querySelector<HTMLDivElement>("#state-pill")!;
 const joystick = document.querySelector<HTMLDivElement>("#joystick")!;
 const stick = document.querySelector<HTMLDivElement>("#stick")!;
 const pushButton = document.querySelector<HTMLButtonElement>("#push")!;
+const pushHint = pushButton.querySelector<HTMLElement>("small")!;
 const stage = document.querySelector<HTMLDivElement>("#personal-stage")!;
 const controllerEl = document.querySelector<HTMLElement>(".controller")!;
 
 const personalView = new PersonalGameView(stage);
+const audioFx = new AudioFx();
 personalView.start();
 
 const endpoint = `${location.protocol}//${location.hostname}:3001`;
@@ -79,6 +82,7 @@ let moveY = 0;
 let pushing = false;
 let activePointer: number | null = null;
 let inputSeq = 0;
+let pushCooldownLeftMs = 0;
 
 socket.on("connect", () => {
   status.textContent = "正在接管角色…";
@@ -117,6 +121,9 @@ socket.on("disconnect", () => {
 socket.on("game:event", (event: GameEvent) => {
   if (!ownedPlayerId) return;
 
+  const isMine = event.targetId === ownedPlayerId || event.actorId === ownedPlayerId;
+  if (isMine) audioFx.play(event.type, event.importance);
+
   if (event.targetId === ownedPlayerId) {
     controllerEl.classList.remove("hit-flash");
     void controllerEl.offsetWidth;
@@ -145,13 +152,22 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
   if (!me) return;
 
   score.textContent = `击落 ${me.score}`;
+  pushCooldownLeftMs = me.pushCooldownLeftMs;
+  const cooldownProgress = 1 - Math.min(1, pushCooldownLeftMs / 850);
+  pushButton.style.setProperty("--cooldown-angle", `${cooldownProgress * 360}deg`);
+  pushButton.classList.toggle("cooling", pushCooldownLeftMs > 45);
+  pushHint.textContent = pushCooldownLeftMs > 45
+    ? `${(pushCooldownLeftMs / 1000).toFixed(1)}s`
+    : "撞飞他";
 
   if (snapshot.phase === "countdown") {
     statePill.textContent = `${Math.max(1, Math.ceil((snapshot.countdownLeftMs ?? 0) / 1000))}`;
   } else if (me.eliminated) {
     statePill.textContent = "已淘汰 · 看大屏";
   } else if (me.state === "edge_hang") {
-    statePill.textContent = "危险！摇杆推向桌内";
+    statePill.textContent = "抓住了！摇杆推向桌内";
+  } else if (me.state === "climbing") {
+    statePill.textContent = "正在爬回桌面！";
   } else if (me.state === "hit" || me.state === "ragdoll") {
     statePill.textContent = "被撞倒！";
   } else if (me.state === "recovering") {
@@ -212,20 +228,14 @@ function releaseStick(event: PointerEvent) {
 joystick.addEventListener("pointerup", releaseStick);
 joystick.addEventListener("pointercancel", releaseStick);
 
-let cooldownTimer = 0;
-
 pushButton.addEventListener("pointerdown", () => {
+  if (pushCooldownLeftMs > 45) {
+    if ("vibrate" in navigator) navigator.vibrate(7);
+    return;
+  }
+
   pushing = true;
   pushButton.classList.add("active");
-  pushButton.classList.remove("cooldown");
-  void pushButton.offsetWidth;
-  pushButton.classList.add("cooldown");
-  window.clearTimeout(cooldownTimer);
-  cooldownTimer = window.setTimeout(
-    () => pushButton.classList.remove("cooldown"),
-    850,
-  );
-
   if ("vibrate" in navigator) navigator.vibrate(18);
   sendInput();
 });

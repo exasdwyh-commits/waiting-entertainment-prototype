@@ -121,8 +121,9 @@ Current MVP uses a single-body assisted-physics character:
 - temporary loss of control after strong hits
 - continuous upright assistance
 - recovery state
-- simplified ledge catch
-- assisted climb-back
+- timed ledge catch
+- staged assisted climb-back
+- failed rescue returns to ragdoll/fall
 
 This intentionally sits between a conventional character controller and a full articulated Active Ragdoll.
 
@@ -147,3 +148,13 @@ Future upgrade path:
 - score and ranking
 - automatic next round
 - final-elimination slow-motion replay
+
+
+## Game-feel synchronization
+
+Important control feedback is authoritative where desynchronization would be noticeable.
+
+- Push cooldown is calculated on the host and included in player snapshots.
+- Phone UI renders the remaining host cooldown instead of starting an independent local timer.
+- Ledge rescue is a host-owned state transition: `EDGE_HANG -> CLIMBING -> RECOVERING`.
+- Camera, VFX, haptics and procedural audio are client presentation only and never decide gameplay.
