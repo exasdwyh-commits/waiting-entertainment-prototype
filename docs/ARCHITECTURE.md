@@ -1,84 +1,149 @@
 # Waiting Entertainment Prototype Architecture
 
-## Product Position
+## Product topology
 
-Waiting Entertainment is a public multiplayer entertainment system, not a traditional mobile game.
+Waiting Entertainment is a **single-site local party game appliance**.
 
-Primary goals:
+It is not an Internet matchmaking platform and does not need room discovery, lobbies, multi-room orchestration, or cloud-authoritative gameplay.
 
-1. Instant participation
-2. Large screen spectacle
-3. Short competitive rounds
-4. Physics-driven fun
-
-## Core Architecture
+The restaurant has one host computer:
 
 ```
-Big Screen Client
-        |
-   WebSocket
-        |
- Game Server
-        |
- ----------------
- |              |
-Players       AI Bots
+Restaurant Host Computer
+├─ Authoritative GameSession
+│  ├─ Rapier physics @ 60Hz
+│  ├─ 8 persistent player slots
+│  ├─ AI takeover
+│  ├─ score / timer / rules
+│  └─ event + replay source data
+│
+├─ Big Screen
+│  ├─ Three.js spectator rendering
+│  ├─ camera director
+│  ├─ ranking
+│  └─ slow-motion replay
+│
+└─ LAN / Wi-Fi
+   ├─ Phone 1 personal game view + controls
+   ├─ Phone 2 personal game view + controls
+   └─ ...
 ```
 
-## Monorepo Direction
+## One permanent game session
+
+There is no user-facing concept of creating or finding a room.
+
+Starting the restaurant host starts the game session.
+
+The server owns eight persistent physical character slots:
 
 ```
-client/
-  Large screen Three.js game
-
-player/
-  Mobile browser controller
-
-server/
-  Authoritative game server
-
-shared/
-  Protocols and shared types
+P1 P2 P3 P4 P5 P6 P7 P8
 ```
 
-## Technical Principles
+All slots start under AI control.
 
-### Server authoritative
+When a guest scans the QR code, that phone takes control of an available AI slot.
 
-Server controls:
+When the phone disconnects, AI immediately takes over the **same physical character** so the match never blocks.
 
-- Physics state
-- Collision results
-- Match state
-- AI behavior
-- Scoring
+A stable browser `sessionId` is retained briefly. If the guest refreshes, wakes the phone, or reconnects after Wi-Fi interruption, the same phone reclaims the same character.
 
-Client controls:
+## Authority
 
-- Input
-- Rendering
-- Animation interpolation
+The restaurant host is the single source of truth.
 
-## Physics Direction
+### Host owns
 
-MVP uses a simplified hybrid ragdoll approach:
+- Rapier world
+- collisions and impulses
+- player states
+- AI decisions
+- eliminations
+- score
+- round lifecycle
+- replay event markers
 
-NORMAL
--> HIT
--> RAGDOLL
--> RECOVER
+### Big screen owns only presentation
 
-Future extension:
+- interpolation
+- camera
+- HUD
+- ranking
+- slow-motion playback of recorded snapshots
+- visual/audio effects
 
-- Active Ragdoll
-- Ledge Catch
-- Advanced recovery
+### Phone owns only input and a personal presentation
 
-## First Game
+- personal follow camera
+- lightweight Three.js scene
+- touch joystick
+- push button
+- haptics
+- player-specific status
 
-Table Push King:
+The phone does **not** run authoritative physics.
 
-- Circular table arena
-- 2-8 players
-- 60 second rounds
-- Last survivor wins
+## Simulation and networking
+
+- Physics: 60Hz on the host
+- State snapshots: 20Hz
+- Important events: emitted immediately
+- Phone input: event-driven / pointer updates
+- Big screen and phones interpolate state locally
+
+This is deliberately simpler than Internet competitive-game prediction/rollback because all gameplay devices are expected to be on the same restaurant LAN.
+
+## Character architecture
+
+Physics and visuals are independent.
+
+```
+Rapier rigid body
+      │
+      ├─ authoritative position / rotation / state
+      │
+      ▼
+CharacterVisual
+      ├─ GLB model
+      ├─ animation mixer
+      └─ capsule fallback
+```
+
+The current character is a temporary CC0 low-poly GLB. Replacing `character.glb` does not require changing gameplay physics or networking.
+
+## Physical character direction
+
+Current MVP uses a single-body assisted-physics character:
+
+- dynamic capsule body
+- physical hit impulses
+- temporary loss of control after strong hits
+- continuous upright assistance
+- recovery state
+- simplified ledge catch
+- assisted climb-back
+
+This intentionally sits between a conventional character controller and a full articulated Active Ragdoll.
+
+Future upgrade path:
+
+1. improve balance torque and stumble thresholds
+2. split visual limbs from the central gameplay body
+3. optional articulated upper body
+4. optional full Active Ragdoll if playtesting proves the extra complexity is worthwhile
+
+## First game: Table Push King
+
+- 1-8 human guests
+- AI fills unused slots
+- circular tabletop arena
+- three-second countdown
+- 60-second rounds
+- movement + one push action
+- knockdown / recovery
+- ledge catch
+- falling elimination
+- score and ranking
+- automatic next round
+- final-elimination slow-motion replay
