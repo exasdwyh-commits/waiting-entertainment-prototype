@@ -24,6 +24,7 @@ type Slot = {
   state: PlayerState;
   alive: boolean;
   pushReadyAt: number;
+  pushStateUntil: number;
   knockedUntil: number;
   recoverUntil: number;
   edgeHangUntil: number;
@@ -185,6 +186,7 @@ export class GameSession {
         state: "idle",
         alive: true,
         pushReadyAt: 0,
+        pushStateUntil: 0,
         knockedUntil: 0,
         recoverUntil: 0,
         edgeHangUntil: 0,
@@ -232,6 +234,7 @@ export class GameSession {
       slot.knockedUntil = 0;
       slot.recoverUntil = 0;
       slot.pushReadyAt = this.countdownUntil + 800;
+      slot.pushStateUntil = 0;
       slot.score = 0;
       slot.lastHitBy = undefined;
       slot.lastHitAt = 0;
@@ -296,6 +299,8 @@ export class GameSession {
       this.winnerId = rankedAlive[0]?.id;
       this.restartAt = now + 8_000;
       if (this.winnerId) {
+        const winner = this.slots.find((slot) => slot.id === this.winnerId);
+        if (winner) winner.state = "celebrate";
         this.emitEvent("win", now, this.winnerId, undefined, 1);
       }
     }
@@ -407,13 +412,15 @@ export class GameSession {
     if (slot.edgeHanging || now < slot.knockedUntil) return;
 
     const magnitude = Math.hypot(direction.x, direction.z);
+    const attackLocked = slot.state === "pushing" && now < slot.pushStateUntil;
+
     if (magnitude < 0.05) {
-      if (slot.state !== "recovering") slot.state = "idle";
+      if (slot.state !== "recovering" && !attackLocked) slot.state = "idle";
       return;
     }
 
-    const controlScale = slot.state === "recovering" ? 0.35 : 1;
-    if (slot.state !== "recovering") slot.state = "moving";
+    const controlScale = slot.state === "recovering" ? 0.35 : attackLocked ? 0.72 : 1;
+    if (slot.state !== "recovering" && !attackLocked) slot.state = "moving";
     slot.facingYaw = Math.atan2(direction.x, direction.z);
     slot.body.applyImpulse(
       {
@@ -461,6 +468,7 @@ export class GameSession {
     const dir = normalize(dx, dz);
     slot.facingYaw = Math.atan2(dir.x, dir.z);
     slot.pushReadyAt = now + PUSH_COOLDOWN_MS;
+    slot.pushStateUntil = now + 320;
     slot.state = "pushing";
     slot.body.applyImpulse({ x: dir.x * 1.7, y: 0.1, z: dir.z * 1.7 }, true);
 
