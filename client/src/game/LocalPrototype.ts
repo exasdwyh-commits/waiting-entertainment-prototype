@@ -45,6 +45,8 @@ export class LocalPrototype {
   private restartAt = 0;
   private lastReplaySampleAt = 0;
   private animationFrame = 0;
+  private lazySusan?: THREE.Group;
+  private centerSpinRadians = 0;
 
   constructor(private readonly options: PrototypeOptions) {}
 
@@ -107,6 +109,26 @@ export class LocalPrototype {
     rim.rotation.x = Math.PI / 2;
     rim.position.y = 0.04;
     this.scene.add(rim);
+
+    const lazySusan = new THREE.Group();
+    const glass = new THREE.Mesh(
+      new THREE.CylinderGeometry(
+        TABLE_PUSH_GEOMETRY.lazySusanRadius,
+        TABLE_PUSH_GEOMETRY.lazySusanRadius,
+        0.08,
+        56,
+      ),
+      new THREE.MeshStandardMaterial({
+        color: 0xd8f0ee,
+        roughness: 0.3,
+        transparent: true,
+        opacity: 0.6,
+      }),
+    );
+    glass.position.y = 0.055;
+    lazySusan.add(glass);
+    this.lazySusan = lazySusan;
+    this.scene.add(lazySusan);
 
     const pedestal = new THREE.Mesh(
       new THREE.CylinderGeometry(1.45, 2.2, 3.5, 32),
@@ -186,6 +208,8 @@ export class LocalPrototype {
 
     this.actors = Array.from({ length: PLAYER_COUNT }, (_, index) => this.createActor(index));
     this.roundStartedAt = performance.now();
+    this.centerSpinRadians = 0;
+    if (this.lazySusan) this.lazySusan.rotation.y = 0;
     this.roundEnded = false;
     this.restartAt = 0;
     this.options.message.textContent = "3 · 2 · 1 · 推！";
@@ -366,6 +390,46 @@ export class LocalPrototype {
     }
   }
 
+  private updateLazySusan(now: number, delta: number) {
+    if (this.roundEnded) return;
+
+    const elapsed = Math.max(0, now - this.roundStartedAt);
+    const progress = Math.max(0, Math.min(1, elapsed / ROUND_MS));
+    let speed = 0.28 + (0.72 - 0.28) * progress;
+    if (ROUND_MS - elapsed <= 10_000) speed *= 1.45;
+
+    this.centerSpinRadians =
+      (this.centerSpinRadians + speed * delta) % (Math.PI * 2);
+    if (this.lazySusan) this.lazySusan.rotation.y = this.centerSpinRadians;
+
+    const speedRatio = Math.min(1, speed / (0.72 * 1.45));
+    for (const actor of this.actors) {
+      if (!actor.alive || actor.edgeHanging) continue;
+
+      const p = actor.body.translation();
+      const radius = Math.hypot(p.x, p.z);
+      if (radius <= 0.15 || radius > TABLE_PUSH_GEOMETRY.lazySusanRadius) continue;
+
+      const radialRatio = Math.min(
+        1,
+        radius / TABLE_PUSH_GEOMETRY.lazySusanRadius,
+      );
+      const impulse =
+        0.012 *
+        (0.45 + speedRatio * 0.55) *
+        radialRatio;
+
+      actor.body.applyImpulse(
+        {
+          x: (-p.z / radius) * impulse,
+          y: 0,
+          z: (p.x / radius) * impulse,
+        },
+        true,
+      );
+    }
+  }
+
   private sampleReplay(now: number) {
     if (now - this.lastReplaySampleAt < 100) return;
     this.lastReplaySampleAt = now;
@@ -454,6 +518,8 @@ export class LocalPrototype {
         }
       }
     }
+
+    this.updateLazySusan(now, delta);
 
     this.pushQueued = false;
     this.world.timestep = Math.max(1 / 120, Math.min(1 / 30, delta || 1 / 60));
