@@ -25,6 +25,7 @@ type Options = {
   status: HTMLElement;
   qr: HTMLCanvasElement;
   joinText: HTMLElement;
+  ranking: HTMLElement;
 };
 
 const REPLAY_SPEED = 0.45;
@@ -240,6 +241,7 @@ export class NetworkGame {
 
   private applySnapshot(snapshot: MatchSnapshot) {
     this.options.timer.textContent = String(Math.ceil(snapshot.timeLeftMs / 1000));
+    this.renderRanking(snapshot);
 
     for (const player of snapshot.players) {
       const view = this.views.get(player.id) ?? this.createView(player);
@@ -250,11 +252,38 @@ export class NetworkGame {
       view.label.visible = !player.eliminated;
     }
 
-    if (!this.replay && snapshot.phase === "finished") {
+    if (!this.replay && snapshot.phase === "countdown") {
+      const count = Math.max(1, Math.ceil((snapshot.countdownLeftMs ?? 0) / 1000));
+      this.options.message.textContent = String(count);
+    } else if (!this.replay && snapshot.phase === "finished") {
       const winner = snapshot.players.find((player) => player.id === snapshot.winnerId);
       this.options.message.textContent = winner ? `🏆 ${winner.name} 获胜` : "本局结束";
     } else if (!this.replay && snapshot.phase === "playing") {
       this.options.message.textContent = "";
+    }
+  }
+
+  private renderRanking(snapshot: MatchSnapshot) {
+    const ranked = [...snapshot.players].sort((a, b) => {
+      if (a.eliminated !== b.eliminated) return a.eliminated ? 1 : -1;
+      if (b.score !== a.score) return b.score - a.score;
+      const ar = Math.hypot(a.position[0], a.position[2]);
+      const br = Math.hypot(b.position[0], b.position[2]);
+      return ar - br;
+    });
+
+    this.options.ranking.replaceChildren();
+    for (const [index, player] of ranked.entries()) {
+      const item = document.createElement("li");
+      item.className = player.eliminated ? "eliminated" : "";
+      const rank = document.createElement("b");
+      rank.textContent = String(index + 1);
+      const name = document.createElement("span");
+      name.textContent = player.bot ? `${player.name} · AI` : player.name;
+      const score = document.createElement("em");
+      score.textContent = `+${player.score}`;
+      item.append(rank, name, score);
+      this.options.ranking.append(item);
     }
   }
 
