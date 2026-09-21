@@ -14,6 +14,7 @@ root.innerHTML = `
     </div>
     <div class="timer"><span id="timer">60</span>s</div>
   </section>
+  <ol class="ranking" id="ranking" aria-label="实时排名"></ol>
   <aside class="join-panel" id="join-panel">
     <canvas id="qr" width="144" height="144"></canvas>
     <div>
@@ -45,6 +46,7 @@ if (localMode) {
     status: document.querySelector<HTMLSpanElement>("#status")!,
     qr: document.querySelector<HTMLCanvasElement>("#qr")!,
     joinText: document.querySelector<HTMLSpanElement>("#join-text")!,
+    ranking: document.querySelector<HTMLOListElement>("#ranking")!,
   });
   game.start();
 }
