@@ -7,6 +7,7 @@ import { createCharacterVisual, type CharacterVisual } from "./CharacterVisual";
 import { ImpactFx } from "./ImpactFx";
 import { AudioFx } from "./AudioFx";
 import { addRestaurantEnvironment } from "./RestaurantEnvironment";
+import { BroadcastDirector, type BroadcastShot } from "./BroadcastDirector";
 
 type View = {
   root: THREE.Group;
@@ -25,6 +26,7 @@ type ReplayClip = {
   frames: MatchSnapshot[];
   label: string;
   loops: number;
+  eventType?: GameEvent["type"];
   actorId?: string;
   targetId?: string;
 };
@@ -32,7 +34,7 @@ type ReplayClip = {
 type ReplayState = ReplayClip & {
   startedAt: number;
   loopsRemaining: number;
-  closeCamera: boolean;
+  reverseAngle: boolean;
 };
 
 type Options = {
@@ -43,12 +45,17 @@ type Options = {
   qr: HTMLCanvasElement;
   joinText: HTMLElement;
   ranking: HTMLElement;
+  broadcastBug: HTMLElement;
+  directorMode: HTMLElement;
+  directorLabel: HTMLElement;
+  replayWipe: HTMLElement;
 };
 
 const REPLAY_SPEED = 0.45;
-const REPLAY_LOOKBACK_MS = 1_050;
+const REPLAY_LOOKBACK_MS = 1_300;
+const REPLAY_LOOKAHEAD_MS = 550;
 const HISTORY_MS = 65_000;
-const MAX_HIGHLIGHTS = 2;
+const MAX_HIGHLIGHTS = 3;
 
 export class NetworkGame {
   private readonly scene = new THREE.Scene();
@@ -59,6 +66,7 @@ export class NetworkGame {
   private readonly history: MatchSnapshot[] = [];
   private readonly fx = new ImpactFx(this.scene);
   private readonly audioFx = new AudioFx();
+  private readonly director = new BroadcastDirector();
   private latest?: MatchSnapshot;
   private displaySnapshot?: MatchSnapshot;
   private replay?: ReplayState;
@@ -74,6 +82,7 @@ export class NetworkGame {
   private lazySusan?: THREE.Group;
   private centerSpinRadians = 0;
   private centerSpinSpeed = 0;
+  private lastDirectorShot?: BroadcastShot;
 
   constructor(private readonly options: Options) {}
 
