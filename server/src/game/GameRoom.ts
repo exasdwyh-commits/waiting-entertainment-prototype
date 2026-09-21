@@ -197,7 +197,7 @@ export class GameRoom {
     if (now - this.startedAt >= ROUND_MS || alive.length <= 1) {
       this.phase = "finished";
       this.winnerId = alive[0]?.id;
-      this.restartAt = now + 3_500;
+      this.restartAt = now + 8_000;
       if (this.winnerId) {
         this.emitEvent("win", now, this.winnerId, undefined, 1);
       }
@@ -422,16 +422,11 @@ export class GameRoom {
         const p = slot.body.translation();
         const q = slot.body.rotation();
         const v = slot.body.linvel();
-        const rotationY = Math.atan2(
-          2 * (q.w * q.y + q.x * q.z),
-          1 - 2 * (q.y * q.y + q.z * q.z),
-        );
-
         return {
           id: slot.id,
           name: slot.name,
           position: [p.x, p.y, p.z],
-          rotationY,
+          rotation: [q.x, q.y, q.z, q.w],
           velocity: [v.x, v.y, v.z],
           state: slot.state,
           eliminated: !slot.alive,
