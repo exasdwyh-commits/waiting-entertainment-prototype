@@ -32,6 +32,13 @@ export const GAME_TUNING = {
     momentumReferenceSpeed: 4.2,
   },
 
+  environment: {
+    lazySusanBaseSpeed: 0.28,
+    lazySusanMaxSpeed: 0.72,
+    lazySusanImpulsePerTick: 0.012,
+    finalTenSpeedMultiplier: 1.45,
+  },
+
   toss: {
     range: 1.25,
     maxTargetBalance: 0.52,
@@ -114,6 +121,14 @@ export function validateGameTuning() {
   requireFinitePositive("push.momentumReferenceSpeed", GAME_TUNING.push.momentumReferenceSpeed);
   if (GAME_TUNING.push.momentumMaxMultiplier < GAME_TUNING.push.momentumMinMultiplier) {
     throw new Error("Invalid game tuning: push momentum max must be >= min");
+  }
+
+  requireFinitePositive("environment.lazySusanBaseSpeed", GAME_TUNING.environment.lazySusanBaseSpeed);
+  requireFinitePositive("environment.lazySusanMaxSpeed", GAME_TUNING.environment.lazySusanMaxSpeed);
+  requireFinitePositive("environment.lazySusanImpulsePerTick", GAME_TUNING.environment.lazySusanImpulsePerTick);
+  requireFinitePositive("environment.finalTenSpeedMultiplier", GAME_TUNING.environment.finalTenSpeedMultiplier);
+  if (GAME_TUNING.environment.lazySusanMaxSpeed < GAME_TUNING.environment.lazySusanBaseSpeed) {
+    throw new Error("Invalid game tuning: lazy Susan max speed must be >= base speed");
   }
 
   requireFinitePositive("toss.range", GAME_TUNING.toss.range);
