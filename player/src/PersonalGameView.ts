@@ -186,8 +186,26 @@ export class PersonalGameView {
     const own = snapshot.players.find((player) => player.id === ownId);
     if (!own) return;
 
-    const ownPosition = this.tmp.set(...own.position);
-    const edgeMoment = own.state === "edge_hang" || own.state === "climbing";
+    const alive = snapshot.players.filter((player) => !player.eliminated);
+    const fallbackSpectator = [...alive].sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const ar = Math.hypot(a.position[0], a.position[2]);
+      const br = Math.hypot(b.position[0], b.position[2]);
+      return ar - br;
+    })[0];
+
+    const winner = snapshot.winnerId
+      ? snapshot.players.find((player) => player.id === snapshot.winnerId)
+      : undefined;
+
+    const subject =
+      own.eliminated || snapshot.phase === "finished"
+        ? winner ?? fallbackSpectator ?? own
+        : own;
+
+    const ownPosition = this.tmp.set(...subject.position);
+    const edgeMoment = subject.state === "edge_hang" || subject.state === "climbing";
+    const spectatorMode = subject.id !== own.id;
     const outward = new THREE.Vector3(ownPosition.x, 0, ownPosition.z);
     if (outward.lengthSq() > 0.001) outward.normalize();
 
@@ -199,11 +217,14 @@ export class PersonalGameView {
         )
       : new THREE.Vector3(
           ownPosition.x,
-          ownPosition.y + 6.3,
-          ownPosition.z + 5.2,
+          ownPosition.y + (spectatorMode ? 7.1 : 6.3),
+          ownPosition.z + (spectatorMode ? 6.3 : 5.2),
         );
 
-    this.camera.position.lerp(desired, edgeMoment ? 0.18 : 0.12);
+    this.camera.position.lerp(
+      desired,
+      edgeMoment ? 0.18 : spectatorMode ? 0.09 : 0.12,
+    );
     this.cameraLook.lerp(
       edgeMoment
         ? new THREE.Vector3(ownPosition.x, ownPosition.y + 0.2, ownPosition.z)
@@ -212,7 +233,7 @@ export class PersonalGameView {
             Math.max(0.3, ownPosition.y),
             ownPosition.z - 1.1,
           ),
-      edgeMoment ? 0.24 : 0.18,
+      edgeMoment ? 0.24 : spectatorMode ? 0.13 : 0.18,
     );
     this.camera.lookAt(this.cameraLook);
   }

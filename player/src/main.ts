@@ -83,6 +83,7 @@ let pushing = false;
 let activePointer: number | null = null;
 let inputSeq = 0;
 let pushCooldownLeftMs = 0;
+let eliminated = false;
 
 socket.on("connect", () => {
   status.textContent = "正在接管角色…";
@@ -146,12 +147,17 @@ socket.on("game:event", (event: GameEvent) => {
 socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
   personalView.update(snapshot);
   timer.textContent = String(Math.ceil(snapshot.timeLeftMs / 1000));
+  const tension = snapshot.phase === "playing" && snapshot.timeLeftMs <= 10_000;
+  timer.classList.toggle("danger", tension);
+  controllerEl.classList.toggle("tension", tension);
 
   if (!ownedPlayerId) return;
   const me = snapshot.players.find((player) => player.id === ownedPlayerId);
   if (!me) return;
 
   score.textContent = `击落 ${me.score}`;
+  eliminated = me.eliminated;
+  controllerEl.classList.toggle("spectating", eliminated);
   pushCooldownLeftMs = me.pushCooldownLeftMs;
   const cooldownProgress = 1 - Math.min(1, pushCooldownLeftMs / 850);
   pushButton.style.setProperty("--cooldown-angle", `${cooldownProgress * 360}deg`);
@@ -163,7 +169,15 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
   if (snapshot.phase === "countdown") {
     statePill.textContent = `${Math.max(1, Math.ceil((snapshot.countdownLeftMs ?? 0) / 1000))}`;
   } else if (me.eliminated) {
-    statePill.textContent = "已淘汰 · 看大屏";
+    const alive = snapshot.players
+      .filter((player) => !player.eliminated)
+      .sort((a, b) => b.score - a.score);
+    const target = snapshot.winnerId
+      ? snapshot.players.find((player) => player.id === snapshot.winnerId)
+      : alive[0];
+    statePill.textContent = target
+      ? `已淘汰 · 观战 ${target.name}`
+      : "已淘汰 · 等待下一局";
   } else if (me.state === "edge_hang") {
     statePill.textContent = "抓住了！摇杆推向桌内";
   } else if (me.state === "climbing") {
@@ -180,7 +194,7 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
 });
 
 function sendInput() {
-  if (!socket.connected || !ownedPlayerId) return;
+  if (!socket.connected || !ownedPlayerId || eliminated) return;
   inputSeq += 1;
   socket.emit("input", { seq: inputSeq, moveX, moveY, push: pushing });
 }
@@ -229,6 +243,7 @@ joystick.addEventListener("pointerup", releaseStick);
 joystick.addEventListener("pointercancel", releaseStick);
 
 pushButton.addEventListener("pointerdown", () => {
+  if (eliminated) return;
   if (pushCooldownLeftMs > 45) {
     if ("vibrate" in navigator) navigator.vibrate(7);
     return;
