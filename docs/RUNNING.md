@@ -84,3 +84,35 @@ GitHub Actions currently verifies:
 - disconnect returns the slot to AI
 
 Real-device game-feel validation is still required.
+
+
+## Mobile performance adaptation
+
+The phone renderer automatically adapts render resolution when sustained frame rate drops.
+
+- Target quality starts at up to 1.5 device pixel ratio.
+- Sustained low FPS lowers render DPR in small steps.
+- Sustained high FPS restores quality gradually.
+- Input, server physics and match rules are never reduced.
+- Only phone rendering resolution changes.
+
+This exists specifically to keep the personal 3D view usable across a wide range of guest phones.
+
+## Phone diagnostics
+
+For field testing, open the phone controller with:
+
+```text
+http://<HOST-LAN-IP>:5174/?debug=1
+```
+
+A small diagnostics overlay shows:
+
+- FPS
+- current render DPR
+- quality tier
+- LAN round-trip time
+- authoritative snapshot rate
+- active Socket.IO transport
+
+Normal guests do not see this panel.

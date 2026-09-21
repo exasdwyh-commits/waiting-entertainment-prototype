@@ -37,6 +37,13 @@ io.on("connection", (socket) => {
     session.input(socket.id, payload ?? {});
   });
 
+  socket.on(
+    "latency:ping",
+    (_payload: unknown, ack?: (value: { ok: true }) => void) => {
+      ack?.({ ok: true });
+    },
+  );
+
   socket.on("disconnect", () => {
     session.leave(socket.id);
   });

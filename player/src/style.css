@@ -322,3 +322,21 @@ body,
   from { transform: scale(1); text-shadow: 0 0 0 rgba(239,68,68,0); }
   to { transform: scale(1.08); text-shadow: 0 0 18px rgba(239,68,68,.65); }
 }
+
+
+.debug-panel {
+  position: absolute;
+  z-index: 20;
+  left: 10px;
+  top: 10px;
+  max-width: calc(100vw - 20px);
+  padding: 6px 9px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 8px;
+  background: rgba(0,0,0,.68);
+  color: #d1fae5;
+  font: 700 10px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .02em;
+  pointer-events: none;
+  backdrop-filter: blur(5px);
+}
