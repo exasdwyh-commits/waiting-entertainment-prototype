@@ -1,6 +1,7 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import type { Server } from "socket.io";
 import type { GameEvent, MatchSnapshot, PlayerInput, PlayerSnapshot, PlayerState } from "@waiting/shared";
+import { GAME_TUNING, validateGameTuning } from "./tuning.js";
 
 const PLAYER_COUNT = 8;
 const ARENA_RADIUS = 6;
@@ -9,7 +10,6 @@ const TICK_MS = 1000 / PHYSICS_HZ;
 const SNAPSHOT_INTERVAL_TICKS = 3; // 20Hz network snapshots; physics remains 60Hz.
 const ROUND_MS = 60_000;
 const COUNTDOWN_MS = 3_000;
-const PUSH_COOLDOWN_MS = 850;
 const SESSION_RECOVERY_MS = 90_000;
 
 type Slot = {
@@ -67,8 +67,9 @@ export class GameSession {
   constructor(private readonly io: Server) {}
 
   async start() {
+    validateGameTuning();
     await RAPIER.init();
-    this.world = new RAPIER.World({ x: 0, y: -18, z: 0 });
+    this.world = new RAPIER.World({ x: 0, y: GAME_TUNING.world.gravityY, z: 0 });
     this.createArena();
     this.createSlots();
     this.resetRound();
@@ -165,8 +166,8 @@ export class GameSession {
 
     this.world.createCollider(
       RAPIER.ColliderDesc.cylinder(0.25, ARENA_RADIUS)
-        .setFriction(1.25)
-        .setRestitution(0.04),
+        .setFriction(GAME_TUNING.world.arenaFriction)
+        .setRestitution(GAME_TUNING.world.arenaRestitution),
       body,
     );
   }
@@ -176,16 +177,16 @@ export class GameSession {
       const body = this.world.createRigidBody(
         RAPIER.RigidBodyDesc.dynamic()
           .setTranslation(0, 1, 0)
-          .setLinearDamping(2.5)
-          .setAngularDamping(2.2)
+          .setLinearDamping(GAME_TUNING.movement.linearDamping)
+          .setAngularDamping(GAME_TUNING.movement.angularDamping)
           .setCanSleep(false),
       );
 
       this.world.createCollider(
         RAPIER.ColliderDesc.capsule(0.48, 0.36)
           .setDensity(1.2)
-          .setFriction(1.1)
-          .setRestitution(0.08),
+          .setFriction(GAME_TUNING.movement.colliderFriction)
+          .setRestitution(GAME_TUNING.movement.colliderRestitution),
         body,
       );
 
@@ -262,7 +263,7 @@ export class GameSession {
       slot.climbTo = undefined;
       slot.knockedUntil = 0;
       slot.recoverUntil = 0;
-      slot.pushReadyAt = this.countdownUntil + 800;
+      slot.pushReadyAt = this.countdownUntil + GAME_TUNING.push.cooldownMs;
       slot.pushStateUntil = 0;
       slot.score = 0;
       slot.lastHitBy = undefined;
@@ -347,14 +348,18 @@ export class GameSession {
 
     if ((slot.state === "hit" || slot.state === "ragdoll") && now >= slot.knockedUntil) {
       slot.state = "recovering";
-      slot.recoverUntil = now + 420 + (1 - slot.balance) * 360;
+      slot.recoverUntil = now + GAME_TUNING.balance.recoveryStateBaseMs + (1 - slot.balance) * GAME_TUNING.balance.recoveryStateBalanceMs;
     }
 
     const recovering = slot.state === "recovering";
     const hardStunned =
       (slot.state === "hit" || slot.state === "ragdoll") &&
       now < slot.knockedUntil;
-    const recoveryPerSecond = recovering ? 0.9 : hardStunned ? 0 : 0.34;
+    const recoveryPerSecond = recovering
+      ? GAME_TUNING.balance.recoveringPerSecond
+      : hardStunned
+        ? 0
+        : GAME_TUNING.balance.passivePerSecond;
 
     slot.balance = clamp(
       slot.balance + recoveryPerSecond / PHYSICS_HZ,
@@ -389,9 +394,9 @@ export class GameSession {
 
     if (t >= 1) {
       slot.body.setGravityScale(1, true);
-      slot.balance = Math.max(slot.balance, 0.52);
+      slot.balance = Math.max(slot.balance, GAME_TUNING.ledge.successfulClimbBalance);
       slot.state = "recovering";
-      slot.recoverUntil = now + 360;
+      slot.recoverUntil = now + GAME_TUNING.ledge.climbRecoveryMs;
       slot.climbFrom = undefined;
       slot.climbTo = undefined;
     }
@@ -414,9 +419,14 @@ export class GameSession {
     const radius = Math.hypot(p.x, p.z);
     const edgeSupport = clamp((ARENA_RADIUS - radius + 0.12) / 0.9, 0.12, 1);
     const balanceAssist = 0.22 + slot.balance * 0.78;
-    const recoveryBoost = slot.state === "recovering" ? 1.85 : 1;
+    const recoveryBoost = slot.state === "recovering"
+      ? GAME_TUNING.balance.uprightRecoveryBoost
+      : 1;
     const strength =
-      Math.min(0.11, tilt * 0.045) *
+      Math.min(
+        GAME_TUNING.balance.uprightMaxTorque,
+        tilt * GAME_TUNING.balance.uprightTiltFactor,
+      ) *
       recoveryBoost *
       balanceAssist *
       edgeSupport;
@@ -514,24 +524,30 @@ export class GameSession {
       return;
     }
 
-    const controlScale = slot.state === "recovering" ? 0.35 : attackLocked ? 0.72 : 1;
-    const balanceControl = 0.52 + slot.balance * 0.48;
+    const controlScale = slot.state === "recovering"
+      ? GAME_TUNING.movement.recoveryControlScale
+      : attackLocked
+        ? GAME_TUNING.movement.attackControlScale
+        : 1;
+    const balanceControl =
+      GAME_TUNING.movement.minBalanceControl +
+      slot.balance * (1 - GAME_TUNING.movement.minBalanceControl);
     const moveScale = (slot.bot ? slot.botMoveScale : 1) * balanceControl;
     if (slot.state !== "recovering" && !attackLocked) slot.state = "moving";
     slot.facingYaw = Math.atan2(direction.x, direction.z);
     slot.body.applyImpulse(
       {
-        x: direction.x * 0.16 * controlScale * moveScale,
+        x: direction.x * GAME_TUNING.movement.impulsePerTick * controlScale * moveScale,
         y: 0,
-        z: direction.z * 0.16 * controlScale * moveScale,
+        z: direction.z * GAME_TUNING.movement.impulsePerTick * controlScale * moveScale,
       },
       true,
     );
 
     const velocity = slot.body.linvel();
     const horizontal = Math.hypot(velocity.x, velocity.z);
-    if (horizontal > 4.2) {
-      const scale = 4.2 / horizontal;
+    if (horizontal > GAME_TUNING.movement.maxHorizontalSpeed) {
+      const scale = GAME_TUNING.movement.maxHorizontalSpeed / horizontal;
       slot.body.setLinvel(
         { x: velocity.x * scale, y: velocity.y, z: velocity.z * scale },
         true,
@@ -581,10 +597,17 @@ export class GameSession {
 
     const dir = normalize(dx, dz);
     slot.facingYaw = Math.atan2(dir.x, dir.z);
-    slot.pushReadyAt = now + PUSH_COOLDOWN_MS * (slot.bot ? slot.botCooldownScale : 1);
-    slot.pushStateUntil = now + 320;
+    slot.pushReadyAt = now + GAME_TUNING.push.cooldownMs * (slot.bot ? slot.botCooldownScale : 1);
+    slot.pushStateUntil = now + GAME_TUNING.push.animationHoldMs;
     slot.state = "pushing";
-    slot.body.applyImpulse({ x: dir.x * 1.7, y: 0.1, z: dir.z * 1.7 }, true);
+    slot.body.applyImpulse(
+      {
+        x: dir.x * GAME_TUNING.push.lungeImpulse,
+        y: GAME_TUNING.push.lungeLift,
+        z: dir.z * GAME_TUNING.push.lungeImpulse,
+      },
+      true,
+    );
 
     const origin = slot.body.translation();
 
@@ -594,26 +617,35 @@ export class GameSession {
       const rx = p.x - origin.x;
       const rz = p.z - origin.z;
       const distance = Math.hypot(rx, rz);
-      if (distance > 1.65 || distance < 0.001) continue;
+      if (distance > GAME_TUNING.push.hitRange || distance < 0.001) continue;
 
       const radial = normalize(rx, rz);
       const facing = dir.x * radial.x + dir.z * radial.z;
-      if (facing < 0.15) continue;
+      if (facing < GAME_TUNING.push.minimumFacingDot) continue;
 
-      const strength = Math.max(0.8, 3.0 * (1 - distance / 2.25));
-      const impact = clamp(strength / 3, 0, 1);
+      const strength = Math.max(
+        0.8,
+        GAME_TUNING.push.maxStrength *
+          (1 - distance / GAME_TUNING.push.falloffDistance),
+      );
+      const impact = clamp(strength / GAME_TUNING.push.maxStrength, 0, 1);
       target.body.applyImpulseAtPoint(
-        { x: radial.x * strength, y: 0.65, z: radial.z * strength },
+        { x: radial.x * strength, y: GAME_TUNING.push.verticalHitImpulse, z: radial.z * strength },
         { x: p.x, y: p.y + 0.55, z: p.z },
         true,
       );
       target.balance = clamp(
-        target.balance - (0.26 + impact * 0.52),
-        0.08,
+        target.balance -
+          (GAME_TUNING.balance.hitLossBase +
+            impact * GAME_TUNING.balance.hitLossScale),
+        GAME_TUNING.balance.minimumAfterHit,
         1,
       );
       target.state = "hit";
-      target.knockedUntil = now + 360 + impact * 460;
+      target.knockedUntil =
+        now +
+        GAME_TUNING.balance.knockdownBaseMs +
+        impact * GAME_TUNING.balance.knockdownImpactMs;
       target.lastHitBy = slot.id;
       target.lastHitAt = now;
       this.emitEvent("push_hit", now, slot.id, target.id, impact);
@@ -634,8 +666,8 @@ export class GameSession {
       radius < ARENA_RADIUS + 1.2
     ) {
       slot.edgeHanging = true;
-      slot.edgeHangUntil = now + 1_400;
-      slot.balance = Math.min(slot.balance, 0.3);
+      slot.edgeHangUntil = now + GAME_TUNING.ledge.hangWindowMs;
+      slot.balance = Math.min(slot.balance, GAME_TUNING.ledge.hangBalanceCap);
       slot.state = "edge_hang";
       slot.body.setGravityScale(0, true);
       slot.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -653,22 +685,23 @@ export class GameSession {
       const inward = normalize(-hp.x, -hp.z);
       const controllerDirection = normalize(slot.input.moveX, slot.input.moveY);
       const controllerPointsInward =
-        controllerDirection.x * inward.x + controllerDirection.z * inward.z > 0.3;
+        controllerDirection.x * inward.x + controllerDirection.z * inward.z >
+        GAME_TUNING.ledge.inwardInputDot;
 
       const inwardIntent = slot.bot
-        ? now > slot.edgeHangUntil - 650
+        ? now > slot.edgeHangUntil - GAME_TUNING.ledge.botRecoveryLeadMs
         : controllerPointsInward;
 
       if (inwardIntent) {
         slot.edgeHanging = false;
         slot.state = "climbing";
         slot.climbStartedAt = now;
-        slot.climbUntil = now + 680;
+        slot.climbUntil = now + GAME_TUNING.ledge.climbDurationMs;
         slot.climbFrom = { x: hp.x, y: hp.y, z: hp.z };
         slot.climbTo = {
-          x: hp.x + inward.x * 1.45,
-          y: 0.96,
-          z: hp.z + inward.z * 1.45,
+          x: hp.x + inward.x * GAME_TUNING.ledge.climbInwardDistance,
+          y: GAME_TUNING.ledge.climbTargetY,
+          z: hp.z + inward.z * GAME_TUNING.ledge.climbInwardDistance,
         };
         slot.facingYaw = Math.atan2(inward.x, inward.z);
         slot.body.setGravityScale(0, true);
@@ -681,7 +714,7 @@ export class GameSession {
       if (now >= slot.edgeHangUntil) {
         slot.body.setGravityScale(1, true);
         slot.edgeHanging = false;
-        slot.balance = Math.min(slot.balance, 0.12);
+        slot.balance = Math.min(slot.balance, GAME_TUNING.ledge.failedHangBalance);
         slot.state = "ragdoll";
         slot.knockedUntil = now + 420;
       }

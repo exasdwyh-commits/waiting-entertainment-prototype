@@ -48,6 +48,10 @@ Commercial/admin systems remain lower priority than game quality.
 - Falling elimination
 - Local physics tuning sandbox
 
+- Centralized `GAME_TUNING` for movement / push / balance / ledge feel
+- Startup validation prevents invalid tuning ranges from reaching runtime
+- Symptom-driven `docs/TUNING.md` maps field feedback to parameters
+
 Exit condition: real users confirm the physical reactions are fun, readable and controllable.
 
 ## Phase 3 - Match loop
