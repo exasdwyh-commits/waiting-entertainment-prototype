@@ -1,7 +1,7 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import type { Server } from "socket.io";
 import type { GameEvent, MatchSnapshot, PlayerInput, PlayerSnapshot, PlayerState } from "@waiting/shared";
-import { GAME_TUNING } from "./tuning.js";
+import { GAME_TUNING, validateGameTuning } from "./tuning.js";
 
 const PLAYER_COUNT = 8;
 const ARENA_RADIUS = 6;
@@ -67,6 +67,7 @@ export class GameSession {
   constructor(private readonly io: Server) {}
 
   async start() {
+    validateGameTuning();
     await RAPIER.init();
     this.world = new RAPIER.World({ x: 0, y: GAME_TUNING.world.gravityY, z: 0 });
     this.createArena();
