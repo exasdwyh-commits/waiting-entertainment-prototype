@@ -525,7 +525,7 @@ export class GameSession {
       }),
     };
 
-    this.io.to("main").emit("match:snapshot", snapshot);
+    this.io.emit("match:snapshot", snapshot);
   }
 }
 
