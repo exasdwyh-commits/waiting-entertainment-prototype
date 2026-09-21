@@ -40,12 +40,33 @@ try {
   await big.waitForSelector('#broadcast-bug[data-mode="replay"]', {
     timeout: 72_000,
   });
-  await big.waitForTimeout(650);
+  await big.waitForSelector(".message.replay-caption", {
+    state: "visible",
+    timeout: 3_000,
+  });
+
+  const replayModeBefore = await big
+    .locator("#broadcast-bug")
+    .getAttribute("data-mode");
+  const replayCaption = (await big
+    .locator(".message.replay-caption")
+    .textContent())?.trim();
+
+  if (replayModeBefore !== "replay" || !replayCaption) {
+    throw new Error("Replay state disappeared before capture.");
+  }
 
   await big.screenshot({
     path: "docs/screenshots/broadcast-replay.png",
     fullPage: true,
   });
+
+  const replayModeAfter = await big
+    .locator("#broadcast-bug")
+    .getAttribute("data-mode");
+  if (replayModeAfter !== "replay") {
+    throw new Error("Replay ended during screenshot capture; retry the visual preview.");
+  }
 } finally {
   await browser.close();
 }
