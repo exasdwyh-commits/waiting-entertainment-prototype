@@ -80,7 +80,8 @@ export class GameRoom {
       seq: Number.isFinite(raw.seq) ? Number(raw.seq) : slot.input.seq + 1,
       moveX: clamp(Number(raw.moveX) || 0, -1, 1),
       moveY: clamp(Number(raw.moveY) || 0, -1, 1),
-      push: Boolean(raw.push),
+      // Latch push until the authoritative tick consumes it so a very short tap is never lost.
+      push: Boolean(raw.push) || slot.input.push,
     };
   }
 
@@ -343,13 +344,17 @@ export class GameRoom {
     }
 
     if (slot.edgeHanging) {
+      const hp = slot.body.translation();
+      const inward = normalize(-hp.x, -hp.z);
+      const controllerDirection = normalize(slot.input.moveX, slot.input.moveY);
+      const controllerPointsInward =
+        controllerDirection.x * inward.x + controllerDirection.z * inward.z > 0.3;
+
       const inwardIntent = slot.bot
         ? now > slot.edgeHangUntil - 650
-        : Math.hypot(slot.input.moveX, slot.input.moveY) > 0.25;
+        : controllerPointsInward;
 
       if (inwardIntent) {
-        const hp = slot.body.translation();
-        const inward = normalize(-hp.x, -hp.z);
         slot.body.setGravityScale(1, true);
         slot.body.setTranslation(
           { x: hp.x + inward.x * 1.25, y: 0.95, z: hp.z + inward.z * 1.25 },
