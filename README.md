@@ -23,7 +23,7 @@ Implemented:
 - Simplified ledge catch and climb-back
 - Falling elimination
 - 3-second round countdown
-- 60-second rounds
+- Current short-round implementation; target gameplay spec is ~180-second staged brawls
 - Elimination scoring and live ranking
 - Automatic winner selection and round restart
 - QR join flow
@@ -93,7 +93,7 @@ Priority order:
 7. Fast creation of additional games
 8. Commercial management systems
 
-See `docs/CORE_RECOMMENDATIONS.md` for the long-term product/game direction, `docs/PHYSICS_PARTY_DIRECTION.md` for the physics-party gameplay roadmap, and `docs/BROADCAST_DIRECTOR.md` for the TV-style camera/replay system, plus `docs/RUNNING.md`, `docs/ARCHITECTURE.md`, `docs/TUNING.md`, and `docs/ROADMAP.md`.
+See `docs/CORE_RECOMMENDATIONS.md` for the long-term product direction, `docs/PARTY_ANIMALS_PARITY_MATRIX.md` for the combat parity target, `docs/PHYSICS_PARTY_DIRECTION.md` for the gameplay roadmap, and `docs/BROADCAST_DIRECTOR.md` for the TV-style camera/replay system, plus `docs/RUNNING.md`, `docs/ARCHITECTURE.md`, `docs/TUNING.md`, and `docs/ROADMAP.md`.
 
 
 ## Topology boundary
