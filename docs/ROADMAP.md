@@ -59,11 +59,13 @@ Exit condition: real users confirm the physical reactions are fun, readable and 
 
 **Status: Implemented; LAN field validation pending**
 
+- One permanent local GameSession; no room/matchmaking layer
 - Server-authoritative Rapier world
+- 60Hz host physics / 20Hz snapshots
 - 8 persistent slots
-- Socket snapshots
 - Human takeover of Bot slots
-- Disconnect -> Bot takeover
+- Disconnect -> immediate Bot takeover
+- Stable phone session -> reclaim same character after refresh/reconnect
 - 1-8 human player model
 
 ## Phase 5 - Mobile controller
@@ -71,9 +73,11 @@ Exit condition: real users confirm the physical reactions are fun, readable and 
 **Status: Implemented; phone compatibility validation pending**
 
 - QR join
-- Mobile web controller
+- Personal lightweight Three.js gameplay view
+- Follow camera focused on the player's own character
+- Mobile web controller overlay
 - Virtual joystick
-- Single push action
+- Single push action + haptics
 - Zero-install join flow
 
 ## Phase 6 - AI Bots
@@ -100,11 +104,18 @@ Implemented:
 - Final elimination slow-motion replay
 - Two-pass replay with second close camera
 
+Implemented additionally:
+
+- Vendored CC0 low-poly GLB character placeholder
+- Replaceable CharacterVisual layer
+- Animation-state adapter
+- Dynamic spectator framing
+- Impact camera shake
+
 Next:
 
-- Better low-poly characters
 - Stronger hit VFX and sound
-- Camera director
+- More advanced camera director
 - More varied Bot personalities
 - Better ledge animation/readability
 - Game-feel tuning from real players

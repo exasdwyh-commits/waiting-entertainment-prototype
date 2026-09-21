@@ -1,42 +1,111 @@
 import { io } from "socket.io-client";
+import type { GameEvent, MatchSnapshot } from "@waiting/shared";
+import { PersonalGameView } from "./PersonalGameView";
 import "./style.css";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
 root.innerHTML = `
   <main class="controller">
-    <header>
-      <strong>餐桌推推王</strong>
+    <div class="personal-stage" id="personal-stage"></div>
+
+    <header class="top-hud">
+      <div>
+        <strong>餐桌推推王</strong>
+        <span id="identity">等待分配角色</span>
+      </div>
+      <div class="match-meta">
+        <span id="timer">60</span>
+        <span id="score">击落 0</span>
+      </div>
       <span id="status">连接中…</span>
     </header>
-    <section class="play-area">
+
+    <div class="state-pill" id="state-pill">准备加入</div>
+
+    <section class="play-area" aria-label="游戏操作">
       <div class="joystick" id="joystick" aria-label="移动摇杆">
         <div class="stick" id="stick"></div>
       </div>
-      <button class="push" id="push" type="button">冲撞</button>
+      <button class="push" id="push" type="button">
+        <span>冲撞</span>
+        <small>撞飞他</small>
+      </button>
     </section>
-    <p>左手移动 · 右手冲撞</p>
+
+    <div class="rotate-hint">横屏体验更好</div>
   </main>
 `;
 
 const status = document.querySelector<HTMLSpanElement>("#status")!;
+const identity = document.querySelector<HTMLSpanElement>("#identity")!;
+const timer = document.querySelector<HTMLSpanElement>("#timer")!;
+const score = document.querySelector<HTMLSpanElement>("#score")!;
+const statePill = document.querySelector<HTMLDivElement>("#state-pill")!;
 const joystick = document.querySelector<HTMLDivElement>("#joystick")!;
 const stick = document.querySelector<HTMLDivElement>("#stick")!;
 const pushButton = document.querySelector<HTMLButtonElement>("#push")!;
+const stage = document.querySelector<HTMLDivElement>("#personal-stage")!;
+
+const personalView = new PersonalGameView(stage);
+personalView.start();
 
 const endpoint = `${location.protocol}//${location.hostname}:3001`;
-const socket = io(endpoint, { transports: ["websocket", "polling"] });
+const socket = io(endpoint, {
+  transports: ["websocket", "polling"],
+  reconnection: true,
+  reconnectionDelay: 350,
+  reconnectionDelayMax: 1_500,
+});
 
+const SESSION_KEY = "waiting-entertainment.session-id";
+const NAME_KEY = "waiting-entertainment.player-name";
+
+function makeSessionId() {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return `guest-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+const sessionId = localStorage.getItem(SESSION_KEY) || makeSessionId();
+localStorage.setItem(SESSION_KEY, sessionId);
+
+const savedName = localStorage.getItem(NAME_KEY);
+const defaultName = savedName || `玩家${sessionId.replace(/-/g, "").slice(-4).toUpperCase()}`;
+localStorage.setItem(NAME_KEY, defaultName);
+
+let ownedPlayerId = "";
 let moveX = 0;
 let moveY = 0;
 let pushing = false;
 let activePointer: number | null = null;
+let inputSeq = 0;
 
 socket.on("connect", () => {
-  const suffix = socket.id?.slice(0, 4) ?? "guest";
-  socket.emit("join", { name: `Player-${suffix}` }, () => {
-    status.textContent = "已加入";
-    status.classList.add("online");
-  });
+  status.textContent = "正在接管角色…";
+  socket.emit(
+    "join",
+    { sessionId, name: defaultName },
+    (response: {
+      ok?: boolean;
+      recovered?: boolean;
+      playerId?: string;
+      name?: string;
+      sessionId?: string;
+      reason?: string;
+    }) => {
+      if (!response?.ok || !response.playerId) {
+        status.textContent = response?.reason === "session-full" ? "当前8位已满" : "加入失败";
+        status.classList.remove("online");
+        return;
+      }
+
+      if (response.sessionId) localStorage.setItem(SESSION_KEY, response.sessionId);
+      ownedPlayerId = response.playerId;
+      personalView.setOwnedPlayer(ownedPlayerId);
+      identity.textContent = response.name || defaultName;
+      status.textContent = response.recovered ? "已恢复控制" : "已加入";
+      status.classList.add("online");
+    },
+  );
 });
 
 socket.on("disconnect", () => {
@@ -44,8 +113,47 @@ socket.on("disconnect", () => {
   status.classList.remove("online");
 });
 
+socket.on("game:event", (event: GameEvent) => {
+  if (!ownedPlayerId || !("vibrate" in navigator)) return;
+
+  if (event.targetId === ownedPlayerId) {
+    navigator.vibrate(event.type === "final_elimination" ? [55, 30, 80] : 42);
+  } else if (event.actorId === ownedPlayerId && event.type === "push_hit") {
+    navigator.vibrate(16);
+  }
+});
+
+socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
+  personalView.update(snapshot);
+  timer.textContent = String(Math.ceil(snapshot.timeLeftMs / 1000));
+
+  if (!ownedPlayerId) return;
+  const me = snapshot.players.find((player) => player.id === ownedPlayerId);
+  if (!me) return;
+
+  score.textContent = `击落 ${me.score}`;
+
+  if (snapshot.phase === "countdown") {
+    statePill.textContent = `${Math.max(1, Math.ceil((snapshot.countdownLeftMs ?? 0) / 1000))}`;
+  } else if (me.eliminated) {
+    statePill.textContent = "已淘汰 · 看大屏";
+  } else if (me.state === "edge_hang") {
+    statePill.textContent = "危险！摇杆推向桌内";
+  } else if (me.state === "hit" || me.state === "ragdoll") {
+    statePill.textContent = "被撞倒！";
+  } else if (me.state === "recovering") {
+    statePill.textContent = "正在爬起来";
+  } else if (snapshot.phase === "finished") {
+    statePill.textContent = snapshot.winnerId === ownedPlayerId ? "🏆 你赢了" : "本局结束";
+  } else {
+    statePill.textContent = "把别人撞下桌！";
+  }
+});
+
 function sendInput() {
-  socket.emit("input", { moveX, moveY, push: pushing });
+  if (!socket.connected || !ownedPlayerId) return;
+  inputSeq += 1;
+  socket.emit("input", { seq: inputSeq, moveX, moveY, push: pushing });
 }
 
 function updateStick(clientX: number, clientY: number) {
@@ -62,7 +170,9 @@ function updateStick(clientX: number, clientY: number) {
 
   stick.style.transform = `translate(${px}px, ${py}px)`;
   moveX = Math.max(-1, Math.min(1, dx / max));
-  moveY = Math.max(-1, Math.min(1, -dy / max));
+  // Camera looks toward -Z. Finger-up therefore maps to -Z so the avatar
+  // moves visually toward the top of the phone screen.
+  moveY = Math.max(-1, Math.min(1, dy / max));
   sendInput();
 }
 
@@ -92,6 +202,7 @@ joystick.addEventListener("pointercancel", releaseStick);
 pushButton.addEventListener("pointerdown", () => {
   pushing = true;
   pushButton.classList.add("active");
+  if ("vibrate" in navigator) navigator.vibrate(18);
   sendInput();
 });
 
@@ -104,3 +215,20 @@ function releasePush() {
 pushButton.addEventListener("pointerup", releasePush);
 pushButton.addEventListener("pointercancel", releasePush);
 pushButton.addEventListener("pointerleave", releasePush);
+
+function clearHeldInput() {
+  moveX = 0;
+  moveY = 0;
+  pushing = false;
+  activePointer = null;
+  stick.style.transform = "translate(0, 0)";
+  pushButton.classList.remove("active");
+  sendInput();
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) clearHeldInput();
+});
+
+window.addEventListener("pagehide", clearHeldInput);
+window.addEventListener("blur", clearHeldInput);

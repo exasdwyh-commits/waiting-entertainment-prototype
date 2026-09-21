@@ -36,6 +36,7 @@ function connectSocket() {
 
 const observer = await connectSocket();
 const player = await connectSocket();
+let recoveredPlayer;
 
 try {
   const initial = await waitForEvent(
@@ -53,6 +54,7 @@ try {
 
   assert.equal(joinAck.ok, true);
   assert.ok(joinAck.playerId);
+  assert.ok(joinAck.sessionId);
 
   const controlled = await waitForEvent(
     observer,
@@ -91,8 +93,39 @@ try {
   const botAgain = handedBack.players.find((entry) => entry.id === joinAck.playerId);
   assert.equal(botAgain.bot, true);
 
-  console.log("Socket E2E passed: join -> authoritative snapshot -> input -> Bot takeover.");
+  recoveredPlayer = await connectSocket();
+  const recoverAck = await new Promise((resolve) => {
+    recoveredPlayer.emit(
+      "join",
+      { sessionId: joinAck.sessionId, name: "CI Player" },
+      resolve,
+    );
+  });
+
+  assert.equal(recoverAck.ok, true);
+  assert.equal(recoverAck.recovered, true);
+  assert.equal(recoverAck.playerId, joinAck.playerId);
+
+  const reclaimed = await waitForEvent(
+    observer,
+    "match:snapshot",
+    (snapshot) =>
+      snapshot.players.some(
+        (entry) =>
+          entry.id === joinAck.playerId &&
+          entry.bot === false &&
+          entry.name === "CI Player",
+      ),
+  );
+
+  const humanAgain = reclaimed.players.find((entry) => entry.id === joinAck.playerId);
+  assert.equal(humanAgain.bot, false);
+
+  console.log(
+    "Socket E2E passed: join -> authoritative input -> Bot takeover -> stable-session recovery.",
+  );
 } finally {
   observer.disconnect();
   player.disconnect();
+  recoveredPlayer?.disconnect();
 }
