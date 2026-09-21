@@ -28,7 +28,7 @@ export interface PlayerSnapshot {
   id: PlayerId;
   name: string;
   position: [number, number, number];
-  rotationY: number;
+  rotation: [number, number, number, number];
   velocity: [number, number, number];
   state: PlayerState;
   eliminated: boolean;
