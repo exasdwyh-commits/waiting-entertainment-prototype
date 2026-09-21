@@ -18,8 +18,30 @@ canvas { display: block; }
 }
 
 .eyebrow { font-size: 12px; letter-spacing: .18em; opacity: .62; }
-h1 { margin: 4px 0 0; font-size: clamp(28px, 4vw, 54px); }
+h1 { margin: 4px 0 3px; font-size: clamp(28px, 4vw, 54px); }
+#status { font-size: 13px; color: #fbbf24; }
+#status.online { color: #86efac; }
 .timer { font-size: clamp(40px, 7vw, 84px); font-weight: 900; line-height: 1; }
+
+.join-panel {
+  position: absolute;
+  right: 28px;
+  bottom: 28px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(8, 12, 20, .76);
+  backdrop-filter: blur(12px);
+  max-width: 340px;
+}
+
+.join-panel[hidden] { display: none; }
+.join-panel canvas { width: 104px !important; height: 104px !important; border-radius: 8px; }
+.join-panel div { display: grid; gap: 5px; min-width: 0; }
+.join-panel strong { font-size: 22px; }
+.join-panel span { max-width: 185px; font-size: 12px; line-height: 1.35; opacity: .68; overflow-wrap: anywhere; }
 
 .tip {
   position: absolute;
@@ -43,4 +65,11 @@ h1 { margin: 4px 0 0; font-size: clamp(28px, 4vw, 54px); }
   text-align: center;
   text-shadow: 0 6px 24px rgba(0,0,0,.4);
   pointer-events: none;
+}
+
+@media (max-width: 760px) {
+  .join-panel { right: 12px; bottom: 58px; }
+  .join-panel canvas { width: 84px !important; height: 84px !important; }
+  .join-panel strong { font-size: 17px; }
+  .tip { bottom: 10px; font-size: 11px; }
 }
