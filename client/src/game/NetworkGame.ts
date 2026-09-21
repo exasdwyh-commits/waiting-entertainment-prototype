@@ -1,14 +1,17 @@
 import * as THREE from "three";
 import { io } from "socket.io-client";
 import QRCode from "qrcode";
-import type { MatchSnapshot, PlayerSnapshot } from "@waiting/shared";
+import type { MatchSnapshot, PlayerSnapshot, PlayerState } from "@waiting/shared";
+import { createCharacterVisual, type CharacterVisual } from "./CharacterVisual";
 
 type View = {
-  mesh: THREE.Mesh;
+  root: THREE.Group;
+  visual?: CharacterVisual;
   label: THREE.Sprite;
   targetPosition: THREE.Vector3;
   targetQuaternion: THREE.Quaternion;
   name: string;
+  state: PlayerState;
 };
 
 type ReplayState = {
@@ -35,6 +38,7 @@ export class NetworkGame {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
   private readonly renderer = new THREE.WebGLRenderer({ antialias: true });
+  private readonly clock = new THREE.Clock();
   private readonly views = new Map<string, View>();
   private readonly history: MatchSnapshot[] = [];
   private latest?: MatchSnapshot;
@@ -174,31 +178,41 @@ export class NetworkGame {
   private createView(player: PlayerSnapshot) {
     const index = Number(player.id.split("-")[1] ?? 0);
     const palette = [0x38bdf8, 0xfb7185, 0xa78bfa, 0x4ade80, 0xfacc15, 0xf97316, 0x22d3ee, 0xe879f9];
+    const tint = palette[index % palette.length];
 
-    const mesh = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.36, 0.96, 6, 12),
-      new THREE.MeshStandardMaterial({
-        color: palette[index % palette.length],
-        roughness: 0.58,
-        metalness: 0.02,
-      }),
+    const root = new THREE.Group();
+    root.position.set(...player.position);
+    root.quaternion.set(...player.rotation);
+
+    const placeholder = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.36, 0.96, 5, 8),
+      new THREE.MeshStandardMaterial({ color: tint, roughness: 0.62 }),
     );
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    this.scene.add(mesh);
+    root.add(placeholder);
+    this.scene.add(root);
 
     const label = this.makeLabel(player.name, player.bot);
     this.scene.add(label);
 
     const view: View = {
-      mesh,
+      root,
       label,
       targetPosition: new THREE.Vector3(...player.position),
       targetQuaternion: new THREE.Quaternion(...player.rotation),
       name: player.name,
+      state: player.state,
     };
 
     this.views.set(player.id, view);
+
+    createCharacterVisual(tint, 1.7).then((visual) => {
+      if (this.views.get(player.id) !== view) return;
+      root.clear();
+      root.add(visual.root);
+      view.visual = visual;
+      visual.setState(view.state);
+    });
+
     return view;
   }
 
@@ -248,7 +262,9 @@ export class NetworkGame {
       this.refreshLabel(view, player);
       view.targetPosition.set(...player.position);
       view.targetQuaternion.set(...player.rotation);
-      view.mesh.visible = !player.eliminated;
+      view.state = player.state;
+      view.visual?.setState(player.state);
+      view.root.visible = !player.eliminated;
       view.label.visible = !player.eliminated;
     }
 
@@ -330,10 +346,13 @@ export class NetworkGame {
 
     if (this.replay) this.updateReplay(now);
 
+    const delta = Math.min(this.clock.getDelta(), 0.05);
+
     for (const view of this.views.values()) {
-      view.mesh.position.lerp(view.targetPosition, this.replay ? 0.42 : 0.28);
-      view.mesh.quaternion.slerp(view.targetQuaternion, this.replay ? 0.5 : 0.32);
-      view.label.position.copy(view.mesh.position).add(new THREE.Vector3(0, 1.65, 0));
+      view.root.position.lerp(view.targetPosition, this.replay ? 0.42 : 0.28);
+      view.root.quaternion.slerp(view.targetQuaternion, this.replay ? 0.5 : 0.32);
+      view.visual?.update(delta);
+      view.label.position.copy(view.root.position).add(new THREE.Vector3(0, 1.65, 0));
     }
 
     const cameraTarget = this.replay?.closeCamera
