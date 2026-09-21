@@ -1,16 +1,20 @@
 import * as THREE from "three";
-import type { MatchSnapshot, PlayerSnapshot } from "@waiting/shared";
+import type { MatchSnapshot, PlayerSnapshot, PlayerState } from "@waiting/shared";
+import { createCharacterVisual, type CharacterVisual } from "./CharacterVisual";
 
 type ActorView = {
-  mesh: THREE.Mesh;
+  root: THREE.Group;
+  visual?: CharacterVisual;
   ring: THREE.Mesh;
   targetPosition: THREE.Vector3;
   targetQuaternion: THREE.Quaternion;
+  state: PlayerState;
 };
 
 export class PersonalGameView {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(56, 1, 0.1, 60);
+  private readonly clock = new THREE.Clock();
   private readonly renderer = new THREE.WebGLRenderer({
     antialias: true,
     alpha: false,
@@ -88,9 +92,11 @@ export class PersonalGameView {
       const actor = this.actors.get(player.id) ?? this.createActor(player);
       actor.targetPosition.set(...player.position);
       actor.targetQuaternion.set(...player.rotation);
+      actor.state = player.state;
+      actor.visual?.setState(player.state);
 
       const visible = !player.eliminated;
-      actor.mesh.visible = visible;
+      actor.root.visible = visible;
       actor.ring.visible = visible && player.id === this.ownPlayerId;
     }
   }
@@ -107,15 +113,18 @@ export class PersonalGameView {
       0x22d3ee,
       0xe879f9,
     ];
+    const tint = palette[index % palette.length];
 
-    const mesh = new THREE.Mesh(
+    const root = new THREE.Group();
+    root.position.set(...player.position);
+    root.quaternion.set(...player.rotation);
+
+    const placeholder = new THREE.Mesh(
       new THREE.CapsuleGeometry(0.36, 0.96, 5, 8),
-      new THREE.MeshStandardMaterial({
-        color: palette[index % palette.length],
-        roughness: 0.62,
-      }),
+      new THREE.MeshStandardMaterial({ color: tint, roughness: 0.62 }),
     );
-    this.scene.add(mesh);
+    root.add(placeholder);
+    this.scene.add(root);
 
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(0.5, 0.67, 32),
@@ -132,12 +141,22 @@ export class PersonalGameView {
     this.scene.add(ring);
 
     const actor: ActorView = {
-      mesh,
+      root,
       ring,
       targetPosition: new THREE.Vector3(...player.position),
       targetQuaternion: new THREE.Quaternion(...player.rotation),
+      state: player.state,
     };
     this.actors.set(player.id, actor);
+
+    createCharacterVisual(tint, 1.7).then((visual) => {
+      if (this.actors.get(player.id) !== actor) return;
+      root.clear();
+      root.add(visual.root);
+      actor.visual = visual;
+      visual.setState(actor.state);
+    });
+
     return actor;
   }
 
@@ -167,10 +186,13 @@ export class PersonalGameView {
   private loop = () => {
     this.animationFrame = requestAnimationFrame(this.loop);
 
+    const delta = Math.min(this.clock.getDelta(), 0.05);
+
     for (const actor of this.actors.values()) {
-      actor.mesh.position.lerp(actor.targetPosition, 0.32);
-      actor.mesh.quaternion.slerp(actor.targetQuaternion, 0.38);
-      actor.ring.position.copy(actor.mesh.position);
+      actor.root.position.lerp(actor.targetPosition, 0.32);
+      actor.root.quaternion.slerp(actor.targetQuaternion, 0.38);
+      actor.visual?.update(delta);
+      actor.ring.position.copy(actor.root.position);
       actor.ring.position.y = 0.04;
     }
 
