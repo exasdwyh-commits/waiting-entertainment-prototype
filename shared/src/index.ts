@@ -32,6 +32,7 @@ export interface PlayerSnapshot {
   position: [number, number, number];
   rotation: [number, number, number, number];
   facingYaw: number;
+  balance: number;
   velocity: [number, number, number];
   score: number;
   pushCooldownLeftMs: number;

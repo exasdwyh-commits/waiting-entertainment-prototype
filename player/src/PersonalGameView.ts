@@ -139,6 +139,7 @@ export class PersonalGameView {
           player.state === "pushing" ||
           player.state === "climbing" ||
           player.state === "celebrate") &&
+        player.balance >= 0.68 &&
         isMostlyUpright(player.rotation)
       ) {
         actor.targetQuaternion.setFromAxisAngle(

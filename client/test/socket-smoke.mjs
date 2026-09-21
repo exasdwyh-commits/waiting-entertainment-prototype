@@ -47,6 +47,11 @@ try {
 
   assert.equal(initial.players.length, 8);
   assert.ok(initial.players.every((entry) => entry.bot === true));
+  assert.ok(
+    initial.players.every(
+      (entry) => typeof entry.balance === "number" && entry.balance >= 0 && entry.balance <= 1,
+    ),
+  );
 
   const joinAck = await new Promise((resolve) => {
     player.emit("join", { name: "CI Player" }, resolve);

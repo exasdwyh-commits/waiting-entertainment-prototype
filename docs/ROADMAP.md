@@ -38,6 +38,10 @@ Commercial/admin systems remain lower priority than game quality.
 - Rapier rigid-body characters
 - Movement and push impulses
 - Knockdown and upright recovery
+- Impact-driven balance loss: stronger hits create longer, weaker recovery
+- Low balance reduces movement control and upright assistance
+- Near-edge support naturally weakens, increasing wobble/fall risk
+- Balance gradually returns instead of snapping instantly to full control
 - Ledge catch with timed rescue window
 - Staged physical climb-back instead of instant teleport
 - Failed ledge rescue -> ragdoll fall/recovery

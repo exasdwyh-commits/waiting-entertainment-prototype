@@ -16,8 +16,13 @@ Adopted concepts:
 - camera behavior reacting to physical events
 - mobile input cancellation when the page hides or loses focus
 - impact-driven feedback
+- stagger temporarily weakening movement and physical assistance
+- gradual recovery of physical support rather than an instant upright reset
+- support weakening close to / outside the playable platform
 
-Current Waiting implementation remains simpler: one central dynamic body per fighter plus visual animation. Full articulated ragdoll remains an upgrade path.
+Waiting implements these ideas independently with a single central dynamic body and a normalized `balance` scalar. Strong impacts reduce balance, which weakens movement and upright torque; balance then recovers over time. The visual layer temporarily stops forcing a clean upright facing pose while balance is low, exposing the actual Rapier tilt. This keeps the architecture much simpler than Stick & Steel's articulated multi-body fighter while preserving part of the same physical-comedy behavior.
+
+Full articulated ragdoll remains an upgrade path rather than an MVP dependency.
 
 ## Couch Kit / Buzz TV Party Game
 

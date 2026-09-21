@@ -436,6 +436,7 @@ export class NetworkGame {
           player.state === "pushing" ||
           player.state === "climbing" ||
           player.state === "celebrate") &&
+        player.balance >= 0.68 &&
         isMostlyUpright(player.rotation)
       ) {
         view.targetQuaternion.setFromAxisAngle(
