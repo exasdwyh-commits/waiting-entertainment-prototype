@@ -17,7 +17,8 @@ root.innerHTML = `
         <span id="identity">等待分配角色</span>
       </div>
       <div class="match-meta">
-        <span id="timer">60</span>
+        <span id="stage">OPENING</span>
+        <span id="timer">3:00</span>
         <span id="score">击落 0</span>
       </div>
       <span id="status">连接中…</span>
@@ -25,14 +26,27 @@ root.innerHTML = `
 
     <div class="state-pill" id="state-pill">准备加入</div>
 
+    <div class="stamina-hud" id="stamina-hud">
+      <span>体力</span>
+      <div class="stamina-track"><i id="stamina-fill"></i></div>
+    </div>
+
     <section class="play-area" aria-label="游戏操作">
       <div class="joystick" id="joystick" aria-label="移动摇杆">
+        <div class="sprint-ring">冲刺</div>
         <div class="stick" id="stick"></div>
       </div>
-      <button class="push" id="push" type="button">
-        <span>冲撞</span>
-        <small>撞飞他</small>
-      </button>
+
+      <div class="action-cluster">
+        <button class="grab" id="grab" type="button">
+          <span>抓取</span>
+          <small>按住</small>
+        </button>
+        <button class="push attack" id="push" type="button">
+          <span>出拳</span>
+          <small>快速攻击</small>
+        </button>
+      </div>
     </section>
 
     <div class="rotate-hint">横屏体验更好</div>
@@ -43,13 +57,19 @@ root.innerHTML = `
 const status = document.querySelector<HTMLSpanElement>("#status")!;
 const identity = document.querySelector<HTMLSpanElement>("#identity")!;
 const timer = document.querySelector<HTMLSpanElement>("#timer")!;
+const stageLabel = document.querySelector<HTMLSpanElement>("#stage")!;
 const score = document.querySelector<HTMLSpanElement>("#score")!;
+const staminaHud = document.querySelector<HTMLDivElement>("#stamina-hud")!;
+const staminaFill = document.querySelector<HTMLElement>("#stamina-fill")!;
 const statePill = document.querySelector<HTMLDivElement>("#state-pill")!;
 const joystick = document.querySelector<HTMLDivElement>("#joystick")!;
 const stick = document.querySelector<HTMLDivElement>("#stick")!;
 const pushButton = document.querySelector<HTMLButtonElement>("#push")!;
 const pushLabel = pushButton.querySelector<HTMLElement>("span")!;
 const pushHint = pushButton.querySelector<HTMLElement>("small")!;
+const grabButton = document.querySelector<HTMLButtonElement>("#grab")!;
+const grabLabel = grabButton.querySelector<HTMLElement>("span")!;
+const grabHint = grabButton.querySelector<HTMLElement>("small")!;
 const stage = document.querySelector<HTMLDivElement>("#personal-stage")!;
 const controllerEl = document.querySelector<HTMLElement>(".controller")!;
 const debugPanel = document.querySelector<HTMLElement>("#debug-panel")!;
@@ -86,6 +106,8 @@ let ownedPlayerId = "";
 let moveX = 0;
 let moveY = 0;
 let pushing = false;
+let grabbing = false;
+let sprinting = false;
 let activePointer: number | null = null;
 let inputSeq = 0;
 let pushCooldownLeftMs = 0;
@@ -137,7 +159,9 @@ socket.on("game:event", (event: GameEvent) => {
   if (isMine) audioFx.play(event.type, event.importance);
 
   if (event.targetId === ownedPlayerId) {
-    personalView.addImpact(event.importance, true);
+    if (event.type !== "grab") {
+      personalView.addImpact(event.importance, true);
+    }
     controllerEl.classList.remove("hit-flash");
     void controllerEl.offsetWidth;
     controllerEl.classList.add("hit-flash");
@@ -149,21 +173,46 @@ socket.on("game:event", (event: GameEvent) => {
           ? [55, 30, 80]
           : event.type === "toss"
             ? [45, 20, 65]
-            : 42,
+            : event.type === "heavy_hit"
+              ? [36, 18, 54]
+              : event.type === "grab"
+                ? 24
+                : 42,
       );
     }
   } else if (
     event.actorId === ownedPlayerId &&
-    (event.type === "push_hit" || event.type === "toss")
+    (
+      event.type === "push_hit" ||
+      event.type === "punch_hit" ||
+      event.type === "heavy_hit" ||
+      event.type === "grab" ||
+      event.type === "toss"
+    )
   ) {
-    personalView.addImpact(event.type === "toss" ? 1 : event.importance, false);
+    if (event.type !== "grab") {
+      personalView.addImpact(
+        event.type === "toss" || event.type === "heavy_hit"
+          ? 1
+          : event.importance,
+        false,
+      );
+    }
     controllerEl.classList.remove("hit-confirm");
     void controllerEl.offsetWidth;
     controllerEl.classList.add("hit-confirm");
     window.setTimeout(() => controllerEl.classList.remove("hit-confirm"), 180);
 
     if ("vibrate" in navigator) {
-      navigator.vibrate(event.type === "toss" ? [24, 18, 36] : 16);
+      navigator.vibrate(
+        event.type === "toss"
+          ? [24, 18, 36]
+          : event.type === "heavy_hit"
+            ? [22, 12, 30]
+            : event.type === "grab"
+              ? 12
+              : 16,
+      );
     }
   }
 });
@@ -179,8 +228,22 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
   }
 
   personalView.update(snapshot);
-  timer.textContent = String(Math.ceil(snapshot.timeLeftMs / 1000));
-  const tension = snapshot.phase === "playing" && snapshot.timeLeftMs <= 10_000;
+  const totalSeconds = Math.max(0, Math.ceil(snapshot.timeLeftMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  timer.textContent = `${minutes}:${seconds}`;
+
+  const stageNames = {
+    opening: "OPENING",
+    brawl: "BRAWL",
+    danger: "DANGER",
+    final: "FINAL",
+  } as const;
+  stageLabel.textContent = stageNames[snapshot.matchStage];
+  stageLabel.dataset.stage = snapshot.matchStage;
+
+  const tension =
+    snapshot.phase === "playing" && snapshot.matchStage === "final";
   timer.classList.toggle("danger", tension);
   controllerEl.classList.toggle("tension", tension);
 
@@ -191,57 +254,55 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
   score.textContent = `击落 ${me.score}`;
   eliminated = me.eliminated;
   controllerEl.classList.toggle("spectating", eliminated);
+
+  staminaFill.style.transform = `scaleX(${Math.max(0, Math.min(1, me.stamina))})`;
+  staminaHud.classList.toggle("low", me.stamina <= 0.22);
+  staminaHud.classList.toggle("sprinting", me.sprinting);
+
   pushCooldownLeftMs = me.pushCooldownLeftMs;
   const cooldownProgress = 1 - Math.min(1, pushCooldownLeftMs / 850);
   pushButton.style.setProperty("--cooldown-angle", `${cooldownProgress * 360}deg`);
   pushButton.classList.toggle("cooling", pushCooldownLeftMs > 45);
 
-  const tossTarget = snapshot.players.find((player) => {
-    if (player.id === me.id || player.eliminated) return false;
-    const vulnerable =
-      player.balance <= 0.55 ||
-      player.state === "hit" ||
-      player.state === "ragdoll" ||
-      player.state === "recovering";
-    if (!vulnerable) return false;
+  const grabbedTarget = me.grabTargetId
+    ? snapshot.players.find((player) => player.id === me.grabTargetId)
+    : undefined;
 
-    return Math.hypot(
-      player.position[0] - me.position[0],
-      player.position[2] - me.position[2],
-    ) <= 1.35;
-  });
+  actionDisabled = me.state === "carried";
+  const attackDisabled = actionDisabled || pushCooldownLeftMs > 45;
+  const grabDisabled =
+    actionDisabled ||
+    me.state === "throwing" ||
+    me.state === "edge_hang" ||
+    me.state === "climbing";
 
-  actionDisabled =
-    me.state === "carried" ||
-    me.state === "grabbing" ||
-    me.state === "throwing";
+  pushButton.classList.toggle("action-disabled", attackDisabled);
+  grabButton.classList.toggle("action-disabled", grabDisabled);
+  grabButton.classList.toggle("holding", Boolean(grabbedTarget));
 
-  const contextualToss =
-    !actionDisabled &&
-    pushCooldownLeftMs <= 45 &&
-    Boolean(tossTarget);
-
-  pushButton.classList.toggle("contextual-toss", contextualToss);
-  pushButton.classList.toggle("action-disabled", actionDisabled);
-
-  if (me.state === "grabbing") {
-    pushLabel.textContent = "抓住了";
-    pushHint.textContent = "准备甩出";
-  } else if (me.state === "carried") {
+  if (me.state === "carried") {
     pushLabel.textContent = "被抓住";
-    pushHint.textContent = "小心！";
-  } else if (me.state === "throwing") {
-    pushLabel.textContent = "甩出";
-    pushHint.textContent = "漂亮！";
-  } else if (pushCooldownLeftMs > 45) {
-    pushLabel.textContent = "冲撞";
-    pushHint.textContent = `${(pushCooldownLeftMs / 1000).toFixed(1)}s`;
-  } else if (tossTarget) {
-    pushLabel.textContent = "抓起";
-    pushHint.textContent = `甩飞 ${tossTarget.name}`;
+    pushHint.textContent = "挣脱中";
+    grabLabel.textContent = "被控制";
+    grabHint.textContent = "等机会";
+  } else if (grabbedTarget) {
+    pushLabel.textContent = "甩飞";
+    pushHint.textContent = "按摇杆方向";
+    grabLabel.textContent = "抓住中";
+    grabHint.textContent = grabbedTarget.name;
+  } else if (me.sprinting && me.stamina >= 0.17) {
+    pushLabel.textContent = "重击";
+    pushHint.textContent = "冲刺攻击";
+    grabLabel.textContent = "抓取";
+    grabHint.textContent = "按住";
   } else {
-    pushLabel.textContent = "冲撞";
-    pushHint.textContent = "撞飞他";
+    pushLabel.textContent = "出拳";
+    pushHint.textContent =
+      pushCooldownLeftMs > 45
+        ? `${(pushCooldownLeftMs / 1000).toFixed(1)}s`
+        : "快速攻击";
+    grabLabel.textContent = "抓取";
+    grabHint.textContent = "按住";
   }
 
   if (snapshot.phase === "countdown") {
@@ -257,7 +318,7 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
       ? `已淘汰 · 观战 ${target.name}`
       : "已淘汰 · 等待下一局";
   } else if (me.state === "grabbing") {
-    statePill.textContent = "抓住了！准备甩出去";
+    statePill.textContent = "抓住了！移动可以拖走 · 攻击键甩飞";
   } else if (me.state === "carried") {
     statePill.textContent = "被抓住了！";
   } else if (me.state === "throwing") {
@@ -272,15 +333,29 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
     statePill.textContent = "正在爬起来";
   } else if (snapshot.phase === "finished") {
     statePill.textContent = snapshot.winnerId === ownedPlayerId ? "🏆 你赢了" : "本局结束";
+  } else if (snapshot.matchStage === "opening") {
+    statePill.textContent = "外圈推满摇杆冲刺 · 近身出拳";
+  } else if (snapshot.matchStage === "brawl") {
+    statePill.textContent = "打倒 · 抓住 · 拖走 · 甩飞";
+  } else if (snapshot.matchStage === "danger") {
+    statePill.textContent = "危险升级！注意桌边和体力";
   } else {
-    statePill.textContent = "把别人撞下桌！";
+    statePill.textContent = "FINAL CHAOS · 活到最后";
   }
 });
 
 function sendInput() {
-  if (!socket.connected || !ownedPlayerId || eliminated || actionDisabled) return;
+  if (!socket.connected || !ownedPlayerId || eliminated) return;
   inputSeq += 1;
-  socket.emit("input", { seq: inputSeq, moveX, moveY, push: pushing });
+  socket.emit("input", {
+    seq: inputSeq,
+    moveX,
+    moveY,
+    push: pushing,
+    attack: pushing,
+    grab: grabbing,
+    sprint: sprinting,
+  });
 }
 
 function updateStick(clientX: number, clientY: number) {
@@ -303,6 +378,9 @@ function updateStick(clientX: number, clientY: number) {
 
   moveX = worldInput.x;
   moveY = worldInput.z;
+  const rawMagnitude = Math.min(1, Math.hypot(dx, dy) / max);
+  sprinting = rawMagnitude >= 0.82;
+  joystick.classList.toggle("sprinting", sprinting);
   sendInput();
 }
 
@@ -322,6 +400,8 @@ function releaseStick(event: PointerEvent) {
   activePointer = null;
   moveX = 0;
   moveY = 0;
+  sprinting = false;
+  joystick.classList.remove("sprinting");
   stick.style.transform = "translate(0, 0)";
   sendInput();
 }
@@ -352,13 +432,35 @@ pushButton.addEventListener("pointerup", releasePush);
 pushButton.addEventListener("pointercancel", releasePush);
 pushButton.addEventListener("pointerleave", releasePush);
 
+grabButton.addEventListener("pointerdown", () => {
+  if (eliminated || actionDisabled) return;
+  grabbing = true;
+  grabButton.classList.add("active");
+  if ("vibrate" in navigator) navigator.vibrate(10);
+  sendInput();
+});
+
+function releaseGrab() {
+  grabbing = false;
+  grabButton.classList.remove("active");
+  sendInput();
+}
+
+grabButton.addEventListener("pointerup", releaseGrab);
+grabButton.addEventListener("pointercancel", releaseGrab);
+grabButton.addEventListener("pointerleave", releaseGrab);
+
 function clearHeldInput() {
   moveX = 0;
   moveY = 0;
   pushing = false;
+  grabbing = false;
+  sprinting = false;
   activePointer = null;
   stick.style.transform = "translate(0, 0)";
+  joystick.classList.remove("sprinting");
   pushButton.classList.remove("active");
+  grabButton.classList.remove("active");
   sendInput();
 }
 
