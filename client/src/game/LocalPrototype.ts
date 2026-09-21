@@ -23,9 +23,11 @@ type PrototypeOptions = {
 };
 
 const PLAYER_COUNT = 8;
-const ROUND_MS = 60_000;
+const ROUND_MS = 180_000;
 const MOVE_ACCEL = 0.16;
 const MAX_SPEED = 4.2;
+const SPRINT_MAX_SPEED = 5.55;
+const SPRINT_ACCEL = 0.215;
 const PUSH_RANGE = 1.65;
 const PUSH_COOLDOWN = 850;
 
@@ -274,14 +276,21 @@ export class LocalPrototype {
 
     direction.normalize();
     const velocity = actor.body.linvel();
+    const sprinting =
+      actor.human &&
+      (this.keys.has("shift") || this.keys.has("shiftleft")) &&
+      direction.lengthSq() > 0.2;
+    const accel = sprinting ? SPRINT_ACCEL : MOVE_ACCEL;
+    const maxSpeed = sprinting ? SPRINT_MAX_SPEED : MAX_SPEED;
+
     actor.body.applyImpulse(
-      { x: direction.x * MOVE_ACCEL, y: 0, z: direction.z * MOVE_ACCEL },
+      { x: direction.x * accel, y: 0, z: direction.z * accel },
       true,
     );
 
     const horizontalSpeed = Math.hypot(velocity.x, velocity.z);
-    if (horizontalSpeed > MAX_SPEED) {
-      const k = MAX_SPEED / horizontalSpeed;
+    if (horizontalSpeed > maxSpeed) {
+      const k = maxSpeed / horizontalSpeed;
       actor.body.setLinvel({ x: velocity.x * k, y: velocity.y, z: velocity.z * k }, true);
     }
 
@@ -396,7 +405,7 @@ export class LocalPrototype {
     const elapsed = Math.max(0, now - this.roundStartedAt);
     const progress = Math.max(0, Math.min(1, elapsed / ROUND_MS));
     let speed = 0.28 + (0.72 - 0.28) * progress;
-    if (ROUND_MS - elapsed <= 10_000) speed *= 1.45;
+    if (ROUND_MS - elapsed <= 15_000) speed *= 1.45;
 
     this.centerSpinRadians =
       (this.centerSpinRadians + speed * delta) % (Math.PI * 2);
@@ -450,7 +459,9 @@ export class LocalPrototype {
 
   private updateMatch(now: number) {
     const remaining = Math.max(0, ROUND_MS - (now - this.roundStartedAt));
-    this.options.timer.textContent = String(Math.ceil(remaining / 1000));
+    const secondsLeft = Math.ceil(remaining / 1000);
+    this.options.timer.textContent =
+      `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, "0")}`;
 
     if (this.roundEnded) {
       if (now >= this.restartAt) this.resetRound();
