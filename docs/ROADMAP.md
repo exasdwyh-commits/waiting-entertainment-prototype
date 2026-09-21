@@ -4,195 +4,128 @@
 
 Waiting Entertainment is a public multiplayer entertainment system for restaurants and waiting areas.
 
-The first objective is not monetization or account systems. The priority is proving that a short, physical, social multiplayer game can attract people in a public environment.
+Core loop:
 
-Core experience:
+**Scan QR -> phone controls character -> 60-second shared-screen match -> highlight replay -> next round.**
 
-Scan QR -> control character -> play 60 seconds -> audience watches -> next round.
+Commercial/admin systems remain lower priority than game quality.
 
----
+## Phase 0 - Research and product definition
 
-# Phase 0 - Research and Product Definition
+**Status: Completed**
 
-Status: Completed
+- Product positioning
+- Open-source reference research
+- Architecture direction
+- MVP scope
 
-Goals:
+## Phase 1 - Engineering foundation
 
-- Define product positioning
-- Study reference projects
-- Decide technical direction
-- Establish MVP scope
+**Status: Completed and CI validated**
 
-Outputs:
+- TypeScript monorepo
+- `client / player / server / shared`
+- Shared protocol
+- Build pipeline
+- Runtime smoke test
+- Socket end-to-end test
 
-- Architecture document
-- Product definition
-- Development roadmap
+## Phase 2 - Physics prototype
 
----
+**Status: Implemented; real-world tuning pending**
 
-# Phase 1 - Engineering Foundation
-
-Goal:
-
-Create a scalable game project foundation.
-
-Tasks:
-
-- Setup TypeScript monorepo
-- Setup client/player/server/shared packages
-- Configure build system
-- Define shared network protocol
-- Add development documentation
-
-Acceptance:
-
-- Project installs successfully
-- All packages compile
-- Basic server and client can communicate
-
----
-
-# Phase 2 - Single Player Physics Prototype
-
-Goal:
-
-Validate the core fun of Table Push King.
-
-Features:
-
-- Three.js arena
-- Circular table
-- Low poly character
-- Rapier physics
-- Movement
-- Push collision
-- Knockdown
-- Recovery
+- Three.js circular table
+- Rapier rigid-body characters
+- Movement and push impulses
+- Knockdown and upright recovery
+- Simplified ledge catch
 - Falling elimination
+- Local physics tuning sandbox
 
-Acceptance:
+Exit condition: real users confirm the physical reactions are fun, readable and controllable.
 
-A single player can push physics characters and create fun reactions.
+## Phase 3 - Match loop
 
----
+**Status: Implemented**
 
-# Phase 3 - Game Rule Prototype
+- 3-second countdown
+- 60-second timer
+- Elimination scoring
+- Ranking
+- Winner determination
+- Automatic restart
 
-Goal:
+## Phase 4 - Multiplayer architecture
 
-Turn physics into a playable match.
+**Status: Implemented; LAN field validation pending**
 
-Features:
+- Server-authoritative Rapier world
+- 8 persistent slots
+- Socket snapshots
+- Human takeover of Bot slots
+- Disconnect -> Bot takeover
+- 1-8 human player model
 
-- 60 second timer
-- Spawn system
-- Winner detection
-- Camera system
-- Basic UI
-- Match restart
+## Phase 5 - Mobile controller
 
-Acceptance:
+**Status: Implemented; phone compatibility validation pending**
 
-A complete local match can run repeatedly.
-
----
-
-# Phase 4 - Multiplayer Architecture
-
-Goal:
-
-Add real-time multiplayer.
-
-Features:
-
-- Authoritative server
-- Room management
-- State synchronization
-- Player sessions
-- Reconnect handling
-
-Acceptance:
-
-2-8 clients can join and play together.
-
----
-
-# Phase 5 - Mobile Controller
-
-Goal:
-
-Create restaurant-friendly interaction.
-
-Features:
-
-- QR join flow
+- QR join
 - Mobile web controller
 - Virtual joystick
-- Push button
-- Player nickname
+- Single push action
+- Zero-install join flow
 
-Acceptance:
+## Phase 6 - AI Bots
 
-A guest can join within seconds without installation.
+**Status: Implemented; behavior tuning pending**
 
----
-
-# Phase 6 - AI Bot System
-
-Goal:
-
-Keep games full even with few players.
-
-Features:
-
-- Bot replacement
-- Target selection
-- Approach behavior
-- Attack behavior
+- Nearest-target selection
+- Chase
+- Push
 - Edge avoidance
+- Auto recovery from ledge
+- Human/Bot slot switching
 
-Acceptance:
+## Phase 7 - Spectator and game-feel polish
 
-1 human player can start an entertaining 8-player match.
+**Status: In progress**
 
----
+Implemented:
 
-# Phase 7 - Experience Polish
+- Big-screen player labels
+- Live ranking
+- Result presentation
+- Rolling snapshot history
+- Final elimination slow-motion replay
+- Two-pass replay with second close camera
 
-Goal:
+Next:
 
-Make the game suitable for public display.
+- Better low-poly characters
+- Stronger hit VFX and sound
+- Camera director
+- More varied Bot personalities
+- Better ledge animation/readability
+- Game-feel tuning from real players
 
-Features:
+## Phase 8 - Waiting Engine
 
-- Better characters
-- Animations
-- Sound effects
-- Victory moments
-- Spectator camera
-- Branding layer
+**Status: Future**
 
----
+Extract reusable systems so additional games share:
 
-# Phase 8 - Future Game Platform
+- Input
+- Sessions
+- Network
+- AI fill
+- Match lifecycle
+- Replay/events
+- Deployment runtime
 
-Goal:
-
-Evolve from one game into Waiting Engine.
-
-Possible games:
+Candidate games:
 
 - Table Push King
 - Sea Battle
 - Kart Racing
 - Party Arena
-
-Shared systems:
-
-- Input
-- Physics
-- Network
-- Room system
-- AI framework
-- Deployment runtime
