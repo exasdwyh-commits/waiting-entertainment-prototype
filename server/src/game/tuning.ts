@@ -32,6 +32,21 @@ export const GAME_TUNING = {
     momentumReferenceSpeed: 4.2,
   },
 
+  toss: {
+    range: 1.25,
+    maxTargetBalance: 0.52,
+    windupMs: 340,
+    cooldownMs: 1_150,
+    holdForward: 0.62,
+    holdHeight: 1.15,
+    baseStrength: 4.05,
+    verticalStrength: 1.05,
+    momentumBonus: 0.35,
+    targetBalanceAfter: 0.08,
+    knockdownMs: 760,
+    attackerLockMs: 280,
+  },
+
   balance: {
     hitLossBase: 0.26,
     hitLossScale: 0.52,
@@ -100,6 +115,18 @@ export function validateGameTuning() {
   if (GAME_TUNING.push.momentumMaxMultiplier < GAME_TUNING.push.momentumMinMultiplier) {
     throw new Error("Invalid game tuning: push momentum max must be >= min");
   }
+
+  requireFinitePositive("toss.range", GAME_TUNING.toss.range);
+  requireUnitRange("toss.maxTargetBalance", GAME_TUNING.toss.maxTargetBalance);
+  requireFinitePositive("toss.windupMs", GAME_TUNING.toss.windupMs);
+  requireFinitePositive("toss.cooldownMs", GAME_TUNING.toss.cooldownMs);
+  requireFinitePositive("toss.holdForward", GAME_TUNING.toss.holdForward);
+  requireFinitePositive("toss.holdHeight", GAME_TUNING.toss.holdHeight);
+  requireFinitePositive("toss.baseStrength", GAME_TUNING.toss.baseStrength);
+  requireFinitePositive("toss.verticalStrength", GAME_TUNING.toss.verticalStrength);
+  requireUnitRange("toss.momentumBonus", GAME_TUNING.toss.momentumBonus);
+  requireUnitRange("toss.targetBalanceAfter", GAME_TUNING.toss.targetBalanceAfter);
+  requireFinitePositive("toss.knockdownMs", GAME_TUNING.toss.knockdownMs);
 
   requireUnitRange("balance.hitLossBase", GAME_TUNING.balance.hitLossBase);
   requireUnitRange("balance.hitLossScale", GAME_TUNING.balance.hitLossScale);
