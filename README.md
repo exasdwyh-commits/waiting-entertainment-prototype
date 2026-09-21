@@ -17,7 +17,8 @@ Implemented:
 - Human disconnect -> immediate AI takeover
 - Phone refresh / wake / reconnect -> reclaim the same character
 - Circular table arena
-- Push / knockdown / recovery
+- Momentum-sensitive push / knockdown / recovery
+- One-button contextual grab-and-toss against vulnerable nearby fighters
 - Simplified ledge catch and climb-back
 - Falling elimination
 - 3-second round countdown
