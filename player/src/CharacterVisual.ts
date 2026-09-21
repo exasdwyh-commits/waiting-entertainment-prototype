@@ -74,6 +74,7 @@ function chooseClip(clips: THREE.AnimationClip[], state: PlayerState) {
     ragdoll: ["fall", "die", "hit"],
     recovering: ["idle", "stand", "getup", "recover"],
     edge_hang: ["holdingboth", "holdingright", "fall"],
+    climbing: ["jump", "interactright", "holdingboth"],
     celebrate: ["emoteyes", "idle"],
     eliminated: ["die", "fall", "death"],
   };
