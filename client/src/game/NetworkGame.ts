@@ -280,6 +280,10 @@ export class NetworkGame {
 
   private applySnapshot(snapshot: MatchSnapshot) {
     this.options.timer.textContent = String(Math.ceil(snapshot.timeLeftMs / 1000));
+    this.options.timer.classList.toggle(
+      "danger",
+      snapshot.phase === "playing" && snapshot.timeLeftMs <= 10_000,
+    );
     this.renderRanking(snapshot);
 
     for (const player of snapshot.players) {
@@ -428,12 +432,16 @@ export class NetworkGame {
       centerZ = centerZ * 0.55 + hanging.position[2] * 0.45;
     }
 
+    const tension = !this.replay &&
+      this.latest?.phase === "playing" &&
+      (this.latest?.timeLeftMs ?? 60_000) <= 10_000;
+
     const cameraTarget = this.replay?.closeCamera
       ? new THREE.Vector3(centerX, 7.6, centerZ + 8.2)
       : new THREE.Vector3(
           centerX,
-          9.2 + spread * 0.32,
-          centerZ + 9.6 + spread * 0.38,
+          9.2 + spread * 0.32 - (tension ? 0.65 : 0),
+          centerZ + 9.6 + spread * 0.38 - (tension ? 0.8 : 0),
         );
 
     this.camera.position.lerp(cameraTarget, this.replay ? 0.075 : 0.045);
