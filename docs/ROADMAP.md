@@ -128,8 +128,9 @@ Implemented:
 
 Implemented additionally:
 
-- Vendored CC0 low-poly GLB character placeholder
-- Replaceable CharacterVisual layer
+- Eight-model CC0 low-poly character roster
+- Slot-specific character variants instead of eight identical fighters
+- Replaceable CharacterVisual asset layer
 - Animation-state adapter
 - Dynamic spectator framing
 - Impact camera shake
@@ -139,13 +140,16 @@ Implemented additionally:
 - Procedural arcade audio plus crowd-like reaction bursts (no external audio assets)
 - Ledge spectator callouts and climb-focused camera
 - Final 10-second big-screen camera push-in + timer pulse
+- Modular low-poly restaurant environment around the arena
+- Restaurant floor, rug, seating, background tables, wall dressing, pendant lighting and arena sign
+- Lightweight matching floor/pedestal treatment on the phone personal view
 
 Next:
 
 - More advanced hit VFX / particles
 - More advanced camera director
-- More varied Bot personalities
 - Better ledge animation/readability
+- Production-quality character art replacement after gameplay lock
 - Game-feel tuning from real players
 
 ## Phase 8 - Waiting Engine

@@ -41,14 +41,18 @@ export class PersonalGameView {
     this.renderer.shadowMap.enabled = false;
     this.container.appendChild(this.renderer.domElement);
 
-    this.scene.background = new THREE.Color(0x0f172a);
-    this.scene.fog = new THREE.Fog(0x0f172a, 10, 24);
+    this.scene.background = new THREE.Color(0x160f0c);
+    this.scene.fog = new THREE.Fog(0x160f0c, 12, 28);
 
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x334155, 2.8));
 
     const key = new THREE.DirectionalLight(0xffffff, 3.2);
     key.position.set(4, 9, 6);
     this.scene.add(key);
+
+    const warm = new THREE.PointLight(0xffb45e, 4.2, 18, 2);
+    warm.position.set(0, 5.5, 3.5);
+    this.scene.add(warm);
 
     const table = new THREE.Mesh(
       new THREE.CylinderGeometry(6, 6, 0.42, 48),
@@ -70,6 +74,38 @@ export class PersonalGameView {
     rim.rotation.x = Math.PI / 2;
     rim.position.y = 0.035;
     this.scene.add(rim);
+
+    const pedestal = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.45, 2.2, 3.5, 24),
+      new THREE.MeshStandardMaterial({
+        color: 0x6b3f25,
+        roughness: 0.82,
+      }),
+    );
+    pedestal.position.y = -2;
+    this.scene.add(pedestal);
+
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(30, 30),
+      new THREE.MeshStandardMaterial({
+        color: 0x2b1c17,
+        roughness: 0.94,
+      }),
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -3.68;
+    this.scene.add(floor);
+
+    const rug = new THREE.Mesh(
+      new THREE.CircleGeometry(8.1, 48),
+      new THREE.MeshStandardMaterial({
+        color: 0x461a17,
+        roughness: 0.96,
+      }),
+    );
+    rug.rotation.x = -Math.PI / 2;
+    rug.position.y = -3.665;
+    this.scene.add(rug);
 
     this.camera.position.copy(this.cameraPosition);
     this.camera.lookAt(0, 0, 0);
@@ -219,7 +255,7 @@ export class PersonalGameView {
     };
     this.actors.set(player.id, actor);
 
-    createCharacterVisual(tint, 1.7).then((visual) => {
+    createCharacterVisual(tint, 1.7, index).then((visual) => {
       if (this.actors.get(player.id) !== actor) return;
       root.clear();
       root.add(visual.root);

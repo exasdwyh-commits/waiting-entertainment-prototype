@@ -3,7 +3,16 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import type { PlayerState } from "@waiting/shared";
 
-const MODEL_URL = "/assets/characters/character.glb";
+const MODEL_URLS = [
+  "/assets/characters/character-female-a.glb",
+  "/assets/characters/character-male-a.glb",
+  "/assets/characters/character-female-b.glb",
+  "/assets/characters/character-male-b.glb",
+  "/assets/characters/character-female-c.glb",
+  "/assets/characters/character-male-c.glb",
+  "/assets/characters/character-female-d.glb",
+  "/assets/characters/character-male-d.glb",
+] as const;
 
 type LoadedCharacter = {
   scene: THREE.Group;
@@ -17,19 +26,27 @@ export type CharacterVisual = {
   update: (delta: number) => void;
 };
 
-let characterPromise: Promise<LoadedCharacter> | undefined;
+const characterPromises = new Map<string, Promise<LoadedCharacter>>();
 
-function loadCharacter() {
-  characterPromise ??= new Promise((resolve, reject) => {
+function loadCharacter(variantIndex: number) {
+  const url = MODEL_URLS[
+    Math.abs(Math.trunc(variantIndex)) % MODEL_URLS.length
+  ];
+
+  const existing = characterPromises.get(url);
+  if (existing) return existing;
+
+  const promise = new Promise<LoadedCharacter>((resolve, reject) => {
     new GLTFLoader().load(
-      MODEL_URL,
+      url,
       (gltf) => resolve({ scene: gltf.scene, animations: gltf.animations }),
       undefined,
       reject,
     );
   });
 
-  return characterPromise;
+  characterPromises.set(url, promise);
+  return promise;
 }
 
 function tintCharacter(root: THREE.Object3D, tint: number) {
@@ -115,9 +132,10 @@ function fallbackCharacter(tint: number, targetHeight: number): CharacterVisual 
 export async function createCharacterVisual(
   tint: number,
   targetHeight = 1.75,
+  variantIndex = 0,
 ): Promise<CharacterVisual> {
   try {
-    const loaded = await loadCharacter();
+    const loaded = await loadCharacter(variantIndex);
     const root = new THREE.Group();
     const model = cloneSkeleton(loaded.scene) as THREE.Group;
     tintCharacter(model, tint);
