@@ -25,6 +25,9 @@ export class PersonalGameView {
   private readonly cameraPosition = new THREE.Vector3(0, 7.1, 6.2);
   private readonly cameraLook = new THREE.Vector3();
   private readonly tmp = new THREE.Vector3();
+  private readonly inputForward = new THREE.Vector3();
+  private readonly inputRight = new THREE.Vector3();
+  private readonly worldUp = new THREE.Vector3(0, 1, 0);
   private ownPlayerId?: string;
   private snapshot?: MatchSnapshot;
   private animationFrame = 0;
@@ -84,6 +87,38 @@ export class PersonalGameView {
 
   setOwnedPlayer(playerId: string) {
     this.ownPlayerId = playerId;
+  }
+
+  toWorldInput(screenX: number, screenY: number) {
+    this.camera.getWorldDirection(this.inputForward);
+    this.inputForward.y = 0;
+
+    if (this.inputForward.lengthSq() < 0.0001) {
+      this.inputForward.set(0, 0, -1);
+    } else {
+      this.inputForward.normalize();
+    }
+
+    this.inputRight
+      .crossVectors(this.inputForward, this.worldUp)
+      .normalize();
+
+    const forwardAmount = -screenY;
+    const worldX =
+      this.inputRight.x * screenX +
+      this.inputForward.x * forwardAmount;
+    const worldZ =
+      this.inputRight.z * screenX +
+      this.inputForward.z * forwardAmount;
+
+    const magnitude = Math.hypot(worldX, worldZ);
+    if (magnitude < 0.0001) return { x: 0, z: 0 };
+
+    const scale = Math.min(1, Math.hypot(screenX, screenY)) / magnitude;
+    return {
+      x: worldX * scale,
+      z: worldZ * scale,
+    };
   }
 
   update(snapshot: MatchSnapshot) {
