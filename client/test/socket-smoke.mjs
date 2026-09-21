@@ -39,6 +39,19 @@ const player = await connectSocket();
 let recoveredPlayer;
 
 try {
+  const pingAck = await new Promise((resolve) => {
+    const timeout = setTimeout(
+      () => resolve({ ok: false, reason: "timeout" }),
+      2_000,
+    );
+    observer.emit("latency:ping", {}, (value) => {
+      clearTimeout(timeout);
+      resolve(value);
+    });
+  });
+
+  assert.equal(pingAck.ok, true);
+
   const initial = await waitForEvent(
     observer,
     "match:snapshot",
