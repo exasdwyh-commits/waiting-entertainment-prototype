@@ -8,7 +8,7 @@ const PLAYER_COUNT = 8;
 const PHYSICS_HZ = 60;
 const TICK_MS = 1000 / PHYSICS_HZ;
 const SNAPSHOT_INTERVAL_TICKS = 3; // 20Hz network snapshots; physics remains 60Hz.
-const ROUND_MS = GAME_TUNING.match.roundMs;
+const ROUND_MS = positiveEnvMs("WAITING_ROUND_MS") ?? GAME_TUNING.match.roundMs;
 const COUNTDOWN_MS = 3_000;
 const RESULT_MS = GAME_TUNING.match.resultMs;
 const SESSION_RECOVERY_MS = 90_000;
@@ -413,9 +413,17 @@ export class GameSession {
     if (this.phase === "finished") return "final";
 
     const elapsed = Math.max(0, now - this.startedAt);
-    if (elapsed < GAME_TUNING.match.openingEndMs) return "opening";
-    if (elapsed < GAME_TUNING.match.brawlEndMs) return "brawl";
-    if (elapsed < GAME_TUNING.match.dangerEndMs) return "danger";
+    const progress = clamp(elapsed / Math.max(1, ROUND_MS), 0, 1);
+    const openingRatio =
+      GAME_TUNING.match.openingEndMs / GAME_TUNING.match.roundMs;
+    const brawlRatio =
+      GAME_TUNING.match.brawlEndMs / GAME_TUNING.match.roundMs;
+    const dangerRatio =
+      GAME_TUNING.match.dangerEndMs / GAME_TUNING.match.roundMs;
+
+    if (progress < openingRatio) return "opening";
+    if (progress < brawlRatio) return "brawl";
+    if (progress < dangerRatio) return "danger";
     return "final";
   }
 
@@ -1615,6 +1623,13 @@ function sanitizeSessionId(value?: string) {
 function sanitizeName(value?: string) {
   if (!value) return "";
   return value.trim().replace(/[<>]/g, "").slice(0, 16);
+}
+
+function positiveEnvMs(name: string) {
+  const raw = process.env[name];
+  if (!raw) return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
 function clamp(value: number, min: number, max: number) {
