@@ -4,7 +4,7 @@ import { TABLE_PUSH_GEOMETRY } from "@waiting/shared";
 import type { GameEvent, MatchSnapshot, PlayerInput, PlayerSnapshot, PlayerState } from "@waiting/shared";
 import { GAME_TUNING, validateGameTuning } from "./tuning.js";
 
-const PLAYER_COUNT = 8;
+const PLAYER_COUNT = 10;
 const PHYSICS_HZ = 60;
 const TICK_MS = 1000 / PHYSICS_HZ;
 const SNAPSHOT_INTERVAL_TICKS = 3; // 20Hz network snapshots; physics remains 60Hz.
@@ -28,6 +28,7 @@ type Slot = {
   sprinting: boolean;
   state: PlayerState;
   alive: boolean;
+  respawnAt: number;
   pushReadyAt: number;
   pushStateUntil: number;
   tossTargetId?: string;
@@ -105,6 +106,7 @@ export class GameSession {
         recovered.disconnectedAt = undefined;
         recovered.name = sanitizeName(requestedName) || recovered.name;
         recovered.input = this.emptyInput();
+        recovered.grabNeedsRelease = false;
 
         return {
           playerId: recovered.id,
@@ -142,6 +144,7 @@ export class GameSession {
     slot.socketId = undefined;
     slot.disconnectedAt = Date.now();
     slot.bot = true;
+    slot.grabNeedsRelease = false;
     // AI takes over the same physical character immediately. The stable session
     // stays reserved briefly so a refreshed/awakened phone can reclaim it.
     slot.input = this.emptyInput();
@@ -223,6 +226,7 @@ export class GameSession {
         sprinting: false,
         state: "idle",
         alive: true,
+        respawnAt: 0,
         pushReadyAt: 0,
         pushStateUntil: 0,
         tossStartedAt: 0,
@@ -293,6 +297,7 @@ export class GameSession {
       slot.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
       slot.state = "idle";
       slot.alive = true;
+      slot.respawnAt = 0;
       slot.edgeHanging = false;
       slot.edgeHangUntil = 0;
       slot.climbStartedAt = 0;
@@ -338,6 +343,8 @@ export class GameSession {
       this.phase = "playing";
       this.startedAt = now;
     }
+
+    this.processRespawns(now);
 
     for (const slot of this.slots) {
       if (!slot.alive) continue;
@@ -387,16 +394,27 @@ export class GameSession {
     for (const slot of this.slots) this.updateState(slot, now);
 
     const alive = this.slots.filter((slot) => slot.alive);
-    if (now - this.startedAt >= ROUND_MS || alive.length <= 1) {
+    const timedOut = now - this.startedAt >= ROUND_MS;
+    const pendingRespawns = this.slots.some((slot) => slot.respawnAt > 0);
+    const finalLastStanding =
+      this.matchStage(now) === "final" &&
+      alive.length <= 1 &&
+      !pendingRespawns;
+
+    if (timedOut || finalLastStanding) {
       this.releaseActiveTosses(now);
       this.phase = "finished";
-      const rankedAlive = [...alive].sort((a, b) => {
+
+      const candidates = timedOut ? [...this.slots] : [...alive];
+      candidates.sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score;
+        if (a.alive !== b.alive) return Number(b.alive) - Number(a.alive);
         const ap = a.body.translation();
         const bp = b.body.translation();
         return Math.hypot(ap.x, ap.z) - Math.hypot(bp.x, bp.z);
       });
-      this.winnerId = rankedAlive[0]?.id;
+
+      this.winnerId = candidates[0]?.id;
       this.restartAt = now + RESULT_MS;
       if (this.winnerId) {
         const winner = this.slots.find((slot) => slot.id === this.winnerId);
@@ -406,6 +424,64 @@ export class GameSession {
     }
 
     if (this.shouldBroadcast() || this.pendingEvents.length > 0) this.broadcast(now);
+  }
+
+  private processRespawns(now: number) {
+    if (this.phase !== "playing") return;
+
+    for (const slot of this.slots) {
+      if (slot.alive || slot.respawnAt <= 0 || now < slot.respawnAt) continue;
+      this.respawnSlot(slot, now);
+    }
+  }
+
+  private respawnSlot(slot: Slot, now: number) {
+    const index = Number(slot.id.split("-")[1]) || 0;
+    const angle = (index / PLAYER_COUNT) * Math.PI * 2;
+    const radius = TABLE_PUSH_GEOMETRY.spawnRadius;
+
+    slot.body.setEnabled(true);
+    slot.body.setGravityScale(1, true);
+    slot.body.setTranslation(
+      {
+        x: Math.cos(angle) * radius,
+        y: 1.05,
+        z: Math.sin(angle) * radius,
+      },
+      true,
+    );
+    slot.body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
+    slot.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    slot.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+
+    slot.facingYaw = Math.atan2(-Math.cos(angle), -Math.sin(angle));
+    slot.alive = true;
+    slot.respawnAt = 0;
+    slot.state = "recovering";
+    slot.balance = 0.72;
+    slot.stamina = Math.max(slot.stamina, 0.58);
+    slot.staminaRecoverAt = now + 250;
+    slot.sprinting = false;
+    slot.edgeHanging = false;
+    slot.edgeHangUntil = 0;
+    slot.climbStartedAt = 0;
+    slot.climbUntil = 0;
+    slot.climbFrom = undefined;
+    slot.climbTo = undefined;
+    slot.knockedUntil = 0;
+    slot.recoverUntil = now + 380;
+    slot.pushReadyAt = now + 420;
+    slot.pushStateUntil = 0;
+    slot.tossTargetId = undefined;
+    slot.carriedBy = undefined;
+    slot.tossStartedAt = 0;
+    slot.tossReleaseAt = 0;
+    slot.tossDirection = undefined;
+    slot.tossMomentum = 0;
+    slot.grabNeedsRelease = false;
+    slot.lastHitBy = undefined;
+    slot.lastHitAt = 0;
+    slot.input = this.emptyInput();
   }
 
   private matchStage(now: number): MatchSnapshot["matchStage"] {
@@ -1466,6 +1542,11 @@ export class GameSession {
       slot.state = "eliminated";
       slot.body.setEnabled(false);
 
+      const permanentElimination = this.matchStage(now) === "final";
+      slot.respawnAt = permanentElimination
+        ? 0
+        : now + GAME_TUNING.match.preFinalRespawnMs;
+
       let scorerId: string | undefined;
       if (slot.lastHitBy && now - slot.lastHitAt <= 4_000) {
         const scorer = this.slots.find((candidate) => candidate.id === slot.lastHitBy);
@@ -1476,12 +1557,13 @@ export class GameSession {
       }
 
       const living = this.slots.filter((candidate) => candidate.alive).length;
+      const finalFall = permanentElimination && living <= 1;
       this.emitEvent(
-        living <= 1 ? "final_elimination" : "big_fall",
+        finalFall ? "final_elimination" : "big_fall",
         now,
         scorerId,
         slot.id,
-        living <= 1 ? 1 : 0.75,
+        finalFall ? 1 : 0.75,
       );
       return;
     }
