@@ -326,7 +326,7 @@ export class GameSession {
   private advanceRecovery(slot: Slot, now: number) {
     if (slot.edgeHanging) return;
 
-    if (slot.state === "hit" && now >= slot.knockedUntil) {
+    if ((slot.state === "hit" || slot.state === "ragdoll") && now >= slot.knockedUntil) {
       slot.state = "recovering";
       slot.recoverUntil = now + 520;
     }
