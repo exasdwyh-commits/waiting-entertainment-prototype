@@ -6,6 +6,7 @@ const PLAYER_COUNT = 8;
 const ARENA_RADIUS = 6;
 const TICK_MS = 50;
 const ROUND_MS = 60_000;
+const COUNTDOWN_MS = 3_000;
 const PUSH_COOLDOWN_MS = 850;
 
 type Slot = {
@@ -20,6 +21,9 @@ type Slot = {
   knockedUntil: number;
   edgeHangUntil: number;
   edgeHanging: boolean;
+  score: number;
+  lastHitBy?: string;
+  lastHitAt: number;
   input: PlayerInput;
 };
 
@@ -27,7 +31,8 @@ export class GameRoom {
   private world!: RAPIER.World;
   private slots: Slot[] = [];
   private startedAt = Date.now();
-  private phase: MatchSnapshot["phase"] = "playing";
+  private countdownUntil = 0;
+  private phase: MatchSnapshot["phase"] = "countdown";
   private winnerId: string | undefined;
   private restartAt = 0;
   private eventSeq = 0;
@@ -127,6 +132,8 @@ export class GameRoom {
         knockedUntil: 0,
         edgeHangUntil: 0,
         edgeHanging: false,
+        score: 0,
+        lastHitAt: 0,
         input: this.emptyInput(),
       };
     });
@@ -138,8 +145,9 @@ export class GameRoom {
 
   private resetRound() {
     const now = Date.now();
-    this.startedAt = now;
-    this.phase = "playing";
+    this.countdownUntil = now + COUNTDOWN_MS;
+    this.startedAt = this.countdownUntil;
+    this.phase = "countdown";
     this.winnerId = undefined;
     this.restartAt = 0;
     this.pendingEvents = [];
@@ -161,7 +169,10 @@ export class GameRoom {
       slot.edgeHanging = false;
       slot.edgeHangUntil = 0;
       slot.knockedUntil = 0;
-      slot.pushReadyAt = now + 800;
+      slot.pushReadyAt = this.countdownUntil + 800;
+      slot.score = 0;
+      slot.lastHitBy = undefined;
+      slot.lastHitAt = 0;
       slot.input = this.emptyInput();
     });
   }
@@ -173,6 +184,15 @@ export class GameRoom {
       this.broadcast(now);
       if (now >= this.restartAt) this.resetRound();
       return;
+    }
+
+    if (this.phase === "countdown") {
+      if (now < this.countdownUntil) {
+        this.broadcast(now);
+        return;
+      }
+      this.phase = "playing";
+      this.startedAt = now;
     }
 
     for (const slot of this.slots) {
@@ -197,7 +217,13 @@ export class GameRoom {
     const alive = this.slots.filter((slot) => slot.alive);
     if (now - this.startedAt >= ROUND_MS || alive.length <= 1) {
       this.phase = "finished";
-      this.winnerId = alive[0]?.id;
+      const rankedAlive = [...alive].sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        const ap = a.body.translation();
+        const bp = b.body.translation();
+        return Math.hypot(ap.x, ap.z) - Math.hypot(bp.x, bp.z);
+      });
+      this.winnerId = rankedAlive[0]?.id;
       this.restartAt = now + 8_000;
       if (this.winnerId) {
         this.emitEvent("win", now, this.winnerId, undefined, 1);
@@ -313,6 +339,8 @@ export class GameRoom {
       );
       target.state = "hit";
       target.knockedUntil = now + 650;
+      target.lastHitBy = slot.id;
+      target.lastHitAt = now;
       this.emitEvent("push_hit", now, slot.id, target.id, Math.min(1, strength / 3));
     }
   }
@@ -377,6 +405,10 @@ export class GameRoom {
       slot.alive = false;
       slot.state = "eliminated";
       slot.body.setEnabled(false);
+      if (slot.lastHitBy && now - slot.lastHitAt <= 4_000) {
+        const scorer = this.slots.find((candidate) => candidate.id === slot.lastHitBy);
+        if (scorer) scorer.score += 1;
+      }
       const living = this.slots.filter((candidate) => candidate.alive).length;
       this.emitEvent(
         living <= 1 ? "final_elimination" : "big_fall",
@@ -414,13 +446,18 @@ export class GameRoom {
   }
 
   private broadcast(now: number) {
-    const timeLeftMs = Math.max(0, ROUND_MS - (now - this.startedAt));
+    const timeLeftMs = this.phase === "countdown"
+      ? ROUND_MS
+      : Math.max(0, ROUND_MS - (now - this.startedAt));
 
     const snapshot: MatchSnapshot = {
       matchId: `main-${this.startedAt}`,
       serverTimeMs: now,
       timeLeftMs,
       phase: this.phase,
+      countdownLeftMs: this.phase === "countdown"
+        ? Math.max(0, this.countdownUntil - now)
+        : undefined,
       winnerId: this.winnerId,
       events: this.pendingEvents.splice(0),
       players: this.slots.map((slot): PlayerSnapshot => {
@@ -433,6 +470,7 @@ export class GameRoom {
           position: [p.x, p.y, p.z],
           rotation: [q.x, q.y, q.z, q.w],
           velocity: [v.x, v.y, v.z],
+          score: slot.score,
           state: slot.state,
           eliminated: !slot.alive,
           bot: slot.bot,
