@@ -16,7 +16,8 @@ Implemented:
 - Phone personal 3D gameplay view + virtual joystick + one push button
 - Human disconnect -> immediate AI takeover
 - Phone refresh / wake / reconnect -> reclaim the same character
-- Circular table arena
+- Expanded circular table arena with run-up space
+- Authoritative rotating center lazy Susan that ramps through the round
 - Momentum-sensitive push / knockdown / recovery
 - One-button contextual grab-and-toss against vulnerable nearby fighters
 - Simplified ledge catch and climb-back

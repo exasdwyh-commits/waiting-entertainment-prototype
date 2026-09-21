@@ -43,6 +43,9 @@ export class PersonalGameView {
   private highFpsWindows = 0;
   private lastWidth = 1;
   private lastHeight = 1;
+  private lazySusan?: THREE.Group;
+  private centerSpinRadians = 0;
+  private centerSpinSpeed = 0;
 
   constructor(private readonly container: HTMLElement) {
     const deviceRatio = Math.max(1, window.devicePixelRatio || 1);
@@ -99,6 +102,44 @@ export class PersonalGameView {
     rim.rotation.x = Math.PI / 2;
     rim.position.y = 0.035;
     this.scene.add(rim);
+
+    const lazySusan = new THREE.Group();
+    const glass = new THREE.Mesh(
+      new THREE.CylinderGeometry(
+        TABLE_PUSH_GEOMETRY.lazySusanRadius,
+        TABLE_PUSH_GEOMETRY.lazySusanRadius,
+        0.065,
+        48,
+      ),
+      new THREE.MeshStandardMaterial({
+        color: 0xd8f0ee,
+        roughness: 0.32,
+        transparent: true,
+        opacity: 0.55,
+      }),
+    );
+    glass.position.y = 0.05;
+    lazySusan.add(glass);
+
+    const markerMaterial = new THREE.MeshBasicMaterial({
+      color: 0xf6d9a7,
+    });
+    for (let index = 0; index < 6; index += 1) {
+      const angle = (index / 6) * Math.PI * 2;
+      const marker = new THREE.Mesh(
+        new THREE.BoxGeometry(0.09, 0.025, 1.15),
+        markerMaterial,
+      );
+      marker.position.set(
+        Math.sin(angle) * TABLE_PUSH_GEOMETRY.lazySusanRadius * 0.58,
+        0.095,
+        Math.cos(angle) * TABLE_PUSH_GEOMETRY.lazySusanRadius * 0.58,
+      );
+      marker.rotation.y = angle;
+      lazySusan.add(marker);
+    }
+    this.lazySusan = lazySusan;
+    this.scene.add(lazySusan);
 
     const pedestal = new THREE.Mesh(
       new THREE.CylinderGeometry(1.45, 2.2, 3.5, 24),
@@ -249,6 +290,10 @@ export class PersonalGameView {
 
   update(snapshot: MatchSnapshot) {
     this.snapshot = snapshot;
+    if (snapshot.arenaState) {
+      this.centerSpinRadians = snapshot.arenaState.centerSpinRadians;
+      this.centerSpinSpeed = snapshot.arenaState.centerSpinSpeed;
+    }
 
     for (const player of snapshot.players) {
       const actor = this.actors.get(player.id) ?? this.createActor(player);
@@ -417,6 +462,10 @@ export class PersonalGameView {
     const now = performance.now();
     this.samplePerformance(now);
     const rawDelta = Math.min(this.clock.getDelta(), 0.05);
+    if (this.lazySusan) {
+      this.centerSpinRadians += this.centerSpinSpeed * rawDelta;
+      this.lazySusan.rotation.y = this.centerSpinRadians;
+    }
     const hitStopped = now < this.hitStopUntil;
     const delta = hitStopped ? 0 : rawDelta;
 

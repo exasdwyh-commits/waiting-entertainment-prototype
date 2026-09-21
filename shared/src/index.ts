@@ -3,6 +3,7 @@ export const TABLE_PUSH_GEOMETRY = {
   spawnRadius: 4.7,
   rimRadius: 8.08,
   dangerStartRadius: 6.35,
+  lazySusanRadius: 3.35,
 } as const;
 
 export type PlayerId = string;
@@ -69,5 +70,9 @@ export interface MatchSnapshot {
   countdownLeftMs?: number;
   players: PlayerSnapshot[];
   events: GameEvent[];
+  arenaState?: {
+    centerSpinRadians: number;
+    centerSpinSpeed: number;
+  };
   winnerId?: PlayerId;
 }
