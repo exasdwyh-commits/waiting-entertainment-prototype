@@ -64,7 +64,7 @@ Before adding broad platform features, close the main physics-party combat gaps:
 - Ledge catch with timed rescue window
 - Staged physical climb-back instead of instant teleport
 - Failed ledge rescue -> ragdoll fall/recovery
-- Falling elimination
+- Pre-Final falling respawn + permanent Final Chaos elimination
 - Local physics tuning sandbox
 
 - Centralized `GAME_TUNING` for movement / push / balance / ledge feel
@@ -80,7 +80,9 @@ Exit condition: real users confirm the physical reactions are fun, readable and 
 - 3-second countdown
 - 180-second authoritative round
 - Opening / Brawl / Danger / Final Chaos stage broadcast
-- Elimination scoring
+- Pre-Final respawn pacing keeps the full three-minute brawl alive
+- Final Chaos switches to permanent elimination / last-standing resolution
+- Fall scoring across the full match; permanent elimination only in Final Chaos
 - Ranking
 - Winner determination
 - Automatic restart
@@ -92,11 +94,11 @@ Exit condition: real users confirm the physical reactions are fun, readable and 
 - One permanent local GameSession; no room/matchmaking layer
 - Server-authoritative Rapier world
 - 60Hz host physics / 20Hz snapshots
-- 8 persistent slots
+- 10 persistent slots
 - Human takeover of Bot slots
 - Disconnect -> immediate Bot takeover
 - Stable phone session -> reclaim same character after refresh/reconnect
-- 1-8 human player model
+- 1-10 human player model
 
 ## Phase 5 - Mobile controller
 
