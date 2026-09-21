@@ -245,14 +245,20 @@ export class NetworkGame {
         event.type === "final_elimination" ? 0.52 :
         event.type === "big_fall" ? 0.32 :
         event.type === "toss" ? 0.3 + event.importance * 0.18 :
-        event.type === "push_hit" ? 0.12 + event.importance * 0.16 :
+        event.type === "heavy_hit" ? 0.22 + event.importance * 0.18 :
+        event.type === "punch_hit" || event.type === "push_hit"
+          ? 0.08 + event.importance * 0.1 :
+        event.type === "grab" ? 0.035 :
         0.08;
       this.cameraImpulse = Math.max(this.cameraImpulse, impulse);
       const fovKick =
         event.type === "final_elimination" ? 6 :
         event.type === "big_fall" ? 4 :
         event.type === "toss" ? 3.5 + event.importance * 2.4 :
-        event.type === "push_hit" ? 1.4 + event.importance * 2.2 :
+        event.type === "heavy_hit" ? 3 + event.importance * 2.6 :
+        event.type === "punch_hit" || event.type === "push_hit"
+          ? 0.8 + event.importance * 1.4 :
+        event.type === "grab" ? 0.35 :
         1.2;
       this.cameraFovKick = Math.max(this.cameraFovKick, fovKick);
 
@@ -260,7 +266,9 @@ export class NetworkGame {
         event.type === "final_elimination" ? 88 :
         event.type === "big_fall" ? 62 :
         event.type === "toss" ? 52 + event.importance * 36 :
-        event.type === "push_hit" ? 22 + event.importance * 34 :
+        event.type === "heavy_hit" ? 42 + event.importance * 34 :
+        event.type === "punch_hit" || event.type === "push_hit"
+          ? 14 + event.importance * 18 :
         event.type === "edge_save" ? 28 :
         0;
       this.hitStopUntil = Math.max(
@@ -277,6 +285,31 @@ export class NetworkGame {
 
       if (subject) {
         this.fx.spawn(event.type, subject.position, event.importance);
+      }
+
+      const targetView = event.targetId
+        ? this.views.get(event.targetId)
+        : undefined;
+      const actorView = event.actorId
+        ? this.views.get(event.actorId)
+        : undefined;
+
+      if (
+        event.type === "punch_hit" ||
+        event.type === "push_hit" ||
+        event.type === "heavy_hit" ||
+        event.type === "toss"
+      ) {
+        targetView?.visual?.addImpact(
+          event.type === "heavy_hit" || event.type === "toss"
+            ? Math.max(0.85, event.importance)
+            : event.importance,
+          true,
+        );
+        actorView?.visual?.addImpact(
+          event.type === "heavy_hit" ? 0.72 : 0.38,
+          false,
+        );
       }
     });
   }
@@ -621,11 +654,22 @@ export class NetworkGame {
       this.centerSpinSpeed = snapshot.arenaState.centerSpinSpeed;
     }
     const humanCount = snapshot.players.filter((player) => !player.bot).length;
-    this.options.status.textContent = `真人 ${humanCount}/${snapshot.players.length} · AI ${snapshot.players.length - humanCount}`;
-    this.options.timer.textContent = String(Math.ceil(snapshot.timeLeftMs / 1000));
+    const stageText = {
+      opening: "开局混战",
+      brawl: "高密度乱斗",
+      danger: "危险升级",
+      final: "FINAL CHAOS",
+    }[snapshot.matchStage];
+    this.options.status.textContent =
+      `${stageText} · 真人 ${humanCount}/${snapshot.players.length} · AI ${snapshot.players.length - humanCount}`;
+
+    const totalSeconds = Math.max(0, Math.ceil(snapshot.timeLeftMs / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = String(totalSeconds % 60).padStart(2, "0");
+    this.options.timer.textContent = `${minutes}:${seconds}`;
     this.options.timer.classList.toggle(
       "danger",
-      snapshot.phase === "playing" && snapshot.timeLeftMs <= 10_000,
+      snapshot.phase === "playing" && snapshot.matchStage === "final",
     );
     this.renderRanking(snapshot);
 
