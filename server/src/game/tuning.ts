@@ -1,0 +1,50 @@
+export const GAME_TUNING = {
+  movement: {
+    impulsePerTick: 0.16,
+    maxHorizontalSpeed: 4.2,
+    recoveryControlScale: 0.35,
+    attackControlScale: 0.72,
+    minBalanceControl: 0.52,
+  },
+
+  push: {
+    cooldownMs: 850,
+    animationHoldMs: 320,
+    lungeImpulse: 1.7,
+    lungeLift: 0.1,
+    hitRange: 1.65,
+    minimumFacingDot: 0.15,
+    maxStrength: 3.0,
+    falloffDistance: 2.25,
+    verticalHitImpulse: 0.65,
+  },
+
+  balance: {
+    hitLossBase: 0.26,
+    hitLossScale: 0.52,
+    minimumAfterHit: 0.08,
+    knockdownBaseMs: 360,
+    knockdownImpactMs: 460,
+    recoveryStateBaseMs: 420,
+    recoveryStateBalanceMs: 360,
+    recoveringPerSecond: 0.9,
+    passivePerSecond: 0.34,
+    movementMinimumControl: 0.52,
+    uprightMaxTorque: 0.11,
+    uprightTiltFactor: 0.045,
+    uprightRecoveryBoost: 1.85,
+  },
+
+  ledge: {
+    hangWindowMs: 1_400,
+    botRecoveryLeadMs: 650,
+    inwardInputDot: 0.3,
+    climbDurationMs: 680,
+    climbInwardDistance: 1.45,
+    climbTargetY: 0.96,
+    climbRecoveryMs: 360,
+    successfulClimbBalance: 0.52,
+    failedHangBalance: 0.12,
+    hangBalanceCap: 0.3,
+  },
+} as const;
