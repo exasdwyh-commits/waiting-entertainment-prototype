@@ -1,19 +1,29 @@
 # Third-party assets
 
-## Temporary low-poly character
+## Temporary low-poly character roster
 
-File:
+Files are vendored in both the big-screen client and phone player public asset folders:
 
-- `client/public/assets/characters/character.glb`
-- `player/public/assets/characters/character.glb`
+- `character-female-a.glb`
+- `character-female-b.glb`
+- `character-female-c.glb`
+- `character-female-d.glb`
+- `character-male-a.glb`
+- `character-male-b.glb`
+- `character-male-c.glb`
+- `character-male-d.glb`
 
-Origin: Kenney character asset, vendored from the CC0 asset collection present in `intellicia-public/parastore`.
+Origin: Kenney low-poly character assets, vendored from the CC0 asset collection present in `intellicia-public/parastore`.
 
 License: **CC0 1.0 / public domain dedication**.
 
-Purpose: temporary gameplay-quality placeholder only.
+Purpose: temporary gameplay-quality character roster.
 
-The project intentionally keeps this model behind a replaceable character visual layer. Production models may replace these files later without changing authoritative physics, networking, scoring, or controller code.
+Each of the eight persistent player slots is assigned a different model variant. Physics, networking and gameplay remain independent from visual assets. Production models can later replace these GLB files or the roster mapping without changing authoritative gameplay code.
+
+## Procedural environment
+
+The restaurant scene, chairs, background tables, pendant lights, floor, walls and arena dressing are generated from Three.js primitives in this repository. They do not depend on external third-party visual assets.
 
 ## Reference repositories
 
