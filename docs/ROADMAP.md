@@ -82,6 +82,9 @@ Exit condition: real users confirm the physical reactions are fun, readable and 
 - Single push action + haptics
 - Authoritative server-driven push cooldown indicator
 - Edge danger ring and dedicated ledge camera
+- Eliminated phone -> automatic spectator camera
+- Eliminated controls visually disable until next round
+- Final 10-second tension treatment on phone
 - Personal procedural audio feedback
 - Zero-install join flow
 
@@ -118,6 +121,7 @@ Implemented additionally:
 - Impact camera shake
 - Procedural arcade audio (no external audio assets)
 - Ledge spectator callouts and climb-focused camera
+- Final 10-second big-screen camera push-in + timer pulse
 
 Next:
 
