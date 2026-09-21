@@ -3,6 +3,7 @@ import { io } from "socket.io-client";
 import QRCode from "qrcode";
 import type { GameEvent, MatchSnapshot, PlayerSnapshot, PlayerState } from "@waiting/shared";
 import { createCharacterVisual, type CharacterVisual } from "./CharacterVisual";
+import { ImpactFx } from "./ImpactFx";
 
 type View = {
   root: THREE.Group;
@@ -41,6 +42,7 @@ export class NetworkGame {
   private readonly clock = new THREE.Clock();
   private readonly views = new Map<string, View>();
   private readonly history: MatchSnapshot[] = [];
+  private readonly fx = new ImpactFx(this.scene);
   private latest?: MatchSnapshot;
   private replay?: ReplayState;
   private animationFrame = 0;
@@ -152,6 +154,15 @@ export class NetworkGame {
         event.type === "push_hit" ? 0.12 + event.importance * 0.16 :
         0.08;
       this.cameraImpulse = Math.max(this.cameraImpulse, impulse);
+
+      const subjectId = event.targetId ?? event.actorId;
+      const subject = subjectId
+        ? this.latest?.players.find((player) => player.id === subjectId)
+        : undefined;
+
+      if (subject) {
+        this.fx.spawn(event.type, subject.position, event.importance);
+      }
     });
   }
 
@@ -366,6 +377,7 @@ export class NetworkGame {
     const now = performance.now();
 
     if (this.replay) this.updateReplay(now);
+    this.fx.update(now);
 
     const delta = Math.min(this.clock.getDelta(), 0.05);
 

@@ -45,6 +45,7 @@ const joystick = document.querySelector<HTMLDivElement>("#joystick")!;
 const stick = document.querySelector<HTMLDivElement>("#stick")!;
 const pushButton = document.querySelector<HTMLButtonElement>("#push")!;
 const stage = document.querySelector<HTMLDivElement>("#personal-stage")!;
+const controllerEl = document.querySelector<HTMLElement>(".controller")!;
 
 const personalView = new PersonalGameView(stage);
 personalView.start();
@@ -114,12 +115,24 @@ socket.on("disconnect", () => {
 });
 
 socket.on("game:event", (event: GameEvent) => {
-  if (!ownedPlayerId || !("vibrate" in navigator)) return;
+  if (!ownedPlayerId) return;
 
   if (event.targetId === ownedPlayerId) {
-    navigator.vibrate(event.type === "final_elimination" ? [55, 30, 80] : 42);
+    controllerEl.classList.remove("hit-flash");
+    void controllerEl.offsetWidth;
+    controllerEl.classList.add("hit-flash");
+    window.setTimeout(() => controllerEl.classList.remove("hit-flash"), 220);
+
+    if ("vibrate" in navigator) {
+      navigator.vibrate(event.type === "final_elimination" ? [55, 30, 80] : 42);
+    }
   } else if (event.actorId === ownedPlayerId && event.type === "push_hit") {
-    navigator.vibrate(16);
+    controllerEl.classList.remove("hit-confirm");
+    void controllerEl.offsetWidth;
+    controllerEl.classList.add("hit-confirm");
+    window.setTimeout(() => controllerEl.classList.remove("hit-confirm"), 180);
+
+    if ("vibrate" in navigator) navigator.vibrate(16);
   }
 });
 
@@ -199,9 +212,20 @@ function releaseStick(event: PointerEvent) {
 joystick.addEventListener("pointerup", releaseStick);
 joystick.addEventListener("pointercancel", releaseStick);
 
+let cooldownTimer = 0;
+
 pushButton.addEventListener("pointerdown", () => {
   pushing = true;
   pushButton.classList.add("active");
+  pushButton.classList.remove("cooldown");
+  void pushButton.offsetWidth;
+  pushButton.classList.add("cooldown");
+  window.clearTimeout(cooldownTimer);
+  cooldownTimer = window.setTimeout(
+    () => pushButton.classList.remove("cooldown"),
+    850,
+  );
+
   if ("vibrate" in navigator) navigator.vibrate(18);
   sendInput();
 });
