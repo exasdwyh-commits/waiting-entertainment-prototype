@@ -48,6 +48,7 @@ const statePill = document.querySelector<HTMLDivElement>("#state-pill")!;
 const joystick = document.querySelector<HTMLDivElement>("#joystick")!;
 const stick = document.querySelector<HTMLDivElement>("#stick")!;
 const pushButton = document.querySelector<HTMLButtonElement>("#push")!;
+const pushLabel = pushButton.querySelector<HTMLElement>("span")!;
 const pushHint = pushButton.querySelector<HTMLElement>("small")!;
 const stage = document.querySelector<HTMLDivElement>("#personal-stage")!;
 const controllerEl = document.querySelector<HTMLElement>(".controller")!;
@@ -89,6 +90,7 @@ let activePointer: number | null = null;
 let inputSeq = 0;
 let pushCooldownLeftMs = 0;
 let eliminated = false;
+let actionDisabled = false;
 let rttMs = 0;
 let snapshotCounter = 0;
 let snapshotRate = 0;
@@ -142,16 +144,27 @@ socket.on("game:event", (event: GameEvent) => {
     window.setTimeout(() => controllerEl.classList.remove("hit-flash"), 220);
 
     if ("vibrate" in navigator) {
-      navigator.vibrate(event.type === "final_elimination" ? [55, 30, 80] : 42);
+      navigator.vibrate(
+        event.type === "final_elimination"
+          ? [55, 30, 80]
+          : event.type === "toss"
+            ? [45, 20, 65]
+            : 42,
+      );
     }
-  } else if (event.actorId === ownedPlayerId && event.type === "push_hit") {
-    personalView.addImpact(event.importance, false);
+  } else if (
+    event.actorId === ownedPlayerId &&
+    (event.type === "push_hit" || event.type === "toss")
+  ) {
+    personalView.addImpact(event.type === "toss" ? 1 : event.importance, false);
     controllerEl.classList.remove("hit-confirm");
     void controllerEl.offsetWidth;
     controllerEl.classList.add("hit-confirm");
     window.setTimeout(() => controllerEl.classList.remove("hit-confirm"), 180);
 
-    if ("vibrate" in navigator) navigator.vibrate(16);
+    if ("vibrate" in navigator) {
+      navigator.vibrate(event.type === "toss" ? [24, 18, 36] : 16);
+    }
   }
 });
 
@@ -182,9 +195,54 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
   const cooldownProgress = 1 - Math.min(1, pushCooldownLeftMs / 850);
   pushButton.style.setProperty("--cooldown-angle", `${cooldownProgress * 360}deg`);
   pushButton.classList.toggle("cooling", pushCooldownLeftMs > 45);
-  pushHint.textContent = pushCooldownLeftMs > 45
-    ? `${(pushCooldownLeftMs / 1000).toFixed(1)}s`
-    : "撞飞他";
+
+  const tossTarget = snapshot.players.find((player) => {
+    if (player.id === me.id || player.eliminated) return false;
+    const vulnerable =
+      player.balance <= 0.55 ||
+      player.state === "hit" ||
+      player.state === "ragdoll" ||
+      player.state === "recovering";
+    if (!vulnerable) return false;
+
+    return Math.hypot(
+      player.position[0] - me.position[0],
+      player.position[2] - me.position[2],
+    ) <= 1.35;
+  });
+
+  actionDisabled =
+    me.state === "carried" ||
+    me.state === "grabbing" ||
+    me.state === "throwing";
+
+  const contextualToss =
+    !actionDisabled &&
+    pushCooldownLeftMs <= 45 &&
+    Boolean(tossTarget);
+
+  pushButton.classList.toggle("contextual-toss", contextualToss);
+  pushButton.classList.toggle("action-disabled", actionDisabled);
+
+  if (me.state === "grabbing") {
+    pushLabel.textContent = "抓住了";
+    pushHint.textContent = "准备甩出";
+  } else if (me.state === "carried") {
+    pushLabel.textContent = "被抓住";
+    pushHint.textContent = "小心！";
+  } else if (me.state === "throwing") {
+    pushLabel.textContent = "甩出";
+    pushHint.textContent = "漂亮！";
+  } else if (pushCooldownLeftMs > 45) {
+    pushLabel.textContent = "冲撞";
+    pushHint.textContent = `${(pushCooldownLeftMs / 1000).toFixed(1)}s`;
+  } else if (tossTarget) {
+    pushLabel.textContent = "抓起";
+    pushHint.textContent = `甩飞 ${tossTarget.name}`;
+  } else {
+    pushLabel.textContent = "冲撞";
+    pushHint.textContent = "撞飞他";
+  }
 
   if (snapshot.phase === "countdown") {
     statePill.textContent = `${Math.max(1, Math.ceil((snapshot.countdownLeftMs ?? 0) / 1000))}`;
@@ -198,6 +256,12 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
     statePill.textContent = target
       ? `已淘汰 · 观战 ${target.name}`
       : "已淘汰 · 等待下一局";
+  } else if (me.state === "grabbing") {
+    statePill.textContent = "抓住了！准备甩出去";
+  } else if (me.state === "carried") {
+    statePill.textContent = "被抓住了！";
+  } else if (me.state === "throwing") {
+    statePill.textContent = "甩出去！";
   } else if (me.state === "edge_hang") {
     statePill.textContent = "抓住了！摇杆推向桌内";
   } else if (me.state === "climbing") {
@@ -214,7 +278,7 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
 });
 
 function sendInput() {
-  if (!socket.connected || !ownedPlayerId || eliminated) return;
+  if (!socket.connected || !ownedPlayerId || eliminated || actionDisabled) return;
   inputSeq += 1;
   socket.emit("input", { seq: inputSeq, moveX, moveY, push: pushing });
 }
@@ -266,7 +330,7 @@ joystick.addEventListener("pointerup", releaseStick);
 joystick.addEventListener("pointercancel", releaseStick);
 
 pushButton.addEventListener("pointerdown", () => {
-  if (eliminated) return;
+  if (eliminated || actionDisabled) return;
   if (pushCooldownLeftMs > 45) {
     if ("vibrate" in navigator) navigator.vibrate(7);
     return;
