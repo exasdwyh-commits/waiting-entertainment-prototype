@@ -57,6 +57,15 @@ const REPLAY_LOOKAHEAD_MS = 250;
 const HISTORY_MS = 65_000;
 const MAX_HIGHLIGHTS = 2;
 const MAX_REPLAY_PACKAGE_MS = 6_200;
+const MIN_REPLAY_PASS_MS = 1_400;
+const MAX_REPLAY_PASS_MS = 1_900;
+
+function replayPassDuration(sourceMs: number) {
+  return Math.min(
+    MAX_REPLAY_PASS_MS,
+    Math.max(MIN_REPLAY_PASS_MS, sourceMs / REPLAY_SPEED),
+  );
+}
 
 export class NetworkGame {
   private readonly scene = new THREE.Scene();
@@ -472,11 +481,12 @@ export class NetworkGame {
           clip.frames[clip.frames.length - 1]?.serverTimeMs ?? first;
         const sourceMs = Math.max(1, last - first);
         let loops = clip.loops;
-        let playbackMs = (sourceMs / REPLAY_SPEED) * loops;
+        const passMs = replayPassDuration(sourceMs);
+        let playbackMs = passMs * loops;
 
         if (usedMs + playbackMs > MAX_REPLAY_PACKAGE_MS && loops > 1) {
           loops = 1;
-          playbackMs = sourceMs / REPLAY_SPEED;
+          playbackMs = passMs;
         }
         if (usedMs + playbackMs > MAX_REPLAY_PACKAGE_MS) continue;
 
@@ -752,7 +762,7 @@ export class NetworkGame {
     const first = replay.frames[0].serverTimeMs;
     const last = replay.frames[replay.frames.length - 1].serverTimeMs;
     const sourceDuration = Math.max(1, last - first);
-    const replayDuration = sourceDuration / REPLAY_SPEED;
+    const replayDuration = replayPassDuration(sourceDuration);
     const elapsed = now - replay.startedAt;
 
     if (elapsed >= replayDuration) {
@@ -774,7 +784,8 @@ export class NetworkGame {
       return;
     }
 
-    const sourceTime = first + elapsed * REPLAY_SPEED;
+    const sourceProgress = Math.min(1, elapsed / replayDuration);
+    const sourceTime = first + sourceDuration * sourceProgress;
     let frame = replay.frames[0];
     for (const candidate of replay.frames) {
       if (candidate.serverTimeMs > sourceTime) break;
