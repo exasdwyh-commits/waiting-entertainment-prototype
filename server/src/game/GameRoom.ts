@@ -1,6 +1,6 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import type { Server } from "socket.io";
-import type { GameEvent, MatchSnapshot, PlayerInput, PlayerState } from "@waiting/shared";
+import type { GameEvent, MatchSnapshot, PlayerInput, PlayerSnapshot, PlayerState } from "@waiting/shared";
 
 const PLAYER_COUNT = 8;
 const ARENA_RADIUS = 6;
@@ -418,7 +418,7 @@ export class GameRoom {
       phase: this.phase,
       winnerId: this.winnerId,
       events: this.pendingEvents.splice(0),
-      players: this.slots.map((slot) => {
+      players: this.slots.map((slot): PlayerSnapshot => {
         const p = slot.body.translation();
         const q = slot.body.rotation();
         const v = slot.body.linvel();
