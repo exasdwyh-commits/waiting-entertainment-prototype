@@ -22,7 +22,7 @@ type PrototypeOptions = {
   message: HTMLElement;
 };
 
-const PLAYER_COUNT = 8;
+const PLAYER_COUNT = 10;
 const ROUND_MS = 180_000;
 const MOVE_ACCEL = 0.16;
 const MAX_SPEED = 4.2;
