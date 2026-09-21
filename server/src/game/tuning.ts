@@ -1,5 +1,15 @@
 export const GAME_TUNING = {
+  world: {
+    gravityY: -18,
+    arenaFriction: 1.25,
+    arenaRestitution: 0.04,
+  },
+
   movement: {
+    linearDamping: 2.5,
+    angularDamping: 2.2,
+    colliderFriction: 1.1,
+    colliderRestitution: 0.08,
     impulsePerTick: 0.16,
     maxHorizontalSpeed: 4.2,
     recoveryControlScale: 0.35,
@@ -29,7 +39,6 @@ export const GAME_TUNING = {
     recoveryStateBalanceMs: 360,
     recoveringPerSecond: 0.9,
     passivePerSecond: 0.34,
-    movementMinimumControl: 0.52,
     uprightMaxTorque: 0.11,
     uprightTiltFactor: 0.045,
     uprightRecoveryBoost: 1.85,
