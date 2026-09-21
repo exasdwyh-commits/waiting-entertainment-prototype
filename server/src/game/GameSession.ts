@@ -68,7 +68,7 @@ export class GameSession {
 
   async start() {
     await RAPIER.init();
-    this.world = new RAPIER.World({ x: 0, y: -18, z: 0 });
+    this.world = new RAPIER.World({ x: 0, y: GAME_TUNING.world.gravityY, z: 0 });
     this.createArena();
     this.createSlots();
     this.resetRound();
@@ -165,8 +165,8 @@ export class GameSession {
 
     this.world.createCollider(
       RAPIER.ColliderDesc.cylinder(0.25, ARENA_RADIUS)
-        .setFriction(1.25)
-        .setRestitution(0.04),
+        .setFriction(GAME_TUNING.world.arenaFriction)
+        .setRestitution(GAME_TUNING.world.arenaRestitution),
       body,
     );
   }
@@ -176,16 +176,16 @@ export class GameSession {
       const body = this.world.createRigidBody(
         RAPIER.RigidBodyDesc.dynamic()
           .setTranslation(0, 1, 0)
-          .setLinearDamping(2.5)
-          .setAngularDamping(2.2)
+          .setLinearDamping(GAME_TUNING.movement.linearDamping)
+          .setAngularDamping(GAME_TUNING.movement.angularDamping)
           .setCanSleep(false),
       );
 
       this.world.createCollider(
         RAPIER.ColliderDesc.capsule(0.48, 0.36)
           .setDensity(1.2)
-          .setFriction(1.1)
-          .setRestitution(0.08),
+          .setFriction(GAME_TUNING.movement.colliderFriction)
+          .setRestitution(GAME_TUNING.movement.colliderRestitution),
         body,
       );
 
