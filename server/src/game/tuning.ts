@@ -4,6 +4,7 @@ export const GAME_TUNING = {
     openingEndMs: 60_000,
     brawlEndMs: 135_000,
     dangerEndMs: 165_000,
+    preFinalRespawnMs: 2_000,
     resultMs: 8_000,
   },
 
@@ -142,6 +143,10 @@ function requireUnitRange(name: string, value: number) {
 
 export function validateGameTuning() {
   requireFinitePositive("match.roundMs", GAME_TUNING.match.roundMs);
+  requireFinitePositive(
+    "match.preFinalRespawnMs",
+    GAME_TUNING.match.preFinalRespawnMs,
+  );
   if (
     !(
       GAME_TUNING.match.openingEndMs <
