@@ -1,0 +1,19 @@
+{
+  "name": "waiting-entertainment-prototype",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Waiting Entertainment multiplayer browser game prototype",
+  "scripts": {
+    "dev": "echo 'Development scripts will be configured in Phase 1.1'",
+    "test": "echo 'Tests will be added with gameplay modules'"
+  },
+  "workspaces": [
+    "client",
+    "player",
+    "server",
+    "shared"
+  ],
+  "devDependencies": {
+    "typescript": "latest"
+  }
+}
