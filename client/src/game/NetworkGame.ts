@@ -329,37 +329,48 @@ export class NetworkGame {
   }
 
   private buildHighlightQueue(snapshot: MatchSnapshot) {
-    const eliminations = this.highlightEvents.filter(
-      (event) => event.type === "big_fall" || event.type === "final_elimination",
-    );
-
-    const finalEvent = [...eliminations]
+    const finalEvent = [...this.highlightEvents]
       .reverse()
       .find((event) => event.type === "final_elimination");
 
-    const nonFinal = eliminations.filter(
-      (event) => event.type === "big_fall" && event.id !== finalEvent?.id,
-    );
-    const previous = nonFinal[nonFinal.length - 1];
+    const scored = this.highlightEvents
+      .filter((event) => event.id !== finalEvent?.id)
+      .map((event) => ({
+        event,
+        score:
+          event.type === "big_fall"
+            ? 70 + event.importance * 20
+            : event.type === "toss"
+              ? 62 + event.importance * 22
+              : event.type === "edge_save"
+                ? 56 + event.importance * 18
+                : 0,
+      }))
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score || b.event.atMs - a.event.atMs)
+      .slice(0, Math.max(0, MAX_HIGHLIGHTS - (finalEvent ? 1 : 0)))
+      .map((entry) => entry.event);
 
-    const selected = finalEvent
-      ? [previous, finalEvent]
-          .filter((event): event is GameEvent => Boolean(event))
-          .slice(-MAX_HIGHLIGHTS)
-      : nonFinal.slice(-MAX_HIGHLIGHTS);
+    const selected = [...scored, ...(finalEvent ? [finalEvent] : [])]
+      .sort((a, b) => a.atMs - b.atMs)
+      .slice(-MAX_HIGHLIGHTS);
 
-    return selected
+    const clips = selected
       .map((event, index): ReplayClip | undefined => {
         const frames = this.history.filter(
           (frame) =>
             frame.matchId === snapshot.matchId &&
             frame.serverTimeMs >= event.atMs - REPLAY_LOOKBACK_MS &&
-            frame.serverTimeMs <= event.atMs,
+            frame.serverTimeMs <= event.atMs + REPLAY_LOOKAHEAD_MS,
         );
 
         if (frames.length < 4) return undefined;
 
-        const reference = frames[frames.length - 1];
+        const reference =
+          [...frames]
+            .reverse()
+            .find((frame) => frame.serverTimeMs <= event.atMs) ??
+          frames[frames.length - 1];
         const actor = event.actorId
           ? reference.players.find((player) => player.id === event.actorId)
           : undefined;
@@ -370,25 +381,63 @@ export class NetworkGame {
         const prefix =
           event.type === "final_elimination"
             ? "决胜击落"
-            : selected.length > 1
-              ? `精彩击落 ${index + 1}/${selected.length}`
-              : "精彩击落";
+            : event.type === "big_fall"
+              ? "精彩击落"
+              : event.type === "toss"
+                ? "暴力甩飞"
+                : "极限救边";
 
-        const label = actor && target
-          ? `${prefix} · ${actor.name} → ${target.name}`
-          : target
-            ? `${prefix} · ${target.name} 出局`
+        const numberedPrefix =
+          selected.length > 1 && event.type !== "final_elimination"
+            ? `${prefix} ${index + 1}/${selected.length}`
             : prefix;
+
+        const label =
+          actor && target
+            ? `${numberedPrefix} · ${actor.name} → ${target.name}`
+            : target
+              ? `${numberedPrefix} · ${target.name}`
+              : actor
+                ? `${numberedPrefix} · ${actor.name}`
+                : numberedPrefix;
 
         return {
           frames,
           label,
-          loops: event.type === "final_elimination" ? 2 : 1,
+          loops:
+            event.type === "final_elimination" ||
+            (event.type === "toss" && event.importance >= 0.92)
+              ? 2
+              : 1,
+          eventType: event.type,
           actorId: event.actorId,
           targetId: event.targetId,
         };
       })
       .filter((clip): clip is ReplayClip => Boolean(clip));
+
+    if (clips.length) return clips;
+
+    const fallbackFrames = this.history.filter(
+      (frame) =>
+        frame.matchId === snapshot.matchId &&
+        frame.serverTimeMs >= snapshot.serverTimeMs - 1_600,
+    );
+
+    if (fallbackFrames.length < 4) return [];
+
+    const winner = snapshot.winnerId
+      ? snapshot.players.find((player) => player.id === snapshot.winnerId)
+      : undefined;
+
+    return [
+      {
+        frames: fallbackFrames,
+        label: winner ? `终场回放 · ${winner.name}` : "终场回放",
+        loops: 1,
+        actorId: winner?.id,
+      },
+    ];
   }
 
   private startNextReplay(now = performance.now()) {
@@ -399,9 +448,22 @@ export class NetworkGame {
       ...clip,
       startedAt: now,
       loopsRemaining: clip.loops,
-      closeCamera: false,
+      reverseAngle: false,
     };
+    this.triggerReplayWipe();
     return true;
+  }
+
+  private triggerReplayWipe() {
+    this.options.replayWipe.classList.remove("active");
+    void this.options.replayWipe.offsetWidth;
+    this.options.replayWipe.classList.add("active");
+  }
+
+  private updateBroadcastBug(label: string, replay: boolean) {
+    this.options.broadcastBug.dataset.mode = replay ? "replay" : "live";
+    this.options.directorMode.textContent = replay ? "REPLAY" : "LIVE";
+    this.options.directorLabel.textContent = label;
   }
 
   private createView(player: PlayerSnapshot) {
