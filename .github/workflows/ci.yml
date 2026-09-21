@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "ci/validate-camera-relative-highlights"]
   pull_request:
 
 jobs:
