@@ -219,7 +219,7 @@ export class PersonalGameView {
     };
     this.actors.set(player.id, actor);
 
-    createCharacterVisual(tint, 1.7).then((visual) => {
+    createCharacterVisual(tint, 1.7, index).then((visual) => {
       if (this.actors.get(player.id) !== actor) return;
       root.clear();
       root.add(visual.root);
