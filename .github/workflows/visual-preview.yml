@@ -12,6 +12,14 @@ on:
       - "shared/**"
       - "scripts/capture-preview.mjs"
       - ".github/workflows/visual-preview.yml"
+  pull_request:
+    paths:
+      - "client/**"
+      - "player/**"
+      - "server/**"
+      - "shared/**"
+      - "scripts/capture-preview.mjs"
+      - ".github/workflows/visual-preview.yml"
 
 permissions:
   contents: write
@@ -65,6 +73,7 @@ jobs:
           if-no-files-found: error
 
       - name: Commit refreshed screenshots
+        if: github.event_name != 'pull_request'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
