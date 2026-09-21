@@ -672,14 +672,17 @@ export class NetworkGame {
       if (replay.loopsRemaining > 1) {
         replay.loopsRemaining -= 1;
         replay.startedAt = now;
-        replay.closeCamera = true;
+        replay.reverseAngle = true;
+        this.triggerReplayWipe();
         return;
       }
 
       this.replay = undefined;
+      this.options.message.classList.remove("replay-caption");
+      this.options.message.textContent = "";
+
       if (this.startNextReplay(now)) return;
 
-      this.options.message.textContent = "";
       if (this.latest) this.applySnapshot(this.latest);
       return;
     }
@@ -691,9 +694,10 @@ export class NetworkGame {
       frame = candidate;
     }
 
-    this.options.message.textContent = replay.closeCamera
-      ? `🎥 ${replay.label} · 近景`
-      : `🎥 ${replay.label} ×0.45`;
+    this.options.message.classList.add("replay-caption");
+    this.options.message.textContent = replay.reverseAngle
+      ? `${replay.label} · 反打机位`
+      : `${replay.label} · 0.45×`;
     this.applySnapshot(frame);
   }
 
