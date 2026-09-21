@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
+import { TABLE_PUSH_GEOMETRY } from "@waiting/shared";
 import { ReplayBuffer } from "./ReplayBuffer";
 
 type Actor = {
@@ -21,7 +22,6 @@ type PrototypeOptions = {
   message: HTMLElement;
 };
 
-const ARENA_RADIUS = 6;
 const PLAYER_COUNT = 8;
 const ROUND_MS = 60_000;
 const MOVE_ACCEL = 0.16;
@@ -93,7 +93,7 @@ export class LocalPrototype {
     this.scene.add(key);
 
     const table = new THREE.Mesh(
-      new THREE.CylinderGeometry(ARENA_RADIUS, ARENA_RADIUS, 0.5, 64),
+      new THREE.CylinderGeometry(TABLE_PUSH_GEOMETRY.arenaRadius, TABLE_PUSH_GEOMETRY.arenaRadius, 0.5, 64),
       new THREE.MeshStandardMaterial({ color: 0xf0b35b, roughness: 0.72, metalness: 0.02 }),
     );
     table.position.y = -0.25;
@@ -101,7 +101,7 @@ export class LocalPrototype {
     this.scene.add(table);
 
     const rim = new THREE.Mesh(
-      new THREE.TorusGeometry(ARENA_RADIUS - 0.08, 0.08, 10, 96),
+      new THREE.TorusGeometry(TABLE_PUSH_GEOMETRY.arenaRadius - 0.08, 0.08, 10, 96),
       new THREE.MeshStandardMaterial({ color: 0xffdf9b, emissive: 0x3a2200 }),
     );
     rim.rotation.x = Math.PI / 2;
@@ -115,7 +115,7 @@ export class LocalPrototype {
     pedestal.position.y = -2;
     this.scene.add(pedestal);
 
-    this.camera.position.set(0, 10.5, 11.5);
+    this.camera.position.set(0, 13.4, 15.2);
     this.camera.lookAt(0, 0.2, 0);
   }
 
@@ -124,7 +124,7 @@ export class LocalPrototype {
       RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.25, 0),
     );
     this.world.createCollider(
-      RAPIER.ColliderDesc.cylinder(0.25, ARENA_RADIUS)
+      RAPIER.ColliderDesc.cylinder(0.25, TABLE_PUSH_GEOMETRY.arenaRadius)
         .setFriction(1.25)
         .setRestitution(0.05),
       tableBody,
@@ -135,7 +135,7 @@ export class LocalPrototype {
     const palette = [0x38bdf8, 0xfb7185, 0xa78bfa, 0x4ade80, 0xfacc15, 0xf97316, 0x22d3ee, 0xe879f9];
     const color = palette[index % palette.length];
     const angle = (index / PLAYER_COUNT) * Math.PI * 2;
-    const radius = index === 0 ? 0 : 3.1;
+    const radius = index === 0 ? 0 : TABLE_PUSH_GEOMETRY.spawnRadius;
     const x = Math.cos(angle) * radius;
     const z = Math.sin(angle) * radius;
 
@@ -222,7 +222,7 @@ export class LocalPrototype {
   private botDirection(actor: Actor) {
     const p = actor.body.translation();
     const radial = new THREE.Vector3(p.x, 0, p.z);
-    const edgeDistance = ARENA_RADIUS - radial.length();
+    const edgeDistance = TABLE_PUSH_GEOMETRY.arenaRadius - radial.length();
 
     if (edgeDistance < 1.15) return radial.multiplyScalar(-1).normalize();
 
@@ -275,6 +275,10 @@ export class LocalPrototype {
     }
 
     direction.normalize();
+    const preVelocity = actor.body.linvel();
+    const preSpeed = Math.hypot(preVelocity.x, preVelocity.z);
+    const momentumMultiplier = 0.85 + Math.min(1, preSpeed / MAX_SPEED) * 0.4;
+
     actor.pushReadyAt = now + PUSH_COOLDOWN;
     actor.body.applyImpulse({ x: direction.x * 1.7, y: 0.12, z: direction.z * 1.7 }, true);
 
@@ -305,7 +309,7 @@ export class LocalPrototype {
     const p = actor.body.translation();
     const radial = Math.hypot(p.x, p.z);
 
-    if (!actor.edgeHanging && p.y < -0.15 && radial > ARENA_RADIUS - 0.55 && radial < ARENA_RADIUS + 1.2) {
+    if (!actor.edgeHanging && p.y < -0.15 && radial > TABLE_PUSH_GEOMETRY.arenaRadius - 0.55 && radial < TABLE_PUSH_GEOMETRY.arenaRadius + 1.2) {
       actor.edgeHanging = true;
       actor.edgeHangUntil = now + 1_400;
       actor.body.setGravityScale(0, true);
@@ -314,7 +318,7 @@ export class LocalPrototype {
 
       const inward = new THREE.Vector3(-p.x, 0, -p.z).normalize();
       actor.body.setTranslation(
-        { x: -inward.x * (ARENA_RADIUS + 0.15), y: -0.35, z: -inward.z * (ARENA_RADIUS + 0.15) },
+        { x: -inward.x * (TABLE_PUSH_GEOMETRY.arenaRadius + 0.15), y: -0.35, z: -inward.z * (TABLE_PUSH_GEOMETRY.arenaRadius + 0.15) },
         true,
       );
     }
