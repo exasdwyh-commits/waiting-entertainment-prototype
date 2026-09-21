@@ -23,6 +23,14 @@ root.innerHTML = `
     </div>
   </aside>
   <div class="tip">${localMode ? "WASD / 方向键移动　SPACE 冲撞　R 重开" : "手机控制 · 服务器权威物理 · AI自动补位"}</div>
+  <div class="broadcast-bug" id="broadcast-bug" data-mode="live">
+    <span id="director-mode">LIVE</span>
+    <strong id="director-label">全场主机位</strong>
+  </div>
+  <div class="replay-wipe" id="replay-wipe">
+    <span>WAITING ENTERTAINMENT</span>
+    <strong>INSTANT REPLAY</strong>
+  </div>
   <div id="message" class="message"></div>
 `;
 
@@ -47,6 +55,10 @@ if (localMode) {
     qr: document.querySelector<HTMLCanvasElement>("#qr")!,
     joinText: document.querySelector<HTMLSpanElement>("#join-text")!,
     ranking: document.querySelector<HTMLOListElement>("#ranking")!,
+    broadcastBug: document.querySelector<HTMLDivElement>("#broadcast-bug")!,
+    directorMode: document.querySelector<HTMLSpanElement>("#director-mode")!,
+    directorLabel: document.querySelector<HTMLElement>("#director-label")!,
+    replayWipe: document.querySelector<HTMLDivElement>("#replay-wipe")!,
   });
   game.start();
 }
