@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { TABLE_PUSH_GEOMETRY } from "@waiting/shared";
 
 function box(
   size: [number, number, number],
@@ -111,7 +112,7 @@ function makeSignTexture() {
 
 export function addRestaurantEnvironment(scene: THREE.Scene) {
   const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(38, 38),
+    new THREE.PlaneGeometry(46, 46),
     new THREE.MeshStandardMaterial({
       color: 0x2b1c17,
       roughness: 0.92,
@@ -124,7 +125,7 @@ export function addRestaurantEnvironment(scene: THREE.Scene) {
   scene.add(floor);
 
   const rug = new THREE.Mesh(
-    new THREE.CircleGeometry(8.1, 64),
+    new THREE.CircleGeometry(TABLE_PUSH_GEOMETRY.arenaRadius + 2.55, 72),
     new THREE.MeshStandardMaterial({
       color: 0x461a17,
       roughness: 0.96,
@@ -135,17 +136,17 @@ export function addRestaurantEnvironment(scene: THREE.Scene) {
   rug.receiveShadow = true;
   scene.add(rug);
 
-  const backWall = box([28, 11, 0.35], 0x201713, 0.92);
-  backWall.position.set(0, 0.9, -14);
+  const backWall = box([34, 11, 0.35], 0x201713, 0.92);
+  backWall.position.set(0, 0.9, -17);
   backWall.receiveShadow = true;
   scene.add(backWall);
 
-  const leftWall = box([0.35, 11, 28], 0x241914, 0.94);
-  leftWall.position.set(-14, 0.9, 0);
+  const leftWall = box([0.35, 11, 34], 0x241914, 0.94);
+  leftWall.position.set(-17, 0.9, 0);
   scene.add(leftWall);
 
   const rightWall = box([0.35, 11, 28], 0x241914, 0.94);
-  rightWall.position.set(14, 0.9, 0);
+  rightWall.position.set(17, 0.9, 0);
   scene.add(rightWall);
 
   const trimMaterial = new THREE.MeshStandardMaterial({
@@ -153,23 +154,27 @@ export function addRestaurantEnvironment(scene: THREE.Scene) {
     roughness: 0.55,
     metalness: 0.18,
   });
-  for (const x of [-9.2, -4.6, 0, 4.6, 9.2]) {
+  for (const x of [-11.5, -5.75, 0, 5.75, 11.5]) {
     const trim = new THREE.Mesh(
       new THREE.BoxGeometry(0.08, 8.8, 0.08),
       trimMaterial,
     );
-    trim.position.set(x, 0.9, -13.78);
+    trim.position.set(x, 0.9, -16.78);
     scene.add(trim);
   }
 
   for (let index = 0; index < 8; index += 1) {
-    addChair(scene, (index / 8) * Math.PI * 2, 8.65);
+    addChair(
+      scene,
+      (index / 8) * Math.PI * 2,
+      TABLE_PUSH_GEOMETRY.arenaRadius + 3.25,
+    );
   }
 
-  addBackgroundTable(scene, -10.4, -8.2, 0.95);
-  addBackgroundTable(scene, 10.2, -8.5, 0.95);
-  addBackgroundTable(scene, -10.6, 6.5, 0.86);
-  addBackgroundTable(scene, 10.6, 6.2, 0.86);
+  addBackgroundTable(scene, -13.1, -10.8, 0.95);
+  addBackgroundTable(scene, 13.0, -11.0, 0.95);
+  addBackgroundTable(scene, -13.2, 8.8, 0.86);
+  addBackgroundTable(scene, 13.2, 8.4, 0.86);
 
   const sign = new THREE.Mesh(
     new THREE.PlaneGeometry(8.2, 2.05),
@@ -179,7 +184,7 @@ export function addRestaurantEnvironment(scene: THREE.Scene) {
       toneMapped: false,
     }),
   );
-  sign.position.set(0, 2.15, -13.78);
+  sign.position.set(0, 2.15, -16.78);
   scene.add(sign);
 
   for (const x of [-7.5, 0, 7.5]) {
