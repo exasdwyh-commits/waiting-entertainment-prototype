@@ -126,6 +126,7 @@ socket.on("game:event", (event: GameEvent) => {
   if (isMine) audioFx.play(event.type, event.importance);
 
   if (event.targetId === ownedPlayerId) {
+    personalView.addImpact(event.importance, true);
     controllerEl.classList.remove("hit-flash");
     void controllerEl.offsetWidth;
     controllerEl.classList.add("hit-flash");
@@ -135,6 +136,7 @@ socket.on("game:event", (event: GameEvent) => {
       navigator.vibrate(event.type === "final_elimination" ? [55, 30, 80] : 42);
     }
   } else if (event.actorId === ownedPlayerId && event.type === "push_hit") {
+    personalView.addImpact(event.importance, false);
     controllerEl.classList.remove("hit-confirm");
     void controllerEl.offsetWidth;
     controllerEl.classList.add("hit-confirm");

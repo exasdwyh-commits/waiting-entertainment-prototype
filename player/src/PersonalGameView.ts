@@ -31,6 +31,7 @@ export class PersonalGameView {
   private ownPlayerId?: string;
   private snapshot?: MatchSnapshot;
   private animationFrame = 0;
+  private fovKick = 0;
 
   constructor(private readonly container: HTMLElement) {}
 
@@ -87,6 +88,11 @@ export class PersonalGameView {
 
   setOwnedPlayer(playerId: string) {
     this.ownPlayerId = playerId;
+  }
+
+  addImpact(strength = 0.5, received = false) {
+    const amount = (received ? 3.2 : 1.8) * Math.max(0.25, Math.min(1, strength));
+    this.fovKick = Math.max(this.fovKick, amount);
   }
 
   toWorldInput(screenX: number, screenY: number) {
@@ -300,6 +306,16 @@ export class PersonalGameView {
     }
 
     this.updateCamera();
+
+    const targetFov = 56 + this.fovKick;
+    const nextFov = THREE.MathUtils.lerp(this.camera.fov, targetFov, 0.24);
+    if (Math.abs(nextFov - this.camera.fov) > 0.01) {
+      this.camera.fov = nextFov;
+      this.camera.updateProjectionMatrix();
+    }
+    this.fovKick *= 0.8;
+    if (this.fovKick < 0.02) this.fovKick = 0;
+
     this.renderer.render(this.scene, this.camera);
   };
 }

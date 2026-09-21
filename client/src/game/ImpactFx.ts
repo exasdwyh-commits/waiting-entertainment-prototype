@@ -9,6 +9,9 @@ type ActiveFx = {
   startScale: number;
   endScale: number;
   rise: number;
+  driftX: number;
+  driftZ: number;
+  spin: number;
 };
 
 export class ImpactFx {
@@ -65,7 +68,59 @@ export class ImpactFx {
       startScale: mesh.scale.x,
       endScale: isWin ? 3.2 : isFall ? 2.8 : 2.05 + strength * 0.6,
       rise: isWin ? 0.45 : isFall ? 0.18 : 0.32,
+      driftX: 0,
+      driftZ: 0,
+      spin: 0,
     });
+
+    if (type === "push_hit") {
+      this.spawnHitShards(position, color, strength);
+    }
+  }
+
+  private spawnHitShards(
+    position: [number, number, number],
+    color: number,
+    strength: number,
+  ) {
+    const count = 6;
+
+    for (let index = 0; index < count; index += 1) {
+      const angle = (index / count) * Math.PI * 2 + 0.22;
+      const material = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.92,
+        depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.06, 0.06, 0.18),
+        material,
+      );
+
+      mesh.position.set(
+        position[0],
+        Math.max(0.32, position[1] + 0.28),
+        position[2],
+      );
+      mesh.rotation.set(angle * 0.3, angle, angle * 0.55);
+      mesh.renderOrder = 6;
+      this.scene.add(mesh);
+
+      const speed = 0.65 + strength * 0.8;
+      this.active.push({
+        mesh,
+        material,
+        startedAt: performance.now(),
+        durationMs: 300 + index * 18,
+        startScale: 1,
+        endScale: 0.18,
+        rise: 0.72 + strength * 0.45,
+        driftX: Math.cos(angle) * speed,
+        driftZ: Math.sin(angle) * speed,
+        spin: (index % 2 === 0 ? 1 : -1) * (5 + strength * 4),
+      });
+    }
   }
 
   update(now: number) {
@@ -76,7 +131,10 @@ export class ImpactFx {
       const scale = THREE.MathUtils.lerp(fx.startScale, fx.endScale, eased);
 
       fx.mesh.scale.setScalar(scale);
+      fx.mesh.position.x += fx.driftX * 0.016;
       fx.mesh.position.y += fx.rise * 0.016;
+      fx.mesh.position.z += fx.driftZ * 0.016;
+      fx.mesh.rotation.y += fx.spin * 0.016;
       fx.material.opacity = Math.max(0, 0.9 * (1 - t));
 
       if (t >= 1) {
