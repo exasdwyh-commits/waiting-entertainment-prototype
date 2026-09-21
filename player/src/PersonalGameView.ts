@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { TABLE_PUSH_GEOMETRY } from "@waiting/shared";
 import type { MatchSnapshot, PlayerSnapshot, PlayerState } from "@waiting/shared";
 import { createCharacterVisual, type CharacterVisual } from "./CharacterVisual";
 
@@ -69,7 +70,12 @@ export class PersonalGameView {
     this.scene.add(warm);
 
     const table = new THREE.Mesh(
-      new THREE.CylinderGeometry(6, 6, 0.42, 48),
+      new THREE.CylinderGeometry(
+        TABLE_PUSH_GEOMETRY.arenaRadius,
+        TABLE_PUSH_GEOMETRY.arenaRadius,
+        0.42,
+        56,
+      ),
       new THREE.MeshStandardMaterial({
         color: 0xe7a94f,
         roughness: 0.82,
@@ -79,7 +85,12 @@ export class PersonalGameView {
     this.scene.add(table);
 
     const rim = new THREE.Mesh(
-      new THREE.TorusGeometry(5.9, 0.095, 8, 64),
+      new THREE.TorusGeometry(
+        TABLE_PUSH_GEOMETRY.rimRadius,
+        0.095,
+        8,
+        72,
+      ),
       new THREE.MeshStandardMaterial({
         color: 0xffe3a8,
         emissive: 0x3a2200,
@@ -111,7 +122,7 @@ export class PersonalGameView {
     this.scene.add(floor);
 
     const rug = new THREE.Mesh(
-      new THREE.CircleGeometry(8.1, 48),
+      new THREE.CircleGeometry(TABLE_PUSH_GEOMETRY.arenaRadius + 2.55, 56),
       new THREE.MeshStandardMaterial({
         color: 0x461a17,
         roughness: 0.96,
@@ -260,7 +271,16 @@ export class PersonalGameView {
       }
       actor.state = player.state;
       const radius = Math.hypot(player.position[0], player.position[2]);
-      actor.danger = THREE.MathUtils.clamp((radius - 4.25) / 1.5, 0, 1);
+      actor.danger = THREE.MathUtils.clamp(
+        (radius - TABLE_PUSH_GEOMETRY.dangerStartRadius) /
+          Math.max(
+            0.1,
+            TABLE_PUSH_GEOMETRY.arenaRadius -
+              TABLE_PUSH_GEOMETRY.dangerStartRadius,
+          ),
+        0,
+        1,
+      );
       actor.visual?.setState(player.state);
 
       const visible = !player.eliminated;

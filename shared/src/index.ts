@@ -1,3 +1,10 @@
+export const TABLE_PUSH_GEOMETRY = {
+  arenaRadius: 8.2,
+  spawnRadius: 4.7,
+  rimRadius: 8.08,
+  dangerStartRadius: 6.35,
+} as const;
+
 export type PlayerId = string;
 
 export type PlayerState =
