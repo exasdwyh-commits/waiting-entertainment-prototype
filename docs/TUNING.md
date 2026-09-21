@@ -17,6 +17,14 @@ When field testing, report the symptom rather than guessing a numeric fix.
 | 人物太滑，停不下来 | `movement.linearDamping`, `movement.colliderFriction` | increase |
 | 人物太粘，不够灵活 | `movement.linearDamping`, `movement.colliderFriction` | decrease slightly |
 | 人物移动太慢 | `movement.impulsePerTick`, `movement.maxHorizontalSpeed` | increase |
+| 冲刺存在感太弱 | `movement.sprintImpulseMultiplier`, `movement.sprintMaxSpeedMultiplier` | increase carefully |
+| 冲刺太久没有节奏 | `stamina.sprintDrainPerSecond` | increase |
+| 体力恢复太慢 | `stamina.recoveryPerSecond` | increase |
+| 普通拳太弱 | `punch.maxStrength`, `punch.balanceLoss` | increase |
+| 普通拳太像重击 | `punch.maxStrength`, `punch.staggerMs` | decrease |
+| 重击不够有区别 | `push.maxStrength`, `stamina.heavyCost` | raise impact / preserve cost |
+| 抓人太容易无限拖 | `stamina.grabDrainPerSecond` | increase |
+| 抓人太难靠近 | `grab.range`, `grab.minimumFacingDot` | relax carefully |
 | 人物太飘 / 落地太慢 | `world.gravityY` | more negative |
 | 冲撞自己冲得不够爽 | `push.lungeImpulse` | increase |
 | 撞到别人但击飞不明显 | `push.maxStrength`, `push.verticalHitImpulse` | increase |
@@ -55,9 +63,25 @@ The most important relationship is:
 
 Do not increase impulse and reduce damping heavily at the same time unless intentionally testing a slippery mode.
 
-### Push
+### Stamina
 
-Controls the one-button attack.
+Stamina is authoritative and currently powers Sprint, Grab/Carry, Heavy Strike and Throw.
+
+The target feel is not “mana management”; it should create short natural attack/rest cycles. A new player should understand low stamina through movement/button feedback without reading numbers.
+
+### Punch / Heavy Strike
+
+Punch is the fast, low-commitment attack. Sprint + sufficient run-up + stamina upgrades the same Attack input into Heavy Strike.
+
+Tune these separately: Punch creates interruption and pressure; Heavy Strike creates knockdown, angular motion and highlight-worthy impacts.
+
+### Grab / Carry / Throw
+
+Grab is hold-to-maintain. Carry drains stamina continuously. Releasing Grab drops the target; pressing Attack while holding throws in the current movement/facing direction.
+
+### Legacy Push / Heavy Strike
+
+The historical `push` tuning group now backs the Heavy Strike physics.
 
 `lungeImpulse` affects the attacker.
 

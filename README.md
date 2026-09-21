@@ -13,17 +13,17 @@ Implemented:
 - Single local GameSession with server-authoritative Rapier3D physics
 - 60Hz host physics / 20Hz state snapshots
 - Three.js big-screen renderer
-- Phone personal 3D gameplay view + virtual joystick + one push button
+- Phone personal 3D gameplay view + camera-relative joystick + Attack/Grab combat controls
 - Human disconnect -> immediate AI takeover
 - Phone refresh / wake / reconnect -> reclaim the same character
 - Expanded circular table arena with run-up space
 - Authoritative rotating center lazy Susan that ramps through the round
-- Momentum-sensitive push / knockdown / recovery
-- One-button contextual grab-and-toss against vulnerable nearby fighters
+- Sprint + authoritative Stamina + Punch / Sprint Heavy Strike
+- Persistent Grab / Carry / manual directional Throw with stamina drain
 - Simplified ledge catch and climb-back
 - Falling elimination
 - 3-second round countdown
-- Current short-round implementation; target gameplay spec is ~180-second staged brawls
+- ~180-second staged brawls: Opening / Brawl / Danger / Final Chaos
 - Elimination scoring and live ranking
 - Automatic winner selection and round restart
 - QR join flow
@@ -76,7 +76,7 @@ For the keyboard-only physics sandbox:
 http://localhost:5173/?mode=local
 ```
 
-Controls: WASD / arrows to move, Space to push, R to restart.
+Controls: WASD / arrows to move, Shift to sprint, Space to attack, R to restart.
 
 ## Product principle
 

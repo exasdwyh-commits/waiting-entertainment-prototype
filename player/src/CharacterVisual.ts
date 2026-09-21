@@ -23,6 +23,7 @@ export type CharacterVisual = {
   root: THREE.Group;
   mixer?: THREE.AnimationMixer;
   setState: (state: PlayerState) => void;
+  addImpact: (strength: number, received: boolean) => void;
   update: (delta: number) => void;
 };
 
@@ -128,6 +129,7 @@ function fallbackCharacter(tint: number, targetHeight: number): CharacterVisual 
   return {
     root,
     setState: () => undefined,
+    addImpact: () => undefined,
     update: () => undefined,
   };
 }
@@ -151,6 +153,8 @@ export async function createCharacterVisual(
 
     let currentAction: THREE.AnimationAction | undefined;
     let currentState: PlayerState | undefined;
+    let impactStrength = 0;
+    let impactReceived = true;
 
     const setState = (state: PlayerState) => {
       if (!mixer || state === currentState) return;
@@ -173,7 +177,35 @@ export async function createCharacterVisual(
       root,
       mixer,
       setState,
-      update: (delta) => mixer?.update(delta),
+      addImpact: (strength, received) => {
+        impactStrength = Math.max(
+          impactStrength,
+          Math.max(0, Math.min(1.2, strength)),
+        );
+        impactReceived = received;
+      },
+      update: (delta) => {
+        mixer?.update(delta);
+
+        if (impactStrength > 0.001) {
+          const amount = impactStrength;
+          const target = impactReceived
+            ? new THREE.Vector3(
+                1 + amount * 0.14,
+                Math.max(0.76, 1 - amount * 0.18),
+                1 + amount * 0.08,
+              )
+            : new THREE.Vector3(
+                Math.max(0.86, 1 - amount * 0.05),
+                Math.max(0.88, 1 - amount * 0.04),
+                1 + amount * 0.16,
+              );
+          root.scale.lerp(target, 0.46);
+          impactStrength = Math.max(0, impactStrength - delta * 4.8);
+        } else {
+          root.scale.lerp(new THREE.Vector3(1, 1, 1), 0.2);
+        }
+      },
     };
   } catch (error) {
     console.warn("Character model failed to load; using capsule fallback.", error);

@@ -247,6 +247,12 @@ export class PersonalGameView {
     const amount = (received ? 3.2 : 1.8) * normalized;
     this.fovKick = Math.max(this.fovKick, amount);
 
+    if (this.ownPlayerId) {
+      this.actors
+        .get(this.ownPlayerId)
+        ?.visual?.addImpact(normalized, received);
+    }
+
     const hitStopMs = received
       ? 28 + normalized * 34
       : 18 + normalized * 22;

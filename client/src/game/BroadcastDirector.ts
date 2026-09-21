@@ -29,7 +29,10 @@ type LiveFocus = {
 };
 
 const EVENT_HOLD_MS: Partial<Record<GameEvent["type"], number>> = {
-  push_hit: 700,
+  push_hit: 500,
+  punch_hit: 0,
+  heavy_hit: 950,
+  grab: 0,
   toss: 1_350,
   edge_save: 1_050,
   big_fall: 1_000,
@@ -104,6 +107,8 @@ export class BroadcastDirector {
       const label =
         event.type === "toss"
           ? "甩人特写"
+          : event.type === "heavy_hit"
+            ? "冲刺重击"
           : event.type === "big_fall"
             ? "击落跟拍"
             : event.type === "final_elimination"
@@ -139,9 +144,11 @@ export class BroadcastDirector {
       label:
         snapshot.phase === "countdown"
           ? "比赛准备"
-          : snapshot.timeLeftMs <= 10_000
-            ? "最后 10 秒"
-            : "全场主机位",
+          : snapshot.matchStage === "final"
+            ? "FINAL CHAOS"
+            : snapshot.matchStage === "danger"
+              ? "危险升级"
+              : "全场主机位",
       replay: false,
     };
   }

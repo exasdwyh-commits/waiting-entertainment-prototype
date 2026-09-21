@@ -1,4 +1,12 @@
 export const GAME_TUNING = {
+  match: {
+    roundMs: 180_000,
+    openingEndMs: 60_000,
+    brawlEndMs: 135_000,
+    dangerEndMs: 165_000,
+    resultMs: 8_000,
+  },
+
   world: {
     gravityY: -18,
     arenaFriction: 1.25,
@@ -12,9 +20,36 @@ export const GAME_TUNING = {
     colliderRestitution: 0.08,
     impulsePerTick: 0.16,
     maxHorizontalSpeed: 4.2,
+    sprintImpulseMultiplier: 1.34,
+    sprintMaxSpeedMultiplier: 1.32,
+    carryMoveScale: 0.7,
     recoveryControlScale: 0.35,
     attackControlScale: 0.72,
     minBalanceControl: 0.52,
+  },
+
+  stamina: {
+    max: 1,
+    sprintDrainPerSecond: 0.15,
+    grabDrainPerSecond: 0.17,
+    recoveryPerSecond: 0.24,
+    recoveryDelayAfterSpendMs: 420,
+    punchCost: 0.055,
+    heavyCost: 0.17,
+    throwCost: 0.13,
+    exhaustedThreshold: 0.08,
+  },
+
+  punch: {
+    cooldownMs: 360,
+    animationHoldMs: 210,
+    lungeImpulse: 0.62,
+    hitRange: 1.2,
+    minimumFacingDot: 0.02,
+    maxStrength: 1.35,
+    verticalHitImpulse: 0.12,
+    balanceLoss: 0.13,
+    staggerMs: 190,
   },
 
   push: {
@@ -30,6 +65,15 @@ export const GAME_TUNING = {
     momentumMinMultiplier: 0.85,
     momentumMaxMultiplier: 1.25,
     momentumReferenceSpeed: 4.2,
+  },
+
+  grab: {
+    range: 1.18,
+    minimumFacingDot: -0.12,
+    holdForward: 0.72,
+    holdHeight: 0.94,
+    botHoldMs: 520,
+    targetBalanceBias: 0.28,
   },
 
   environment: {
@@ -97,6 +141,20 @@ function requireUnitRange(name: string, value: number) {
 }
 
 export function validateGameTuning() {
+  requireFinitePositive("match.roundMs", GAME_TUNING.match.roundMs);
+  if (
+    !(
+      GAME_TUNING.match.openingEndMs <
+      GAME_TUNING.match.brawlEndMs &&
+      GAME_TUNING.match.brawlEndMs <
+      GAME_TUNING.match.dangerEndMs &&
+      GAME_TUNING.match.dangerEndMs <
+      GAME_TUNING.match.roundMs
+    )
+  ) {
+    throw new Error("Invalid game tuning: match stage boundaries must be ascending");
+  }
+
   if (!Number.isFinite(GAME_TUNING.world.gravityY) || GAME_TUNING.world.gravityY >= 0) {
     throw new Error("Invalid game tuning: world.gravityY must be negative");
   }
@@ -106,9 +164,28 @@ export function validateGameTuning() {
   requireFinitePositive("movement.colliderFriction", GAME_TUNING.movement.colliderFriction);
   requireFinitePositive("movement.impulsePerTick", GAME_TUNING.movement.impulsePerTick);
   requireFinitePositive("movement.maxHorizontalSpeed", GAME_TUNING.movement.maxHorizontalSpeed);
+  requireFinitePositive("movement.sprintImpulseMultiplier", GAME_TUNING.movement.sprintImpulseMultiplier);
+  requireFinitePositive("movement.sprintMaxSpeedMultiplier", GAME_TUNING.movement.sprintMaxSpeedMultiplier);
+  requireUnitRange("movement.carryMoveScale", GAME_TUNING.movement.carryMoveScale);
   requireUnitRange("movement.recoveryControlScale", GAME_TUNING.movement.recoveryControlScale);
   requireUnitRange("movement.attackControlScale", GAME_TUNING.movement.attackControlScale);
   requireUnitRange("movement.minBalanceControl", GAME_TUNING.movement.minBalanceControl);
+
+  requireFinitePositive("stamina.sprintDrainPerSecond", GAME_TUNING.stamina.sprintDrainPerSecond);
+  requireFinitePositive("stamina.grabDrainPerSecond", GAME_TUNING.stamina.grabDrainPerSecond);
+  requireFinitePositive("stamina.recoveryPerSecond", GAME_TUNING.stamina.recoveryPerSecond);
+  requireFinitePositive("stamina.recoveryDelayAfterSpendMs", GAME_TUNING.stamina.recoveryDelayAfterSpendMs);
+  requireUnitRange("stamina.punchCost", GAME_TUNING.stamina.punchCost);
+  requireUnitRange("stamina.heavyCost", GAME_TUNING.stamina.heavyCost);
+  requireUnitRange("stamina.throwCost", GAME_TUNING.stamina.throwCost);
+  requireUnitRange("stamina.exhaustedThreshold", GAME_TUNING.stamina.exhaustedThreshold);
+
+  requireFinitePositive("punch.cooldownMs", GAME_TUNING.punch.cooldownMs);
+  requireFinitePositive("punch.animationHoldMs", GAME_TUNING.punch.animationHoldMs);
+  requireFinitePositive("punch.lungeImpulse", GAME_TUNING.punch.lungeImpulse);
+  requireFinitePositive("punch.hitRange", GAME_TUNING.punch.hitRange);
+  requireFinitePositive("punch.maxStrength", GAME_TUNING.punch.maxStrength);
+  requireUnitRange("punch.balanceLoss", GAME_TUNING.punch.balanceLoss);
 
   requireFinitePositive("push.cooldownMs", GAME_TUNING.push.cooldownMs);
   requireFinitePositive("push.lungeImpulse", GAME_TUNING.push.lungeImpulse);
@@ -122,6 +199,12 @@ export function validateGameTuning() {
   if (GAME_TUNING.push.momentumMaxMultiplier < GAME_TUNING.push.momentumMinMultiplier) {
     throw new Error("Invalid game tuning: push momentum max must be >= min");
   }
+
+  requireFinitePositive("grab.range", GAME_TUNING.grab.range);
+  requireFinitePositive("grab.holdForward", GAME_TUNING.grab.holdForward);
+  requireFinitePositive("grab.holdHeight", GAME_TUNING.grab.holdHeight);
+  requireFinitePositive("grab.botHoldMs", GAME_TUNING.grab.botHoldMs);
+  requireUnitRange("grab.targetBalanceBias", GAME_TUNING.grab.targetBalanceBias);
 
   requireFinitePositive("environment.lazySusanBaseSpeed", GAME_TUNING.environment.lazySusanBaseSpeed);
   requireFinitePositive("environment.lazySusanMaxSpeed", GAME_TUNING.environment.lazySusanMaxSpeed);

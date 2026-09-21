@@ -12,7 +12,7 @@ root.innerHTML = `
       <h1>餐桌推推王</h1>
       <span id="status">${localMode ? "本地调试模式" : "连接服务器中"}</span>
     </div>
-    <div class="timer"><span id="timer">60</span>s</div>
+    <div class="timer"><span id="timer">3:00</span></div>
   </section>
   <ol class="ranking" id="ranking" aria-label="实时排名"></ol>
   <aside class="join-panel" id="join-panel">
@@ -22,7 +22,7 @@ root.innerHTML = `
       <span id="join-text">正在生成加入码…</span>
     </div>
   </aside>
-  <div class="tip">${localMode ? "WASD / 方向键移动　SPACE 冲撞　R 重开" : "手机控制 · 服务器权威物理 · AI自动补位"}</div>
+  <div class="tip">${localMode ? "WASD / 方向键移动　SPACE 攻击　R 重开" : "外圈冲刺 · 出拳/重击 · 抓取/甩飞 · AI自动补位"}</div>
   <div class="broadcast-bug" id="broadcast-bug" data-mode="live">
     <span id="director-mode">LIVE</span>
     <strong id="director-label">全场主机位</strong>
