@@ -71,6 +71,9 @@ export class NetworkGame {
   private cameraFovKick = 0;
   private hitStopUntil = 0;
   private readonly cameraLook = new THREE.Vector3();
+  private lazySusan?: THREE.Group;
+  private centerSpinRadians = 0;
+  private centerSpinSpeed = 0;
 
   constructor(private readonly options: Options) {}
 
@@ -136,6 +139,48 @@ export class NetworkGame {
     rim.rotation.x = Math.PI / 2;
     rim.position.y = 0.04;
     this.scene.add(rim);
+
+    const lazySusan = new THREE.Group();
+    const glass = new THREE.Mesh(
+      new THREE.CylinderGeometry(
+        TABLE_PUSH_GEOMETRY.lazySusanRadius,
+        TABLE_PUSH_GEOMETRY.lazySusanRadius,
+        0.08,
+        64,
+      ),
+      new THREE.MeshStandardMaterial({
+        color: 0xd8f0ee,
+        roughness: 0.26,
+        metalness: 0.08,
+        transparent: true,
+        opacity: 0.62,
+      }),
+    );
+    glass.position.y = 0.055;
+    glass.receiveShadow = true;
+    lazySusan.add(glass);
+
+    const markerMaterial = new THREE.MeshStandardMaterial({
+      color: 0xf6d9a7,
+      emissive: 0x3b240d,
+      roughness: 0.5,
+    });
+    for (let index = 0; index < 8; index += 1) {
+      const angle = (index / 8) * Math.PI * 2;
+      const marker = new THREE.Mesh(
+        new THREE.BoxGeometry(0.12, 0.035, 1.45),
+        markerMaterial,
+      );
+      marker.position.set(
+        Math.sin(angle) * TABLE_PUSH_GEOMETRY.lazySusanRadius * 0.58,
+        0.11,
+        Math.cos(angle) * TABLE_PUSH_GEOMETRY.lazySusanRadius * 0.58,
+      );
+      marker.rotation.y = angle;
+      lazySusan.add(marker);
+    }
+    this.lazySusan = lazySusan;
+    this.scene.add(lazySusan);
 
     const pedestal = new THREE.Mesh(
       new THREE.CylinderGeometry(1.45, 2.2, 3.5, 32),
@@ -448,6 +493,10 @@ export class NetworkGame {
 
   private applySnapshot(snapshot: MatchSnapshot) {
     this.displaySnapshot = snapshot;
+    if (snapshot.arenaState) {
+      this.centerSpinRadians = snapshot.arenaState.centerSpinRadians;
+      this.centerSpinSpeed = snapshot.arenaState.centerSpinSpeed;
+    }
     const humanCount = snapshot.players.filter((player) => !player.bot).length;
     this.options.status.textContent = `真人 ${humanCount}/${snapshot.players.length} · AI ${snapshot.players.length - humanCount}`;
     this.options.timer.textContent = String(Math.ceil(snapshot.timeLeftMs / 1000));
@@ -576,6 +625,10 @@ export class NetworkGame {
     this.fx.update(now);
 
     const rawDelta = Math.min(this.clock.getDelta(), 0.05);
+    if (this.lazySusan) {
+      this.centerSpinRadians += this.centerSpinSpeed * rawDelta;
+      this.lazySusan.rotation.y = this.centerSpinRadians;
+    }
     const hitStopped = !this.replay && now < this.hitStopUntil;
     const delta = hitStopped ? 0 : rawDelta;
 
