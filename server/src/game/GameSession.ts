@@ -40,6 +40,13 @@ type Slot = {
   botRetargetAt: number;
   botOrbit: number;
   botAggression: number;
+  botEdgeCaution: number;
+  botOrbitStrength: number;
+  botEdgeHunter: number;
+  botPushRange: number;
+  botPushFacing: number;
+  botCooldownScale: number;
+  botMoveScale: number;
   input: PlayerInput;
 };
 
@@ -181,6 +188,8 @@ export class GameSession {
         body,
       );
 
+      const profile = botProfile(index);
+
       return {
         id: `P-${index}`,
         name: `BOT ${index + 1}`,
@@ -201,7 +210,14 @@ export class GameSession {
         lastHitAt: 0,
         botRetargetAt: 0,
         botOrbit: index % 2 === 0 ? 1 : -1,
-        botAggression: 0.78 + ((index * 17) % 20) / 100,
+        botAggression: profile.aggression,
+        botEdgeCaution: profile.edgeCaution,
+        botOrbitStrength: profile.orbitStrength,
+        botEdgeHunter: profile.edgeHunter,
+        botPushRange: profile.pushRange,
+        botPushFacing: profile.pushFacing,
+        botCooldownScale: profile.cooldownScale,
+        botMoveScale: profile.moveScale,
         input: this.emptyInput(),
       };
     });
@@ -396,10 +412,14 @@ export class GameSession {
     const radius = Math.hypot(p.x, p.z);
     const edgeDistance = ARENA_RADIUS - radius;
 
-    if (edgeDistance < 1.35) {
+    if (edgeDistance < slot.botEdgeCaution) {
       const inward = normalize(-p.x, -p.z);
       const tangent = { x: -inward.z * slot.botOrbit, z: inward.x * slot.botOrbit };
-      const panic = clamp((1.35 - edgeDistance) / 0.85, 0, 1);
+      const panic = clamp(
+        (slot.botEdgeCaution - edgeDistance) / Math.max(0.55, slot.botEdgeCaution * 0.58),
+        0,
+        1,
+      );
       return normalize(
         inward.x * (1 + panic * 1.6) + tangent.x * 0.2,
         inward.z * (1 + panic * 1.6) + tangent.z * 0.2,
@@ -424,7 +444,11 @@ export class GameSession {
         const existingFocus = this.slots.filter(
           (other) => other !== slot && other.botTargetId === candidate.id,
         ).length;
-        const score = distance + existingFocus * 1.15;
+        const targetRadius = Math.hypot(c.x, c.z);
+        const edgeExposure = clamp((targetRadius - 3.8) / 2.2, 0, 1);
+        const crowdPenalty = existingFocus * (candidate.bot ? 1.05 : 1.4);
+        const edgeOpportunity = edgeExposure * slot.botEdgeHunter * 1.6;
+        const score = distance + crowdPenalty - edgeOpportunity;
 
         if (score < best) {
           best = score;
@@ -441,7 +465,7 @@ export class GameSession {
     const t = target.body.translation();
     const direct = normalize(t.x - p.x, t.z - p.z);
     const distance = Math.hypot(t.x - p.x, t.z - p.z);
-    const orbitAmount = distance > 1.7 ? 0.28 * (1 - slot.botAggression) : 0.05;
+    const orbitAmount = distance > 1.7 ? slot.botOrbitStrength : 0.04;
     const tangent = { x: -direct.z * slot.botOrbit, z: direct.x * slot.botOrbit };
 
     return normalize(
@@ -462,13 +486,14 @@ export class GameSession {
     }
 
     const controlScale = slot.state === "recovering" ? 0.35 : attackLocked ? 0.72 : 1;
+    const moveScale = slot.bot ? slot.botMoveScale : 1;
     if (slot.state !== "recovering" && !attackLocked) slot.state = "moving";
     slot.facingYaw = Math.atan2(direction.x, direction.z);
     slot.body.applyImpulse(
       {
-        x: direction.x * 0.16 * controlScale,
+        x: direction.x * 0.16 * controlScale * moveScale,
         y: 0,
-        z: direction.z * 0.16 * controlScale,
+        z: direction.z * 0.16 * controlScale * moveScale,
       },
       true,
     );
@@ -486,13 +511,30 @@ export class GameSession {
 
   private shouldBotPush(slot: Slot, now: number) {
     if (now < slot.pushReadyAt) return false;
-    const p = slot.body.translation();
 
-    return this.slots.some((target) => {
-      if (target === slot || !target.alive) return false;
-      const t = target.body.translation();
-      return Math.hypot(t.x - p.x, t.z - p.z) < 1.25 + slot.botAggression * 0.28;
-    });
+    const target = this.slots.find(
+      (candidate) =>
+        candidate.id === slot.botTargetId &&
+        candidate !== slot &&
+        candidate.alive,
+    );
+    if (!target) return false;
+
+    const p = slot.body.translation();
+    const t = target.body.translation();
+    const dx = t.x - p.x;
+    const dz = t.z - p.z;
+    const distance = Math.hypot(dx, dz);
+    if (distance > slot.botPushRange || distance < 0.001) return false;
+
+    const targetDir = normalize(dx, dz);
+    const facingDir = {
+      x: Math.sin(slot.facingYaw),
+      z: Math.cos(slot.facingYaw),
+    };
+    const facing = facingDir.x * targetDir.x + facingDir.z * targetDir.z;
+
+    return facing >= slot.botPushFacing;
   }
 
   private push(slot: Slot, direction: { x: number; z: number }, now: number) {
@@ -509,7 +551,7 @@ export class GameSession {
 
     const dir = normalize(dx, dz);
     slot.facingYaw = Math.atan2(dir.x, dir.z);
-    slot.pushReadyAt = now + PUSH_COOLDOWN_MS;
+    slot.pushReadyAt = now + PUSH_COOLDOWN_MS * (slot.bot ? slot.botCooldownScale : 1);
     slot.pushStateUntil = now + 320;
     slot.state = "pushing";
     slot.body.applyImpulse({ x: dir.x * 1.7, y: 0.1, z: dir.z * 1.7 }, true);
@@ -693,6 +735,53 @@ export class GameSession {
 
     this.io.emit("match:snapshot", snapshot);
   }
+}
+
+function botProfile(index: number) {
+  const profiles = [
+    {
+      aggression: 0.98,
+      edgeCaution: 1.12,
+      orbitStrength: 0.08,
+      edgeHunter: 0.55,
+      pushRange: 1.5,
+      pushFacing: 0.52,
+      cooldownScale: 0.9,
+      moveScale: 1.05,
+    },
+    {
+      aggression: 0.68,
+      edgeCaution: 1.72,
+      orbitStrength: 0.34,
+      edgeHunter: 0.12,
+      pushRange: 1.34,
+      pushFacing: 0.72,
+      cooldownScale: 1.12,
+      moveScale: 0.96,
+    },
+    {
+      aggression: 0.84,
+      edgeCaution: 1.4,
+      orbitStrength: 0.18,
+      edgeHunter: 1.05,
+      pushRange: 1.48,
+      pushFacing: 0.6,
+      cooldownScale: 0.98,
+      moveScale: 1,
+    },
+    {
+      aggression: 0.74,
+      edgeCaution: 1.34,
+      orbitStrength: 0.52,
+      edgeHunter: 0.4,
+      pushRange: 1.4,
+      pushFacing: 0.66,
+      cooldownScale: 1.05,
+      moveScale: 1.02,
+    },
+  ] as const;
+
+  return profiles[index % profiles.length];
 }
 
 function angleFromIndex(index: number) {
