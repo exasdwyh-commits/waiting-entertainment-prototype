@@ -93,9 +93,11 @@ Exit condition: real users confirm the physical reactions are fun, readable and 
 
 **Status: Implemented; behavior tuning pending**
 
-- Nearest-target selection
+- Target-aware selection with anti-dogpile penalty
+- Four Bot behavior profiles: bruiser / survivor / opportunist / flanker
+- Personality-specific edge caution, orbiting, target bias, movement and push cadence
+- Push only when the Bot is actually facing its selected target
 - Chase
-- Push
 - Edge avoidance
 - Auto recovery from ledge
 - Human/Bot slot switching
@@ -123,6 +125,8 @@ Implemented additionally:
 - Animation-state adapter
 - Dynamic spectator framing
 - Impact camera shake
+- Impact-driven FOV punch on big screen and personal phone view
+- Lightweight push-hit shard VFX
 - Procedural arcade audio (no external audio assets)
 - Ledge spectator callouts and climb-focused camera
 - Final 10-second big-screen camera push-in + timer pulse
