@@ -187,7 +187,7 @@ export class PersonalGameView {
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(0.5, 0.67, 32),
       new THREE.MeshBasicMaterial({
-        color: 0xffffff,
+        color: tint,
         transparent: true,
         opacity: 0.9,
         side: THREE.DoubleSide,

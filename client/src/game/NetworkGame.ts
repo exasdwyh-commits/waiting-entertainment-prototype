@@ -10,9 +10,12 @@ type View = {
   root: THREE.Group;
   visual?: CharacterVisual;
   label: THREE.Sprite;
+  ring: THREE.Mesh;
   targetPosition: THREE.Vector3;
   targetQuaternion: THREE.Quaternion;
   name: string;
+  bot: boolean;
+  joinPulseUntil: number;
   state: PlayerState;
 };
 
@@ -326,12 +329,31 @@ export class NetworkGame {
     const label = this.makeLabel(player.name, player.bot);
     this.scene.add(label);
 
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.52, 0.72, 40),
+      new THREE.MeshBasicMaterial({
+        color: tint,
+        transparent: true,
+        opacity: player.bot ? 0.2 : 0.86,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(...player.position);
+    ring.position.y = 0.045;
+    ring.renderOrder = 4;
+    this.scene.add(ring);
+
     const view: View = {
       root,
       label,
+      ring,
       targetPosition: new THREE.Vector3(...player.position),
       targetQuaternion: new THREE.Quaternion(...player.rotation),
       name: player.name,
+      bot: player.bot,
+      joinPulseUntil: player.bot ? 0 : performance.now() + 900,
       state: player.state,
     };
 
@@ -374,7 +396,9 @@ export class NetworkGame {
   }
 
   private refreshLabel(view: View, player: PlayerSnapshot) {
-    if (view.name === player.name && Boolean(view.label.userData.bot) === player.bot) return;
+    if (view.name === player.name && view.bot === player.bot) return;
+
+    const becameHuman = view.bot && !player.bot;
 
     this.scene.remove(view.label);
     (view.label.material as THREE.SpriteMaterial).map?.dispose();
@@ -382,11 +406,19 @@ export class NetworkGame {
     view.label = this.makeLabel(player.name, player.bot);
     view.label.userData.bot = player.bot;
     view.name = player.name;
+    view.bot = player.bot;
+
+    if (becameHuman) {
+      view.joinPulseUntil = performance.now() + 1_200;
+    }
+
     this.scene.add(view.label);
   }
 
   private applySnapshot(snapshot: MatchSnapshot) {
     this.displaySnapshot = snapshot;
+    const humanCount = snapshot.players.filter((player) => !player.bot).length;
+    this.options.status.textContent = `真人 ${humanCount}/${snapshot.players.length} · AI ${snapshot.players.length - humanCount}`;
     this.options.timer.textContent = String(Math.ceil(snapshot.timeLeftMs / 1000));
     this.options.timer.classList.toggle(
       "danger",
@@ -417,6 +449,7 @@ export class NetworkGame {
       view.visual?.setState(player.state);
       view.root.visible = !player.eliminated;
       view.label.visible = !player.eliminated;
+      view.ring.visible = !player.eliminated;
     }
 
     if (!this.replay && snapshot.phase === "countdown") {
@@ -515,6 +548,23 @@ export class NetworkGame {
       view.root.quaternion.slerp(view.targetQuaternion, this.replay ? 0.5 : 0.32);
       view.visual?.update(delta);
       view.label.position.copy(view.root.position).add(new THREE.Vector3(0, 1.65, 0));
+      view.ring.position.copy(view.root.position);
+      view.ring.position.y = 0.045;
+
+      const ringMaterial = view.ring.material as THREE.MeshBasicMaterial;
+      const joining = now < view.joinPulseUntil;
+      const pulse = joining
+        ? 1.12 + Math.sin(now * 0.024) * 0.16
+        : view.bot
+          ? 0.82
+          : 1 + Math.sin(now * 0.008) * 0.035;
+
+      view.ring.scale.setScalar(pulse);
+      ringMaterial.opacity = joining
+        ? 0.96
+        : view.bot
+          ? 0.16
+          : 0.78;
     }
 
     const cameraSnapshot = this.displaySnapshot ?? this.latest;
