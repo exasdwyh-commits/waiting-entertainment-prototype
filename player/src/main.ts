@@ -268,10 +268,13 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
     ? snapshot.players.find((player) => player.id === me.grabTargetId)
     : undefined;
 
+  const spawnProtected = me.spawnProtectionLeftMs > 0;
   actionDisabled = me.state === "carried";
-  const attackDisabled = actionDisabled || pushCooldownLeftMs > 45;
+  const attackDisabled =
+    actionDisabled || spawnProtected || pushCooldownLeftMs > 45;
   const grabDisabled =
     actionDisabled ||
+    spawnProtected ||
     me.state === "throwing" ||
     me.state === "edge_hang" ||
     me.state === "climbing";
@@ -280,7 +283,12 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
   grabButton.classList.toggle("action-disabled", grabDisabled);
   grabButton.classList.toggle("holding", Boolean(grabbedTarget));
 
-  if (me.state === "carried") {
+  if (spawnProtected) {
+    pushLabel.textContent = "保护中";
+    pushHint.textContent = "先找位置";
+    grabLabel.textContent = "保护中";
+    grabHint.textContent = "短暂无敌";
+  } else if (me.state === "carried") {
     pushLabel.textContent = "被抓住";
     pushHint.textContent = "挣脱中";
     grabLabel.textContent = "被控制";
@@ -317,6 +325,9 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
     statePill.textContent = target
       ? `已淘汰 · 观战 ${target.name}`
       : "已淘汰 · 等待下一局";
+  } else if (spawnProtected) {
+    statePill.textContent =
+      `回场保护 · ${(me.spawnProtectionLeftMs / 1000).toFixed(1)}s`;
   } else if (me.state === "grabbing") {
     statePill.textContent = "抓住了！移动可以拖走 · 攻击键甩飞";
   } else if (me.state === "carried") {
