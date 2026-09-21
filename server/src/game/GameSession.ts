@@ -69,6 +69,7 @@ export class GameSession {
   private pendingEvents: GameEvent[] = [];
   private timer: NodeJS.Timeout | undefined;
   private tickCounter = 0;
+  private centerSpinRadians = 0;
 
   constructor(private readonly io: Server) {}
 
@@ -247,6 +248,7 @@ export class GameSession {
     this.winnerId = undefined;
     this.restartAt = 0;
     this.pendingEvents = [];
+    this.centerSpinRadians = 0;
 
     this.slots.forEach((slot, index) => {
       const angle = (index / PLAYER_COUNT) * Math.PI * 2;
@@ -330,6 +332,8 @@ export class GameSession {
       this.applyUprightAssist(slot, now);
     }
 
+    this.updateLazySusan(now);
+
     this.world.timestep = 1 / PHYSICS_HZ;
     this.world.step();
 
@@ -355,6 +359,81 @@ export class GameSession {
     }
 
     if (this.shouldBroadcast() || this.pendingEvents.length > 0) this.broadcast(now);
+  }
+
+  private currentLazySusanSpeed(now: number) {
+    if (this.phase !== "playing") return 0;
+
+    const elapsed = Math.max(0, now - this.startedAt);
+    const progress = clamp(elapsed / ROUND_MS, 0, 1);
+    let speed =
+      GAME_TUNING.environment.lazySusanBaseSpeed +
+      (GAME_TUNING.environment.lazySusanMaxSpeed -
+        GAME_TUNING.environment.lazySusanBaseSpeed) *
+        progress;
+
+    if (ROUND_MS - elapsed <= 10_000) {
+      speed *= GAME_TUNING.environment.finalTenSpeedMultiplier;
+    }
+
+    return speed;
+  }
+
+  private updateLazySusan(now: number) {
+    const speed = this.currentLazySusanSpeed(now);
+    if (speed <= 0) return;
+
+    this.centerSpinRadians =
+      (this.centerSpinRadians + speed / PHYSICS_HZ) %
+      (Math.PI * 2);
+
+    const maxVisualSpeed =
+      GAME_TUNING.environment.lazySusanMaxSpeed *
+      GAME_TUNING.environment.finalTenSpeedMultiplier;
+    const speedRatio = clamp(speed / Math.max(0.01, maxVisualSpeed), 0, 1);
+
+    for (const slot of this.slots) {
+      if (
+        !slot.alive ||
+        slot.carriedBy ||
+        slot.edgeHanging ||
+        slot.state === "climbing"
+      ) {
+        continue;
+      }
+
+      const p = slot.body.translation();
+      const radius = Math.hypot(p.x, p.z);
+      if (
+        radius <= 0.15 ||
+        radius > TABLE_PUSH_GEOMETRY.lazySusanRadius
+      ) {
+        continue;
+      }
+
+      const radialRatio = clamp(
+        radius / TABLE_PUSH_GEOMETRY.lazySusanRadius,
+        0,
+        1,
+      );
+      const tangent = {
+        x: -p.z / radius,
+        z: p.x / radius,
+      };
+      const impulse =
+        GAME_TUNING.environment.lazySusanImpulsePerTick *
+        (0.45 + speedRatio * 0.55) *
+        radialRatio;
+
+      slot.body.applyImpulse(
+        {
+          x: tangent.x * impulse,
+          y: 0,
+          z: tangent.z * impulse,
+        },
+        true,
+      );
+    }
   }
 
   private shouldBroadcast() {
@@ -1025,6 +1104,10 @@ export class GameSession {
         : undefined,
       winnerId: this.winnerId,
       events: this.pendingEvents.splice(0),
+      arenaState: {
+        centerSpinRadians: this.centerSpinRadians,
+        centerSpinSpeed: this.currentLazySusanSpeed(now),
+      },
       players: this.slots.map((slot): PlayerSnapshot => {
         const p = slot.body.translation();
         const q = slot.body.rotation();
