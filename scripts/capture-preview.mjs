@@ -37,19 +37,26 @@ try {
   // This is also a functional broadcast/replay smoke test. A normal round
   // must eventually enter the replay package. If it never does, fail the
   // workflow rather than silently committing a stale "replay" screenshot.
-  await big.waitForSelector('#broadcast-bug[data-mode="replay"]', {
-    timeout: 72_000,
-  });
-  await big.waitForSelector(".message.replay-caption", {
-    state: "visible",
-    timeout: 3_000,
-  });
+  await big.waitForFunction(
+    () => {
+      const bug = document.querySelector("#broadcast-bug");
+      const message = document.querySelector("#message");
+      const caption = message?.textContent?.trim() ?? "";
+      return (
+        bug?.getAttribute("data-mode") === "replay" &&
+        message?.classList.contains("replay-caption") &&
+        caption.length > 0 &&
+        (caption.includes("×") || caption.includes("反打机位"))
+      );
+    },
+    { timeout: 72_000 },
+  );
 
   const replayModeBefore = await big
     .locator("#broadcast-bug")
     .getAttribute("data-mode");
   const replayCaption = (await big
-    .locator(".message.replay-caption")
+    .locator("#message")
     .textContent())?.trim();
 
   if (replayModeBefore !== "replay" || !replayCaption) {
@@ -64,7 +71,10 @@ try {
   const replayModeAfter = await big
     .locator("#broadcast-bug")
     .getAttribute("data-mode");
-  if (replayModeAfter !== "replay") {
+  const captionStillReplay = await big
+    .locator("#message")
+    .evaluate((node) => node.classList.contains("replay-caption"));
+  if (replayModeAfter !== "replay" || !captionStillReplay) {
     throw new Error("Replay ended during screenshot capture; retry the visual preview.");
   }
 } finally {
