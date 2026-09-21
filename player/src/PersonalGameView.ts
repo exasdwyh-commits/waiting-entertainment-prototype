@@ -200,3 +200,10 @@ export class PersonalGameView {
     this.renderer.render(this.scene, this.camera);
   };
 }
+
+
+function isMostlyUpright(rotation: [number, number, number, number]) {
+  const [x, , z] = rotation;
+  const upY = 1 - 2 * (x * x + z * z);
+  return upY > 0.72;
+}
