@@ -20,6 +20,7 @@ type Slot = {
   disconnectedAt?: number;
   bot: boolean;
   body: RAPIER.RigidBody;
+  facingYaw: number;
   state: PlayerState;
   alive: boolean;
   pushReadyAt: number;
@@ -180,6 +181,7 @@ export class GameSession {
         name: `BOT ${index + 1}`,
         bot: true,
         body,
+        facingYaw: angleFromIndex(index),
         state: "idle",
         alive: true,
         pushReadyAt: 0,
@@ -220,6 +222,7 @@ export class GameSession {
         true,
       );
       slot.body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
+      slot.facingYaw = Math.atan2(-Math.cos(angle), -Math.sin(angle));
       slot.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
       slot.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
       slot.state = "idle";
@@ -411,6 +414,7 @@ export class GameSession {
 
     const controlScale = slot.state === "recovering" ? 0.35 : 1;
     if (slot.state !== "recovering") slot.state = "moving";
+    slot.facingYaw = Math.atan2(direction.x, direction.z);
     slot.body.applyImpulse(
       {
         x: direction.x * 0.16 * controlScale,
@@ -455,6 +459,7 @@ export class GameSession {
     }
 
     const dir = normalize(dx, dz);
+    slot.facingYaw = Math.atan2(dir.x, dir.z);
     slot.pushReadyAt = now + PUSH_COOLDOWN_MS;
     slot.state = "pushing";
     slot.body.applyImpulse({ x: dir.x * 1.7, y: 0.1, z: dir.z * 1.7 }, true);
@@ -610,6 +615,7 @@ export class GameSession {
           name: slot.name,
           position: [p.x, p.y, p.z],
           rotation: [q.x, q.y, q.z, q.w],
+          facingYaw: slot.facingYaw,
           velocity: [v.x, v.y, v.z],
           score: slot.score,
           state: slot.state,
@@ -621,6 +627,11 @@ export class GameSession {
 
     this.io.emit("match:snapshot", snapshot);
   }
+}
+
+function angleFromIndex(index: number) {
+  const angle = (index / PLAYER_COUNT) * Math.PI * 2;
+  return Math.atan2(-Math.cos(angle), -Math.sin(angle));
 }
 
 function sanitizeSessionId(value?: string) {
