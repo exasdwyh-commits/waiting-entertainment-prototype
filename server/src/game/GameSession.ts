@@ -4,7 +4,9 @@ import type { GameEvent, MatchSnapshot, PlayerInput, PlayerSnapshot, PlayerState
 
 const PLAYER_COUNT = 8;
 const ARENA_RADIUS = 6;
-const TICK_MS = 50;
+const PHYSICS_HZ = 60;
+const TICK_MS = 1000 / PHYSICS_HZ;
+const SNAPSHOT_INTERVAL_TICKS = 3; // 20Hz network snapshots; physics remains 60Hz.
 const ROUND_MS = 60_000;
 const COUNTDOWN_MS = 3_000;
 const PUSH_COOLDOWN_MS = 850;
@@ -22,11 +24,16 @@ type Slot = {
   alive: boolean;
   pushReadyAt: number;
   knockedUntil: number;
+  recoverUntil: number;
   edgeHangUntil: number;
   edgeHanging: boolean;
   score: number;
   lastHitBy?: string;
   lastHitAt: number;
+  botTargetId?: string;
+  botRetargetAt: number;
+  botOrbit: number;
+  botAggression: number;
   input: PlayerInput;
 };
 
@@ -41,6 +48,7 @@ export class GameSession {
   private eventSeq = 0;
   private pendingEvents: GameEvent[] = [];
   private timer: NodeJS.Timeout | undefined;
+  private tickCounter = 0;
 
   constructor(private readonly io: Server) {}
 
@@ -154,8 +162,8 @@ export class GameSession {
       const body = this.world.createRigidBody(
         RAPIER.RigidBodyDesc.dynamic()
           .setTranslation(0, 1, 0)
-          .setLinearDamping(2.8)
-          .setAngularDamping(4.2)
+          .setLinearDamping(2.5)
+          .setAngularDamping(2.2)
           .setCanSleep(false),
       );
 
@@ -176,10 +184,14 @@ export class GameSession {
         alive: true,
         pushReadyAt: 0,
         knockedUntil: 0,
+        recoverUntil: 0,
         edgeHangUntil: 0,
         edgeHanging: false,
         score: 0,
         lastHitAt: 0,
+        botRetargetAt: 0,
+        botOrbit: index % 2 === 0 ? 1 : -1,
+        botAggression: 0.78 + ((index * 17) % 20) / 100,
         input: this.emptyInput(),
       };
     });
@@ -215,27 +227,31 @@ export class GameSession {
       slot.edgeHanging = false;
       slot.edgeHangUntil = 0;
       slot.knockedUntil = 0;
+      slot.recoverUntil = 0;
       slot.pushReadyAt = this.countdownUntil + 800;
       slot.score = 0;
       slot.lastHitBy = undefined;
       slot.lastHitAt = 0;
+      slot.botTargetId = undefined;
+      slot.botRetargetAt = 0;
       slot.input = this.emptyInput();
     });
   }
 
   private tick() {
     const now = Date.now();
+    this.tickCounter += 1;
     this.releaseExpiredSessions(now);
 
     if (this.phase === "finished") {
-      this.broadcast(now);
+      if (this.shouldBroadcast()) this.broadcast(now);
       if (now >= this.restartAt) this.resetRound();
       return;
     }
 
     if (this.phase === "countdown") {
       if (now < this.countdownUntil) {
-        this.broadcast(now);
+        if (this.shouldBroadcast()) this.broadcast(now);
         return;
       }
       this.phase = "playing";
@@ -245,7 +261,9 @@ export class GameSession {
     for (const slot of this.slots) {
       if (!slot.alive) continue;
 
-      const direction = slot.bot ? this.botDirection(slot) : this.inputDirection(slot);
+      this.advanceRecovery(slot, now);
+
+      const direction = slot.bot ? this.botDirection(slot, now) : this.inputDirection(slot);
       this.drive(slot, direction, now);
 
       const wantsPush = slot.bot
@@ -254,9 +272,11 @@ export class GameSession {
 
       if (wantsPush) this.push(slot, direction, now);
       if (!slot.bot) slot.input.push = false;
+
+      this.applyUprightAssist(slot, now);
     }
 
-    this.world.timestep = TICK_MS / 1000;
+    this.world.timestep = 1 / PHYSICS_HZ;
     this.world.step();
 
     for (const slot of this.slots) this.updateState(slot, now);
@@ -277,37 +297,107 @@ export class GameSession {
       }
     }
 
-    this.broadcast(now);
+    if (this.shouldBroadcast() || this.pendingEvents.length > 0) this.broadcast(now);
+  }
+
+  private shouldBroadcast() {
+    return this.tickCounter % SNAPSHOT_INTERVAL_TICKS === 0;
+  }
+
+  private advanceRecovery(slot: Slot, now: number) {
+    if (slot.edgeHanging) return;
+
+    if (slot.state === "hit" && now >= slot.knockedUntil) {
+      slot.state = "recovering";
+      slot.recoverUntil = now + 520;
+    }
+
+    if (slot.state === "recovering" && now >= slot.recoverUntil) {
+      slot.state = "idle";
+    }
+  }
+
+  private applyUprightAssist(slot: Slot, now: number) {
+    if (!slot.alive || slot.edgeHanging || now < slot.knockedUntil) return;
+
+    const q = slot.body.rotation();
+    const upX = 2 * (q.x * q.y - q.z * q.w);
+    const upY = 1 - 2 * (q.x * q.x + q.z * q.z);
+    const upZ = 2 * (q.y * q.z + q.x * q.w);
+    const tilt = Math.acos(clamp(upY, -1, 1));
+
+    if (tilt < 0.025) return;
+
+    const recoveryBoost = slot.state === "recovering" ? 1.9 : 1;
+    const strength = Math.min(0.11, tilt * 0.045) * recoveryBoost;
+
+    slot.body.applyTorqueImpulse(
+      { x: -upZ * strength, y: 0, z: upX * strength },
+      true,
+    );
   }
 
   private inputDirection(slot: Slot) {
     return normalize(slot.input.moveX, slot.input.moveY);
   }
 
-  private botDirection(slot: Slot) {
+  private botDirection(slot: Slot, now: number) {
     const p = slot.body.translation();
     const radius = Math.hypot(p.x, p.z);
+    const edgeDistance = ARENA_RADIUS - radius;
 
-    if (ARENA_RADIUS - radius < 1.25) {
-      return normalize(-p.x, -p.z);
+    if (edgeDistance < 1.35) {
+      const inward = normalize(-p.x, -p.z);
+      const tangent = { x: -inward.z * slot.botOrbit, z: inward.x * slot.botOrbit };
+      const panic = clamp((1.35 - edgeDistance) / 0.85, 0, 1);
+      return normalize(
+        inward.x * (1 + panic * 1.6) + tangent.x * 0.2,
+        inward.z * (1 + panic * 1.6) + tangent.z * 0.2,
+      );
     }
 
-    let target: Slot | undefined;
-    let best = Number.POSITIVE_INFINITY;
+    let target = this.slots.find(
+      (candidate) =>
+        candidate.id === slot.botTargetId &&
+        candidate !== slot &&
+        candidate.alive,
+    );
 
-    for (const candidate of this.slots) {
-      if (candidate === slot || !candidate.alive) continue;
-      const c = candidate.body.translation();
-      const distance = Math.hypot(c.x - p.x, c.z - p.z);
-      if (distance < best) {
-        best = distance;
-        target = candidate;
+    if (!target || now >= slot.botRetargetAt) {
+      let best = Number.POSITIVE_INFINITY;
+      target = undefined;
+
+      for (const candidate of this.slots) {
+        if (candidate === slot || !candidate.alive) continue;
+        const c = candidate.body.translation();
+        const distance = Math.hypot(c.x - p.x, c.z - p.z);
+        const existingFocus = this.slots.filter(
+          (other) => other !== slot && other.botTargetId === candidate.id,
+        ).length;
+        const score = distance + existingFocus * 1.15;
+
+        if (score < best) {
+          best = score;
+          target = candidate;
+        }
       }
+
+      slot.botTargetId = target?.id;
+      slot.botRetargetAt = now + 650 + (Number(slot.id.split("-")[1]) % 4) * 130;
     }
 
     if (!target) return { x: 0, z: 0 };
+
     const t = target.body.translation();
-    return normalize(t.x - p.x, t.z - p.z);
+    const direct = normalize(t.x - p.x, t.z - p.z);
+    const distance = Math.hypot(t.x - p.x, t.z - p.z);
+    const orbitAmount = distance > 1.7 ? 0.28 * (1 - slot.botAggression) : 0.05;
+    const tangent = { x: -direct.z * slot.botOrbit, z: direct.x * slot.botOrbit };
+
+    return normalize(
+      direct.x + tangent.x * orbitAmount,
+      direct.z + tangent.z * orbitAmount,
+    );
   }
 
   private drive(slot: Slot, direction: { x: number; z: number }, now: number) {
@@ -315,13 +405,18 @@ export class GameSession {
 
     const magnitude = Math.hypot(direction.x, direction.z);
     if (magnitude < 0.05) {
-      slot.state = "idle";
+      if (slot.state !== "recovering") slot.state = "idle";
       return;
     }
 
-    slot.state = "moving";
+    const controlScale = slot.state === "recovering" ? 0.35 : 1;
+    if (slot.state !== "recovering") slot.state = "moving";
     slot.body.applyImpulse(
-      { x: direction.x * 0.16, y: 0, z: direction.z * 0.16 },
+      {
+        x: direction.x * 0.16 * controlScale,
+        y: 0,
+        z: direction.z * 0.16 * controlScale,
+      },
       true,
     );
 
@@ -343,7 +438,7 @@ export class GameSession {
     return this.slots.some((target) => {
       if (target === slot || !target.alive) return false;
       const t = target.body.translation();
-      return Math.hypot(t.x - p.x, t.z - p.z) < 1.45;
+      return Math.hypot(t.x - p.x, t.z - p.z) < 1.25 + slot.botAggression * 0.28;
     });
   }
 
@@ -467,12 +562,6 @@ export class GameSession {
       return;
     }
 
-    if (now >= slot.knockedUntil && slot.state === "hit") {
-      slot.state = "recovering";
-      const q = slot.body.rotation();
-      slot.body.setRotation({ x: 0, y: q.y, z: 0, w: Math.sqrt(Math.max(0, 1 - q.y * q.y)) }, true);
-      slot.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
-    }
   }
 
   private emitEvent(
@@ -482,14 +571,19 @@ export class GameSession {
     targetId?: string,
     importance = 0.5,
   ) {
-    this.pendingEvents.push({
+    const event: GameEvent = {
       id: `E-${++this.eventSeq}`,
       type,
       atMs,
       actorId,
       targetId,
       importance,
-    });
+    };
+
+    this.pendingEvents.push(event);
+    // Small latency-critical reactions (camera/audio/haptics) should not wait
+    // for the next 20Hz state snapshot.
+    this.io.emit("game:event", event);
   }
 
   private broadcast(now: number) {
