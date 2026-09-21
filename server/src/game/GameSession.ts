@@ -36,6 +36,7 @@ type Slot = {
   tossReleaseAt: number;
   tossDirection?: { x: number; z: number };
   tossMomentum: number;
+  grabNeedsRelease: boolean;
   knockedUntil: number;
   recoverUntil: number;
   edgeHangUntil: number;
@@ -174,6 +175,7 @@ export class GameSession {
       grab: Boolean(raw.grab),
       sprint: Boolean(raw.sprint),
     };
+    if (!slot.input.grab) slot.grabNeedsRelease = false;
   }
 
   private createArena() {
@@ -226,6 +228,7 @@ export class GameSession {
         tossStartedAt: 0,
         tossReleaseAt: 0,
         tossMomentum: 0,
+        grabNeedsRelease: false,
         knockedUntil: 0,
         recoverUntil: 0,
         edgeHangUntil: 0,
@@ -306,6 +309,7 @@ export class GameSession {
       slot.tossReleaseAt = 0;
       slot.tossDirection = undefined;
       slot.tossMomentum = 0;
+      slot.grabNeedsRelease = false;
       slot.score = 0;
       slot.lastHitBy = undefined;
       slot.lastHitAt = 0;
@@ -483,7 +487,42 @@ export class GameSession {
     return this.tickCounter % SNAPSHOT_INTERVAL_TICKS === 0;
   }
 
-  private advanceToss(slot: Slot, now: number) {
+  private updateStamina(slot: Slot, now: number) {
+    if (slot.stamina >= GAME_TUNING.stamina.max) {
+      slot.stamina = GAME_TUNING.stamina.max;
+      return;
+    }
+
+    if (
+      now < slot.staminaRecoverAt ||
+      slot.sprinting ||
+      Boolean(slot.tossTargetId)
+    ) {
+      return;
+    }
+
+    slot.stamina = clamp(
+      slot.stamina +
+        GAME_TUNING.stamina.recoveryPerSecond / PHYSICS_HZ,
+      0,
+      GAME_TUNING.stamina.max,
+    );
+  }
+
+  private spendStamina(slot: Slot, amount: number, now: number) {
+    if (slot.stamina + 1e-6 < amount) return false;
+
+    slot.stamina = clamp(
+      slot.stamina - amount,
+      0,
+      GAME_TUNING.stamina.max,
+    );
+    slot.staminaRecoverAt =
+      now + GAME_TUNING.stamina.recoveryDelayAfterSpendMs;
+    return true;
+  }
+
+  private maintainGrab(slot: Slot, now: number) {
     if (!slot.tossTargetId) return false;
 
     const target = this.slots.find(
@@ -506,38 +545,176 @@ export class GameSession {
       slot.state === "climbing" ||
       now < slot.knockedUntil;
 
-    if (interrupted) {
+    const humanReleased = !slot.bot && !slot.input.grab;
+    const drained =
+      GAME_TUNING.stamina.grabDrainPerSecond / PHYSICS_HZ;
+    const canHold = this.spendStamina(slot, drained, now);
+
+    if (interrupted || humanReleased || !canHold) {
       this.dropTossTarget(slot, target, now);
+      if (humanReleased) slot.grabNeedsRelease = false;
       return false;
     }
 
-    const dir = slot.tossDirection ?? {
+    if (slot.bot && now >= slot.tossReleaseAt) {
+      const direction = {
+        x: Math.sin(slot.facingYaw),
+        z: Math.cos(slot.facingYaw),
+      };
+      this.throwCarried(slot, direction, now);
+      return false;
+    }
+
+    const dir = {
       x: Math.sin(slot.facingYaw),
       z: Math.cos(slot.facingYaw),
     };
     const p = slot.body.translation();
 
     slot.state = "grabbing";
-    slot.facingYaw = Math.atan2(dir.x, dir.z);
 
     target.body.setGravityScale(0, true);
     target.body.setTranslation(
       {
-        x: p.x + dir.x * GAME_TUNING.toss.holdForward,
-        y: p.y + GAME_TUNING.toss.holdHeight,
-        z: p.z + dir.z * GAME_TUNING.toss.holdForward,
+        x: p.x + dir.x * GAME_TUNING.grab.holdForward,
+        y: p.y + GAME_TUNING.grab.holdHeight,
+        z: p.z + dir.z * GAME_TUNING.grab.holdForward,
       },
       true,
     );
     target.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     target.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
     target.state = "carried";
+    return true;
+  }
 
-    if (now < slot.tossReleaseAt) return true;
+  private tryGrab(
+    slot: Slot,
+    direction: { x: number; z: number },
+    now: number,
+  ) {
+    if (
+      slot.tossTargetId ||
+      slot.edgeHanging ||
+      slot.grabNeedsRelease ||
+      slot.stamina <= GAME_TUNING.stamina.exhaustedThreshold
+    ) {
+      return false;
+    }
 
+    const origin = slot.body.translation();
+    let best: Slot | undefined;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    let dx = direction.x;
+    let dz = direction.z;
+    if (Math.hypot(dx, dz) < 0.05) {
+      dx = Math.sin(slot.facingYaw);
+      dz = Math.cos(slot.facingYaw);
+    }
+    const dir = normalize(dx, dz);
+
+    for (const candidate of this.slots) {
+      if (
+        candidate === slot ||
+        !candidate.alive ||
+        candidate.carriedBy ||
+        candidate.edgeHanging ||
+        candidate.state === "climbing"
+      ) {
+        continue;
+      }
+
+      const p = candidate.body.translation();
+      const rx = p.x - origin.x;
+      const rz = p.z - origin.z;
+      const distance = Math.hypot(rx, rz);
+      if (
+        distance > GAME_TUNING.grab.range ||
+        distance < 0.001
+      ) {
+        continue;
+      }
+
+      const targetDir = normalize(rx, rz);
+      const facing = dir.x * targetDir.x + dir.z * targetDir.z;
+      if (facing < GAME_TUNING.grab.minimumFacingDot) continue;
+
+      const score =
+        distance +
+        candidate.balance * GAME_TUNING.grab.targetBalanceBias;
+      if (score < bestScore) {
+        bestScore = score;
+        best = candidate;
+      }
+    }
+
+    if (!best) return false;
+
+    slot.tossTargetId = best.id;
+    slot.tossStartedAt = now;
+    slot.tossReleaseAt = now + GAME_TUNING.grab.botHoldMs;
+    slot.tossDirection = { x: dir.x, z: dir.z };
+    slot.tossMomentum = clamp(
+      Math.hypot(slot.body.linvel().x, slot.body.linvel().z) /
+        GAME_TUNING.push.momentumReferenceSpeed,
+      0,
+      1,
+    );
+    slot.grabNeedsRelease = !slot.bot;
+    slot.state = "grabbing";
+    slot.facingYaw = Math.atan2(dir.x, dir.z);
+
+    best.carriedBy = slot.id;
+    best.edgeHanging = false;
+    best.body.setGravityScale(0, true);
+    best.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    best.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    best.state = "carried";
+
+    this.emitEvent("grab", now, slot.id, best.id, 0.45);
+    return true;
+  }
+
+  private throwCarried(
+    slot: Slot,
+    direction: { x: number; z: number },
+    now: number,
+  ) {
+    if (!slot.tossTargetId) return false;
+
+    const target = this.slots.find(
+      (candidate) =>
+        candidate.id === slot.tossTargetId &&
+        candidate.carriedBy === slot.id,
+    );
+    if (!target) {
+      this.clearToss(slot);
+      return false;
+    }
+
+    if (!this.spendStamina(slot, GAME_TUNING.stamina.throwCost, now)) {
+      this.dropTossTarget(slot, target, now);
+      return false;
+    }
+
+    let dx = direction.x;
+    let dz = direction.z;
+    if (Math.hypot(dx, dz) < 0.05) {
+      dx = Math.sin(slot.facingYaw);
+      dz = Math.cos(slot.facingYaw);
+    }
+    const dir = normalize(dx, dz);
+    const velocity = slot.body.linvel();
+    const runUp = clamp(
+      Math.hypot(velocity.x, velocity.z) /
+        GAME_TUNING.push.momentumReferenceSpeed,
+      0,
+      1,
+    );
     const strength =
       GAME_TUNING.toss.baseStrength *
-      (1 + slot.tossMomentum * GAME_TUNING.toss.momentumBonus);
+      (1 + runUp * GAME_TUNING.toss.momentumBonus);
 
     target.body.setGravityScale(1, true);
     target.carriedBy = undefined;
@@ -550,6 +727,14 @@ export class GameSession {
       },
       true,
     );
+    target.body.applyTorqueImpulse(
+      {
+        x: dir.z * 0.34,
+        y: (slot.botOrbit || 1) * 0.22,
+        z: -dir.x * 0.34,
+      },
+      true,
+    );
     target.balance = GAME_TUNING.toss.targetBalanceAfter;
     target.state = "ragdoll";
     target.knockedUntil = now + GAME_TUNING.toss.knockdownMs;
@@ -558,8 +743,13 @@ export class GameSession {
 
     slot.state = "throwing";
     slot.pushStateUntil = now + GAME_TUNING.toss.attackerLockMs;
+    slot.pushReadyAt = Math.max(
+      slot.pushReadyAt,
+      now + GAME_TUNING.toss.cooldownMs,
+    );
+
     const targetId = target.id;
-    const importance = clamp(0.78 + slot.tossMomentum * 0.22, 0, 1);
+    const importance = clamp(0.8 + runUp * 0.2, 0, 1);
     this.clearToss(slot);
     this.emitEvent("toss", now, slot.id, targetId, importance);
     return true;
