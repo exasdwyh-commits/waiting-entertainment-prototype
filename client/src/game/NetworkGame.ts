@@ -238,6 +238,8 @@ export class NetworkGame {
     });
 
     socket.on("game:event", (event: GameEvent) => {
+      this.director.noteEvent(event, performance.now());
+
       const impulse =
         event.type === "final_elimination" ? 0.52 :
         event.type === "big_fall" ? 0.32 :
@@ -288,13 +290,20 @@ export class NetworkGame {
       this.replayQueue = [];
       this.replay = undefined;
       this.replayedMatchId = undefined;
+      this.director.reset();
+      this.lastDirectorShot = undefined;
     }
 
     this.history.push(snapshot);
 
     for (const event of snapshot.events) {
       if (
-        (event.type === "big_fall" || event.type === "final_elimination") &&
+        (
+          event.type === "toss" ||
+          event.type === "edge_save" ||
+          event.type === "big_fall" ||
+          event.type === "final_elimination"
+        ) &&
         !this.highlightEvents.some((candidate) => candidate.id === event.id)
       ) {
         this.highlightEvents.push(event);
