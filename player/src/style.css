@@ -296,3 +296,29 @@ body,
   100% { opacity: 0; }
 }
 
+
+
+#timer.danger {
+  animation: tension-pulse .7s ease-in-out infinite alternate;
+}
+
+.controller.tension::after {
+  background: radial-gradient(circle at center, transparent 48%, rgba(239,68,68,.22) 100%);
+  opacity: .7;
+}
+
+.controller.spectating .joystick,
+.controller.spectating .push {
+  pointer-events: none;
+  opacity: .24;
+  filter: grayscale(.8);
+}
+
+.controller.spectating .play-area {
+  transform: scale(.96);
+}
+
+@keyframes tension-pulse {
+  from { transform: scale(1); text-shadow: 0 0 0 rgba(239,68,68,0); }
+  to { transform: scale(1.08); text-shadow: 0 0 18px rgba(239,68,68,.65); }
+}
