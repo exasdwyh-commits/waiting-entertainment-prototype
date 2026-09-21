@@ -353,6 +353,8 @@ export class PersonalGameView {
       0xf97316,
       0x22d3ee,
       0xe879f9,
+      0xf43f5e,
+      0x84cc16,
     ];
     const tint = palette[index % palette.length];
 
