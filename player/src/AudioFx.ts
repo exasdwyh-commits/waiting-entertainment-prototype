@@ -46,6 +46,13 @@ export class AudioFx {
       return;
     }
 
+    if (type === "toss") {
+      this.tone(260, 72, 0.2, 0, 0.07);
+      this.tone(520, 145, 0.12, 0.025, 0.03);
+      this.noiseBurst(0.24, 0, 0.032, 1_100);
+      return;
+    }
+
     this.tone(150 + strength * 45, 80, 0.075, 0, 0.025 + strength * 0.025);
     if (strength > 0.72) {
       this.noiseBurst(0.09, 0, 0.01 + strength * 0.008, 1_900);
