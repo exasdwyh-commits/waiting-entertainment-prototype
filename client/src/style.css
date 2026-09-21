@@ -73,3 +73,43 @@ h1 { margin: 4px 0 3px; font-size: clamp(28px, 4vw, 54px); }
   .join-panel strong { font-size: 17px; }
   .tip { bottom: 10px; font-size: 11px; }
 }
+
+.ranking {
+  position: absolute;
+  left: 30px;
+  top: 142px;
+  width: min(250px, 28vw);
+  margin: 0;
+  padding: 10px;
+  list-style: none;
+  border-radius: 16px;
+  background: rgba(8, 12, 20, .58);
+  backdrop-filter: blur(10px);
+  display: grid;
+  gap: 4px;
+}
+
+.ranking li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 3px 7px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.ranking li:first-child { background: rgba(255,255,255,.12); }
+.ranking li.eliminated { opacity: .38; text-decoration: line-through; }
+.ranking b { font-size: 12px; opacity: .65; }
+.ranking span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ranking em { font-style: normal; font-weight: 800; text-align: right; }
+
+@keyframes winner-pop {
+  0% { transform: translate(-50%, -50%) scale(.72); opacity: 0; }
+  45% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+.message:not(:empty) { animation: winner-pop .38s ease-out; }
