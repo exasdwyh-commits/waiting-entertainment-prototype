@@ -37,6 +37,9 @@ When field testing, report the symptom rather than guessing a numeric fix.
 | 抓起过程看不清 | `toss.windupMs` | increase moderately |
 | 甩人不够爽 | `toss.baseStrength`, `toss.verticalStrength` | increase |
 | 甩人太夸张 | `toss.baseStrength`, `toss.verticalStrength` | decrease |
+| 中央转盘存在感太弱 | `environment.lazySusanImpulsePerTick`, spin speeds | increase carefully |
+| 中央转盘太干扰操作 | `environment.lazySusanImpulsePerTick` | decrease |
+| 最后10秒转得太疯狂 | `environment.finalTenSpeedMultiplier` | decrease |
 
 ## Tuning groups
 
@@ -61,6 +64,17 @@ Controls the one-button attack.
 `maxStrength` and `verticalHitImpulse` affect the victim.
 
 Keep these separate: a satisfying forward burst does not require launching victims excessively.
+
+### Environment
+
+The first active environment mechanic is the center lazy Susan.
+
+- `lazySusanBaseSpeed`: opening rotation speed;
+- `lazySusanMaxSpeed`: late-round rotation speed before the final-ten multiplier;
+- `lazySusanImpulsePerTick`: how strongly the center disk nudges fighters tangentially;
+- `finalTenSpeedMultiplier`: final-ten-second escalation.
+
+The key tuning rule: the center disk should create trajectory mistakes and collisions, not steal control from the player.
 
 ### Toss
 
