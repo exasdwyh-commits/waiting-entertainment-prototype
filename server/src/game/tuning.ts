@@ -27,6 +27,9 @@ export const GAME_TUNING = {
     maxStrength: 3.0,
     falloffDistance: 2.25,
     verticalHitImpulse: 0.65,
+    momentumMinMultiplier: 0.85,
+    momentumMaxMultiplier: 1.25,
+    momentumReferenceSpeed: 4.2,
   },
 
   balance: {
@@ -91,6 +94,12 @@ export function validateGameTuning() {
   requireFinitePositive("push.maxStrength", GAME_TUNING.push.maxStrength);
   requireFinitePositive("push.falloffDistance", GAME_TUNING.push.falloffDistance);
   requireUnitRange("push.minimumFacingDot", GAME_TUNING.push.minimumFacingDot);
+  requireFinitePositive("push.momentumMinMultiplier", GAME_TUNING.push.momentumMinMultiplier);
+  requireFinitePositive("push.momentumMaxMultiplier", GAME_TUNING.push.momentumMaxMultiplier);
+  requireFinitePositive("push.momentumReferenceSpeed", GAME_TUNING.push.momentumReferenceSpeed);
+  if (GAME_TUNING.push.momentumMaxMultiplier < GAME_TUNING.push.momentumMinMultiplier) {
+    throw new Error("Invalid game tuning: push momentum max must be >= min");
+  }
 
   requireUnitRange("balance.hitLossBase", GAME_TUNING.balance.hitLossBase);
   requireUnitRange("balance.hitLossScale", GAME_TUNING.balance.hitLossScale);
