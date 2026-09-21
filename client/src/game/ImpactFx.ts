@@ -26,23 +26,33 @@ export class ImpactFx {
   ) {
     const isFall = type === "big_fall" || type === "final_elimination";
     const isToss = type === "toss";
+    const isHeavy = type === "heavy_hit";
+    const isPunch = type === "punch_hit" || type === "push_hit";
+    const isGrab = type === "grab";
     const isSave = type === "edge_save";
     const isWin = type === "win";
 
-    const geometry = isFall || isWin || isToss
+    const geometry = isFall || isWin || isToss || isHeavy
       ? new THREE.TorusGeometry(
-          isWin ? 0.58 : isToss ? 0.38 : 0.42,
-          isToss ? 0.065 : 0.055,
+          isWin ? 0.58 : isToss ? 0.38 : isHeavy ? 0.32 : 0.42,
+          isToss ? 0.065 : isHeavy ? 0.06 : 0.055,
           8,
           28,
         )
-      : new THREE.TorusGeometry(0.22, 0.045, 7, 20);
+      : new THREE.TorusGeometry(
+          isGrab ? 0.18 : 0.22,
+          isGrab ? 0.028 : 0.045,
+          7,
+          20,
+        );
 
     const color =
       type === "final_elimination" || isWin ? 0xffd166 :
       isSave ? 0x7dd3fc :
       isToss ? 0xffa94d :
-      type === "push_hit" ? 0xffffff :
+      isHeavy ? 0xfff1a8 :
+      isGrab ? 0x60a5fa :
+      isPunch ? 0xffffff :
       0xfb7185;
 
     const material = new THREE.MeshBasicMaterial({
@@ -55,7 +65,7 @@ export class ImpactFx {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(position[0], Math.max(0.08, position[1]), position[2]);
 
-    if (isFall || isWin || isSave || isToss) {
+    if (isFall || isWin || isSave || isToss || isHeavy) {
       mesh.rotation.x = Math.PI / 2;
       mesh.position.y = isWin ? 0.09 : Math.max(0.06, position[1] * 0.25);
     } else {
@@ -71,17 +81,91 @@ export class ImpactFx {
       mesh,
       material,
       startedAt: performance.now(),
-      durationMs: isWin ? 1500 : isFall ? 850 : isToss ? 620 : 430,
+      durationMs:
+        isWin ? 1500 :
+        isFall ? 850 :
+        isToss ? 620 :
+        isHeavy ? 520 :
+        isGrab ? 260 :
+        360,
       startScale: mesh.scale.x,
-      endScale: isWin ? 3.2 : isFall ? 2.8 : isToss ? 2.65 : 2.05 + strength * 0.6,
-      rise: isWin ? 0.45 : isFall ? 0.18 : isToss ? 0.42 : 0.32,
+      endScale:
+        isWin ? 3.2 :
+        isFall ? 2.8 :
+        isToss ? 2.65 :
+        isHeavy ? 2.45 :
+        isGrab ? 1.45 :
+        1.8 + strength * 0.45,
+      rise:
+        isWin ? 0.45 :
+        isFall ? 0.18 :
+        isToss ? 0.42 :
+        isHeavy ? 0.34 :
+        isGrab ? 0.14 :
+        0.24,
       driftX: 0,
       driftZ: 0,
       spin: 0,
     });
 
-    if (type === "push_hit" || type === "toss") {
-      this.spawnHitShards(position, color, strength);
+    if (isPunch || isHeavy || isToss) {
+      this.spawnHitShards(
+        position,
+        color,
+        isHeavy || isToss ? Math.max(0.78, strength) : strength,
+      );
+    }
+
+    if (isHeavy || isToss || isFall) {
+      this.spawnSmokePuffs(
+        position,
+        isToss || isFall ? Math.max(0.8, strength) : strength,
+      );
+    }
+  }
+
+  private spawnSmokePuffs(
+    position: [number, number, number],
+    strength: number,
+  ) {
+    const count = 7 + Math.round(strength * 4);
+
+    for (let index = 0; index < count; index += 1) {
+      const angle =
+        (index / count) * Math.PI * 2 +
+        (index % 2 === 0 ? 0.16 : -0.12);
+      const material = new THREE.MeshBasicMaterial({
+        color: index % 3 === 0 ? 0xd6d3d1 : 0xa8a29e,
+        transparent: true,
+        opacity: 0.3 + strength * 0.18,
+        depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.1 + strength * 0.035, 7, 5),
+        material,
+      );
+
+      mesh.position.set(
+        position[0] + Math.cos(angle) * 0.12,
+        Math.max(0.12, position[1] * 0.18 + 0.12),
+        position[2] + Math.sin(angle) * 0.12,
+      );
+      mesh.renderOrder = 4;
+      this.scene.add(mesh);
+
+      const speed = 0.24 + strength * 0.34;
+      this.active.push({
+        mesh,
+        material,
+        startedAt: performance.now(),
+        durationMs: 420 + index * 22,
+        startScale: 0.8,
+        endScale: 2.5 + strength * 1.1,
+        rise: 0.22 + strength * 0.26,
+        driftX: Math.cos(angle) * speed,
+        driftZ: Math.sin(angle) * speed,
+        spin: 0,
+      });
     }
   }
 
