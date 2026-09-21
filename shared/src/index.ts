@@ -8,6 +8,7 @@ export type PlayerState =
   | "ragdoll"
   | "recovering"
   | "edge_hang"
+  | "celebrate"
   | "eliminated";
 
 export type GameEventType =
