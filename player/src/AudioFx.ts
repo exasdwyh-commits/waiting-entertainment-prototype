@@ -53,6 +53,24 @@ export class AudioFx {
       return;
     }
 
+    if (type === "heavy_hit") {
+      this.tone(190, 58, 0.16, 0, 0.065);
+      this.tone(340, 96, 0.11, 0.018, 0.032);
+      this.noiseBurst(0.18, 0, 0.036, 1_250);
+      return;
+    }
+
+    if (type === "punch_hit" || type === "push_hit") {
+      this.tone(250, 110, 0.085, 0, 0.035);
+      this.noiseBurst(0.075, 0, 0.012, 2_200);
+      return;
+    }
+
+    if (type === "grab") {
+      this.tone(360, 240, 0.07, 0, 0.02);
+      return;
+    }
+
     this.tone(150 + strength * 45, 80, 0.075, 0, 0.025 + strength * 0.025);
     if (strength > 0.72) {
       this.noiseBurst(0.09, 0, 0.01 + strength * 0.008, 1_900);
