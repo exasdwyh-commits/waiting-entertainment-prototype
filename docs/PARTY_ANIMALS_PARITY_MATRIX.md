@@ -70,15 +70,15 @@
 ### 当前最大缺口
 
 1. **攻击动词太少**；
-2. **抓取还不是真正持续 Grapple**；
-3. **没有 Stamina / 体力资源管理**；
+2. **抓取已有持续 Grab/Carry V1，但挣脱与双手/部位抓取仍未完成**；
+3. **Stamina V1 已完成，后续还要接 Jump / Dropkick / Climb 等动作**；
 4. **KO 体系还不够完整**；
 5. **没有跳跃 / 飞踢 / 头槌这类身体攻击**；
 6. **没有武器 / 可拾取物件**；
 7. **场景可交互物件不足**；
 8. **角色身体的 Active Ragdoll 视觉不足**；
 9. **攻击层的烟雾、扭曲、压缩、拖尾、重击包装仍不足**；
-10. **60 秒局长太短，不足以形成完整 3 分钟乱斗故事。**
+10. **180 秒四阶段结构已落地，阶段内武器/KO/机关升级仍待补齐。**
 
 ---
 
@@ -137,9 +137,9 @@
 
 ### 当前状态
 
-**缺失。**
+**V1 已实现。**
 
-目前“冲撞”承担了太多功能。
+现在已经把快速 Punch 与 Sprint Heavy Strike 分开。
 
 ### 目标
 
@@ -373,9 +373,9 @@ Throw 力量应该受到：
 
 ## 当前状态
 
-**缺失。**
+**V1 已实现。**
 
-这是当前与成熟物理派对战斗最大的系统差距之一。
+Stamina 已由服务器权威管理，当前控制 Sprint / Grab / Heavy Strike / Throw；后续继续接 Jump、Dropkick、Climb 与 Struggle。
 
 ## 体力应该控制
 
@@ -922,18 +922,18 @@ AI 后续必须学会这些行为，而不只是“找最近目标然后撞”�
 | 战斗元素 | 当前 | Parity 目标 |
 | --- | --- | --- |
 | 基础移动 | ✅ | 继续调手感 |
-| Sprint | 🔴 | 增加 + Stamina |
+| Sprint | ✅ V1 | 摇杆外圈触发 + Stamina；继续调加速/急停/侧倾 |
 | 动量攻击 | ✅ | Heavy Strike 更明确 |
-| Punch | 🔴 | 快速基础攻击 |
+| Punch | ✅ V1 | 快速基础攻击已独立 |
 | Kick | 🔴 | 倒地 / 桌边用途 |
 | Headbutt | 🔴 | 抓人时近身攻击 |
 | Jump | 🔴 | 跳跃和地图互动 |
 | Dropkick | 🔴 | 高风险飞踢 |
-| Grab | 🟡 | 从自动抓取升级到持续 Grapple |
-| Carry | 🟡 | 允许移动 / 体力消耗 |
-| Throw | 🟡 | 方向 / 动量 / Stamina / 旋转共同决定 |
+| Grab | ✅ V1 | 按住持续抓取；继续做单/双手、部位与挣脱 |
+| Carry | ✅ V1 | 可拖带移动并持续消耗体力 |
+| Throw | ✅ V1 | 手动攻击键释放，方向 / 动量 / Stamina / 角冲量参与 |
 | Struggle / Break Grab | 🔴 | 被抓者可挣脱 |
-| Stamina | 🔴 | Sprint / Grab / Heavy / Climb 共同资源 |
+| Stamina | ✅ V1 | 已控制 Sprint / Grab / Heavy / Throw；继续接其他动作 |
 | HP / KO Resistance | 🔴 | 与 Stamina 分离 |
 | KO | 🟡 | 完整意识丧失 / 醒来体系 |
 | Knockdown | ✅ | 继续做 Active Ragdoll |
@@ -949,15 +949,15 @@ AI 后续必须学会这些行为，而不只是“找最近目标然后撞”�
 | Ragdoll Visual | 🟡 | Active Ragdoll |
 | Hit-stop | ✅ | 分级强化 |
 | Camera Shake | ✅ | 分攻击级别 |
-| Smoke / Dust | 🟡 | 系统化战斗粒子 |
-| Stretch / Squash | 🔴 | 战斗形变 |
+| Smoke / Dust | 🟡 V1 | Heavy / Toss / Fall 已有烟尘；继续做方向性拖尾与落地尘 |
+| Stretch / Squash | 🟡 | 已有命中压缩/拉伸 V1；继续做骨骼局部形变 |
 | Motion Trail | 🔴 | 强攻击 / Throw / Dropkick |
 | Angular Physics | 🟡 | 更明显扭转 / 翻滚 |
 | Haptics | ✅ | 按动作分类 |
 | Combat Audio | 🟡 | 从程序音升级成完整 SFX |
 | Big-screen Director | ✅ V1 | 真机调导演频率 |
 | Instant Replay | ✅ V1 | 稳定多机位 + PiP |
-| 3-minute match | 🔴 | 180 秒阶段结构 |
+| 3-minute match | ✅ V1 | 180 秒 Opening / Brawl / Danger / Final |
 | Final Phase | 🟡 | 15 秒升级成完整 Final Chaos |
 | AI Brawler | 🟡 | 学会抓、踢、武器、复仇、抢夺 |
 | FFA | ✅ | 主模式 |
