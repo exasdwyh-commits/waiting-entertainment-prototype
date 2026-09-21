@@ -30,6 +30,7 @@ export interface PlayerSnapshot {
   position: [number, number, number];
   rotation: [number, number, number, number];
   velocity: [number, number, number];
+  score: number;
   state: PlayerState;
   eliminated: boolean;
   bot: boolean;
@@ -49,6 +50,7 @@ export interface MatchSnapshot {
   serverTimeMs: number;
   timeLeftMs: number;
   phase: "lobby" | "countdown" | "playing" | "finished";
+  countdownLeftMs?: number;
   players: PlayerSnapshot[];
   events: GameEvent[];
   winnerId?: PlayerId;
