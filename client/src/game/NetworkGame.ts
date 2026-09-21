@@ -51,11 +51,12 @@ type Options = {
   replayWipe: HTMLElement;
 };
 
-const REPLAY_SPEED = 0.45;
-const REPLAY_LOOKBACK_MS = 1_300;
-const REPLAY_LOOKAHEAD_MS = 550;
+const REPLAY_SPEED = 0.5;
+const REPLAY_LOOKBACK_MS = 750;
+const REPLAY_LOOKAHEAD_MS = 250;
 const HISTORY_MS = 65_000;
-const MAX_HIGHLIGHTS = 3;
+const MAX_HIGHLIGHTS = 2;
+const MAX_REPLAY_PACKAGE_MS = 6_200;
 
 export class NetworkGame {
   private readonly scene = new THREE.Scene();
@@ -292,6 +293,10 @@ export class NetworkGame {
       this.replayedMatchId = undefined;
       this.director.reset();
       this.lastDirectorShot = undefined;
+      this.options.message.classList.remove("replay-caption");
+      this.options.message.textContent = "";
+      this.options.replayWipe.classList.remove("active");
+      this.updateBroadcastBug("比赛准备", false);
     }
 
     this.history.push(snapshot);
@@ -355,7 +360,7 @@ export class NetworkGame {
       .sort((a, b) => a.atMs - b.atMs)
       .slice(-MAX_HIGHLIGHTS);
 
-    const clips = selected
+    const candidates = selected
       .map((event, index): ReplayClip | undefined => {
         const frames = this.history.filter(
           (frame) =>
@@ -406,7 +411,7 @@ export class NetworkGame {
           label,
           loops:
             event.type === "final_elimination" ||
-            (event.type === "toss" && event.importance >= 0.92)
+            (event.type === "toss" && event.importance >= 0.96)
               ? 2
               : 1,
           eventType: event.type,
@@ -416,7 +421,45 @@ export class NetworkGame {
       })
       .filter((clip): clip is ReplayClip => Boolean(clip));
 
-    if (clips.length) return clips;
+    if (candidates.length) {
+      const budgeted: ReplayClip[] = [];
+      let usedMs = 0;
+
+      // The decisive clip is added first so a secondary highlight can never
+      // consume the result-window budget needed for the final replay.
+      const ordered = [...candidates].sort((a, b) => {
+        const aFinal = a.eventType === "final_elimination" ? 1 : 0;
+        const bFinal = b.eventType === "final_elimination" ? 1 : 0;
+        return bFinal - aFinal;
+      });
+
+      for (const clip of ordered) {
+        const first = clip.frames[0]?.serverTimeMs ?? 0;
+        const last =
+          clip.frames[clip.frames.length - 1]?.serverTimeMs ?? first;
+        const sourceMs = Math.max(1, last - first);
+        let loops = clip.loops;
+        let playbackMs = (sourceMs / REPLAY_SPEED) * loops;
+
+        if (usedMs + playbackMs > MAX_REPLAY_PACKAGE_MS && loops > 1) {
+          loops = 1;
+          playbackMs = sourceMs / REPLAY_SPEED;
+        }
+        if (usedMs + playbackMs > MAX_REPLAY_PACKAGE_MS) continue;
+
+        budgeted.push({ ...clip, loops });
+        usedMs += playbackMs;
+      }
+
+      // Restore chronological order for the actual show package.
+      budgeted.sort(
+        (a, b) =>
+          (a.frames[0]?.serverTimeMs ?? 0) -
+          (b.frames[0]?.serverTimeMs ?? 0),
+      );
+
+      if (budgeted.length) return budgeted;
+    }
 
     const fallbackFrames = this.history.filter(
       (frame) =>
@@ -697,7 +740,7 @@ export class NetworkGame {
     this.options.message.classList.add("replay-caption");
     this.options.message.textContent = replay.reverseAngle
       ? `${replay.label} · 反打机位`
-      : `${replay.label} · 0.45×`;
+      : `${replay.label} · ${REPLAY_SPEED.toFixed(2)}×`;
     this.applySnapshot(frame);
   }
 
