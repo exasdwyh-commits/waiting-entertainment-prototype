@@ -132,7 +132,7 @@ socket.on("connect", () => {
       reason?: string;
     }) => {
       if (!response?.ok || !response.playerId) {
-        status.textContent = response?.reason === "session-full" ? "当前8位已满" : "加入失败";
+        status.textContent = response?.reason === "session-full" ? "当前对局已满" : "加入失败";
         status.classList.remove("online");
         return;
       }
