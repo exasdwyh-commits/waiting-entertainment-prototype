@@ -98,3 +98,18 @@ See `docs/RUNNING.md`, `docs/ARCHITECTURE.md`, `docs/TUNING.md`, and `docs/ROADM
 The current product is intentionally **single restaurant / single host / single live game session**.
 
 There is no matchmaking, public room browser, multi-room orchestration, or cloud-authoritative gameplay in the MVP. The phone is a personal game/control screen connected to the restaurant host over LAN.
+
+
+## Visual Preview
+
+Current automated screenshots from the actual running build:
+
+### Big screen
+
+![Table Push King big-screen preview](docs/screenshots/big-screen.png)
+
+### Phone player view
+
+![Table Push King phone-player preview](docs/screenshots/phone-player.png)
+
+These images are captured from the real Three.js/Socket.IO build rather than mockups. Refresh them through the `Visual Preview` GitHub Action after meaningful visual changes.
