@@ -272,7 +272,17 @@ export class NetworkGame {
       const view = this.views.get(player.id) ?? this.createView(player);
       this.refreshLabel(view, player);
       view.targetPosition.set(...player.position);
-      view.targetQuaternion.set(...player.rotation);
+      if (
+        (player.state === "idle" || player.state === "moving" || player.state === "pushing") &&
+        isMostlyUpright(player.rotation)
+      ) {
+        view.targetQuaternion.setFromAxisAngle(
+          new THREE.Vector3(0, 1, 0),
+          player.facingYaw,
+        );
+      } else {
+        view.targetQuaternion.set(...player.rotation);
+      }
       view.state = player.state;
       view.visual?.setState(player.state);
       view.root.visible = !player.eliminated;
@@ -415,4 +425,11 @@ export class NetworkGame {
     this.camera.lookAt(this.cameraLook);
     this.renderer.render(this.scene, this.camera);
   };
+}
+
+
+function isMostlyUpright(rotation: [number, number, number, number]) {
+  const [x, , z] = rotation;
+  const upY = 1 - 2 * (x * x + z * z);
+  return upY > 0.72;
 }
