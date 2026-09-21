@@ -16,3 +16,20 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run build
+      - name: Smoke test authoritative server
+        run: |
+          npm run start -w server > /tmp/waiting-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:3001/health | grep -q '"ok":true'; then
+              echo "Authoritative server health check passed."
+              exit 0
+            fi
+            sleep 0.5
+          done
+
+          echo "Server failed to become healthy."
+          cat /tmp/waiting-server.log
+          exit 1
