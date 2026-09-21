@@ -9,6 +9,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.19.0",
     "@waiting/shared": "*",
     "socket.io": "^4.8.1"
   },
