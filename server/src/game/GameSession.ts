@@ -8,8 +8,9 @@ const PLAYER_COUNT = 8;
 const PHYSICS_HZ = 60;
 const TICK_MS = 1000 / PHYSICS_HZ;
 const SNAPSHOT_INTERVAL_TICKS = 3; // 20Hz network snapshots; physics remains 60Hz.
-const ROUND_MS = 60_000;
+const ROUND_MS = GAME_TUNING.match.roundMs;
 const COUNTDOWN_MS = 3_000;
+const RESULT_MS = GAME_TUNING.match.resultMs;
 const SESSION_RECOVERY_MS = 90_000;
 
 type Slot = {
@@ -22,6 +23,9 @@ type Slot = {
   body: RAPIER.RigidBody;
   facingYaw: number;
   balance: number;
+  stamina: number;
+  staminaRecoverAt: number;
+  sprinting: boolean;
   state: PlayerState;
   alive: boolean;
   pushReadyAt: number;
@@ -161,8 +165,14 @@ export class GameSession {
       seq: Number.isFinite(raw.seq) ? Number(raw.seq) : slot.input.seq + 1,
       moveX: clamp(Number(raw.moveX) || 0, -1, 1),
       moveY: clamp(Number(raw.moveY) || 0, -1, 1),
-      // Latch push until the authoritative tick consumes it so a very short tap is never lost.
+      // Attack is latched until the authoritative tick consumes it so a short tap is never lost.
       push: Boolean(raw.push) || slot.input.push,
+      attack:
+        Boolean(raw.attack) ||
+        Boolean(raw.push) ||
+        slot.input.attack,
+      grab: Boolean(raw.grab),
+      sprint: Boolean(raw.sprint),
     };
   }
 
@@ -206,6 +216,9 @@ export class GameSession {
         body,
         facingYaw: angleFromIndex(index),
         balance: 1,
+        stamina: GAME_TUNING.stamina.max,
+        staminaRecoverAt: 0,
+        sprinting: false,
         state: "idle",
         alive: true,
         pushReadyAt: 0,
@@ -237,7 +250,15 @@ export class GameSession {
   }
 
   private emptyInput(): PlayerInput {
-    return { seq: 0, moveX: 0, moveY: 0, push: false };
+    return {
+      seq: 0,
+      moveX: 0,
+      moveY: 0,
+      push: false,
+      attack: false,
+      grab: false,
+      sprint: false,
+    };
   }
 
   private resetRound() {
@@ -262,6 +283,9 @@ export class GameSession {
       slot.body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
       slot.facingYaw = Math.atan2(-Math.cos(angle), -Math.sin(angle));
       slot.balance = 1;
+      slot.stamina = GAME_TUNING.stamina.max;
+      slot.staminaRecoverAt = 0;
+      slot.sprinting = false;
       slot.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
       slot.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
       slot.state = "idle";
@@ -315,19 +339,38 @@ export class GameSession {
       if (!slot.alive) continue;
       if (slot.carriedBy) continue;
 
-      if (this.advanceToss(slot, now)) continue;
+      this.updateStamina(slot, now);
       this.advanceRecovery(slot, now);
       if (this.advanceClimb(slot, now)) continue;
 
-      const direction = slot.bot ? this.botDirection(slot, now) : this.inputDirection(slot);
+      const direction = slot.bot
+        ? this.botDirection(slot, now)
+        : this.inputDirection(slot);
+
+      this.maintainGrab(slot, now);
+
+      const wantsGrab = slot.bot
+        ? this.shouldBotGrab(slot, now)
+        : slot.input.grab;
+      if (wantsGrab && !slot.tossTargetId) {
+        this.tryGrab(slot, direction, now);
+      }
+
       this.drive(slot, direction, now);
 
-      const wantsPush = slot.bot
+      const wantsAttack = slot.bot
         ? this.shouldBotPush(slot, now)
-        : slot.input.push;
+        : slot.input.attack || slot.input.push;
 
-      if (wantsPush) this.push(slot, direction, now);
-      if (!slot.bot) slot.input.push = false;
+      if (wantsAttack) {
+        if (slot.tossTargetId) this.throwCarried(slot, direction, now);
+        else this.attack(slot, direction, now);
+      }
+
+      if (!slot.bot) {
+        slot.input.attack = false;
+        slot.input.push = false;
+      }
 
       this.applyUprightAssist(slot, now);
     }
@@ -350,7 +393,7 @@ export class GameSession {
         return Math.hypot(ap.x, ap.z) - Math.hypot(bp.x, bp.z);
       });
       this.winnerId = rankedAlive[0]?.id;
-      this.restartAt = now + 8_000;
+      this.restartAt = now + RESULT_MS;
       if (this.winnerId) {
         const winner = this.slots.find((slot) => slot.id === this.winnerId);
         if (winner) winner.state = "celebrate";
