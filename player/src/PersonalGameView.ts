@@ -32,6 +32,7 @@ export class PersonalGameView {
   private snapshot?: MatchSnapshot;
   private animationFrame = 0;
   private fovKick = 0;
+  private hitStopUntil = 0;
 
   constructor(private readonly container: HTMLElement) {}
 
@@ -91,8 +92,17 @@ export class PersonalGameView {
   }
 
   addImpact(strength = 0.5, received = false) {
-    const amount = (received ? 3.2 : 1.8) * Math.max(0.25, Math.min(1, strength));
+    const normalized = Math.max(0.25, Math.min(1, strength));
+    const amount = (received ? 3.2 : 1.8) * normalized;
     this.fovKick = Math.max(this.fovKick, amount);
+
+    const hitStopMs = received
+      ? 28 + normalized * 34
+      : 18 + normalized * 22;
+    this.hitStopUntil = Math.max(
+      this.hitStopUntil,
+      performance.now() + hitStopMs,
+    );
   }
 
   toWorldInput(screenX: number, screenY: number) {
@@ -283,11 +293,16 @@ export class PersonalGameView {
   private loop = () => {
     this.animationFrame = requestAnimationFrame(this.loop);
 
-    const delta = Math.min(this.clock.getDelta(), 0.05);
+    const now = performance.now();
+    const rawDelta = Math.min(this.clock.getDelta(), 0.05);
+    const hitStopped = now < this.hitStopUntil;
+    const delta = hitStopped ? 0 : rawDelta;
 
     for (const actor of this.actors.values()) {
-      actor.root.position.lerp(actor.targetPosition, 0.32);
-      actor.root.quaternion.slerp(actor.targetQuaternion, 0.38);
+      if (!hitStopped) {
+        actor.root.position.lerp(actor.targetPosition, 0.32);
+        actor.root.quaternion.slerp(actor.targetQuaternion, 0.38);
+      }
       actor.visual?.update(delta);
       actor.ring.position.copy(actor.root.position);
       actor.ring.position.y = 0.04;
@@ -298,10 +313,10 @@ export class PersonalGameView {
         urgent ? 0xf97316 : actor.danger > 0.55 ? 0xef4444 : 0xffffff,
       );
       ringMaterial.opacity = urgent
-        ? 0.78 + Math.sin(performance.now() * 0.018) * 0.18
+        ? 0.78 + Math.sin(now * 0.018) * 0.18
         : 0.72 + actor.danger * 0.24;
       const pulse = urgent
-        ? 1.12 + Math.sin(performance.now() * 0.014) * 0.08
+        ? 1.12 + Math.sin(now * 0.014) * 0.08
         : 1 + actor.danger * 0.15;
       actor.ring.scale.setScalar(pulse);
     }

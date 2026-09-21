@@ -134,8 +134,9 @@ Implemented additionally:
 - Dynamic spectator framing
 - Impact camera shake
 - Impact-driven FOV punch on big screen and personal phone view
+- Presentation-only hit-stop on strong impacts; authoritative physics never pauses
 - Lightweight push-hit shard VFX
-- Procedural arcade audio (no external audio assets)
+- Procedural arcade audio plus crowd-like reaction bursts (no external audio assets)
 - Ledge spectator callouts and climb-focused camera
 - Final 10-second big-screen camera push-in + timer pulse
 

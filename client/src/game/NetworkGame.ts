@@ -67,6 +67,7 @@ export class NetworkGame {
   private animationFrame = 0;
   private cameraImpulse = 0;
   private cameraFovKick = 0;
+  private hitStopUntil = 0;
   private readonly cameraLook = new THREE.Vector3();
 
   constructor(private readonly options: Options) {}
@@ -180,6 +181,18 @@ export class NetworkGame {
         event.type === "push_hit" ? 1.4 + event.importance * 2.2 :
         1.2;
       this.cameraFovKick = Math.max(this.cameraFovKick, fovKick);
+
+      const hitStopMs =
+        event.type === "final_elimination" ? 88 :
+        event.type === "big_fall" ? 62 :
+        event.type === "push_hit" ? 22 + event.importance * 34 :
+        event.type === "edge_save" ? 28 :
+        0;
+      this.hitStopUntil = Math.max(
+        this.hitStopUntil,
+        performance.now() + hitStopMs,
+      );
+
       this.audioFx.play(event.type, event.importance);
 
       const subjectId = event.targetId ?? event.actorId;
@@ -542,11 +555,15 @@ export class NetworkGame {
     if (this.replay) this.updateReplay(now);
     this.fx.update(now);
 
-    const delta = Math.min(this.clock.getDelta(), 0.05);
+    const rawDelta = Math.min(this.clock.getDelta(), 0.05);
+    const hitStopped = !this.replay && now < this.hitStopUntil;
+    const delta = hitStopped ? 0 : rawDelta;
 
     for (const view of this.views.values()) {
-      view.root.position.lerp(view.targetPosition, this.replay ? 0.42 : 0.28);
-      view.root.quaternion.slerp(view.targetQuaternion, this.replay ? 0.5 : 0.32);
+      if (!hitStopped) {
+        view.root.position.lerp(view.targetPosition, this.replay ? 0.42 : 0.28);
+        view.root.quaternion.slerp(view.targetQuaternion, this.replay ? 0.5 : 0.32);
+      }
       view.visual?.update(delta);
       view.label.position.copy(view.root.position).add(new THREE.Vector3(0, 1.65, 0));
       view.ring.position.copy(view.root.position);

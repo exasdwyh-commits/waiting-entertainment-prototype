@@ -23,26 +23,33 @@ export class AudioFx {
       this.tone(523, 659, 0.14, 0.08);
       this.tone(659, 784, 0.14, 0.22);
       this.tone(784, 1047, 0.22, 0.36);
+      this.noiseBurst(0.72, 0.03, 0.026, 950);
       return;
     }
 
     if (type === "edge_save") {
       this.tone(330, 740, 0.16, 0, 0.055);
+      this.noiseBurst(0.18, 0, 0.012, 1_600);
       return;
     }
 
     if (type === "final_elimination") {
       this.tone(150, 48, 0.34, 0, 0.085);
       this.tone(290, 95, 0.22, 0.04, 0.04);
+      this.noiseBurst(0.62, 0.02, 0.04, 760);
       return;
     }
 
     if (type === "big_fall") {
       this.tone(120, 52, 0.2, 0, 0.055);
+      this.noiseBurst(0.34, 0, 0.024, 880);
       return;
     }
 
     this.tone(150 + strength * 45, 80, 0.075, 0, 0.025 + strength * 0.025);
+    if (strength > 0.72) {
+      this.noiseBurst(0.09, 0, 0.01 + strength * 0.008, 1_900);
+    }
   }
 
   private ensureContext() {
@@ -53,6 +60,49 @@ export class AudioFx {
 
     this.context = new Ctor();
     return this.context;
+  }
+
+  private noiseBurst(
+    duration: number,
+    delay: number,
+    volume: number,
+    cutoffHz: number,
+  ) {
+    const context = this.context;
+    if (!context) return;
+
+    const length = Math.max(1, Math.floor(context.sampleRate * duration));
+    const buffer = context.createBuffer(1, length, context.sampleRate);
+    const data = buffer.getChannelData(0);
+
+    for (let index = 0; index < length; index += 1) {
+      const envelope = Math.pow(1 - index / length, 0.65);
+      data[index] = (Math.random() * 2 - 1) * envelope;
+    }
+
+    const source = context.createBufferSource();
+    const filter = context.createBiquadFilter();
+    const gain = context.createGain();
+    const start = context.currentTime + delay;
+    const end = start + duration;
+
+    source.buffer = buffer;
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(cutoffHz, start);
+    filter.frequency.exponentialRampToValueAtTime(
+      Math.max(180, cutoffHz * 0.55),
+      end,
+    );
+
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(volume, start + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, end);
+
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(context.destination);
+    source.start(start);
+    source.stop(end + 0.02);
   }
 
   private tone(
