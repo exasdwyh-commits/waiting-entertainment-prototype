@@ -337,6 +337,7 @@ export class GameSession {
 
     const alive = this.slots.filter((slot) => slot.alive);
     if (now - this.startedAt >= ROUND_MS || alive.length <= 1) {
+      this.releaseActiveTosses(now);
       this.phase = "finished";
       const rankedAlive = [...alive].sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score;
@@ -440,6 +441,19 @@ export class GameSession {
     this.clearToss(slot);
     this.emitEvent("toss", now, slot.id, targetId, importance);
     return true;
+  }
+
+  private releaseActiveTosses(now: number) {
+    for (const slot of this.slots) {
+      if (!slot.tossTargetId) continue;
+      const target = this.slots.find(
+        (candidate) =>
+          candidate.id === slot.tossTargetId &&
+          candidate.carriedBy === slot.id,
+      );
+      if (target) this.dropTossTarget(slot, target, now);
+      else this.clearToss(slot);
+    }
   }
 
   private dropTossTarget(slot: Slot, target: Slot, now: number) {
@@ -938,6 +952,16 @@ export class GameSession {
     }
 
     if (p.y < -2.6) {
+      if (slot.tossTargetId) {
+        const carried = this.slots.find(
+          (candidate) =>
+            candidate.id === slot.tossTargetId &&
+            candidate.carriedBy === slot.id,
+        );
+        if (carried) this.dropTossTarget(slot, carried, now);
+        else this.clearToss(slot);
+      }
+
       slot.alive = false;
       slot.state = "eliminated";
       slot.body.setEnabled(false);
