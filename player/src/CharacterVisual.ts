@@ -69,12 +69,12 @@ function chooseClip(clips: THREE.AnimationClip[], state: PlayerState) {
   const aliases: Record<PlayerState, string[]> = {
     idle: ["idle", "stand"],
     moving: ["walk", "run", "move"],
-    pushing: ["punch", "attack", "push", "interact"],
-    hit: ["hit", "damage", "fall"],
-    ragdoll: ["fall", "death", "hit"],
-    recovering: ["stand", "getup", "recover", "idle"],
-    edge_hang: ["hang", "climb", "idle"],
-    eliminated: ["death", "fall"],
+    pushing: ["attackmeleeright", "attackmeleeleft", "attack", "interactright"],
+    hit: ["fall", "hit", "damage"],
+    ragdoll: ["fall", "die", "hit"],
+    recovering: ["idle", "stand", "getup", "recover"],
+    edge_hang: ["holdingboth", "holdingright", "fall"],
+    eliminated: ["die", "fall", "death"],
   };
 
   const desired = aliases[state];
