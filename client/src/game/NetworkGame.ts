@@ -5,6 +5,7 @@ import type { GameEvent, MatchSnapshot, PlayerSnapshot, PlayerState } from "@wai
 import { createCharacterVisual, type CharacterVisual } from "./CharacterVisual";
 import { ImpactFx } from "./ImpactFx";
 import { AudioFx } from "./AudioFx";
+import { addRestaurantEnvironment } from "./RestaurantEnvironment";
 
 type View = {
   root: THREE.Group;
@@ -98,8 +99,8 @@ export class NetworkGame {
   }
 
   private setupScene() {
-    this.scene.background = new THREE.Color(0x101827);
-    this.scene.fog = new THREE.Fog(0x101827, 15, 29);
+    this.scene.background = new THREE.Color(0x160f0c);
+    this.scene.fog = new THREE.Fog(0x160f0c, 18, 34);
 
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x334155, 2.2));
 
@@ -130,7 +131,10 @@ export class NetworkGame {
       new THREE.MeshStandardMaterial({ color: 0x6b3f25, roughness: 0.8 }),
     );
     pedestal.position.y = -2;
+    pedestal.castShadow = true;
     this.scene.add(pedestal);
+
+    addRestaurantEnvironment(this.scene);
 
     this.camera.position.set(0, 10.5, 11.5);
     this.camera.lookAt(0, 0.2, 0);
