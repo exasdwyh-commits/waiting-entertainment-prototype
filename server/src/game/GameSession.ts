@@ -965,7 +965,10 @@ export class GameSession {
   }
 
   private drive(slot: Slot, direction: { x: number; z: number }, now: number) {
-    if (slot.edgeHanging || now < slot.knockedUntil) return;
+    if (slot.edgeHanging || now < slot.knockedUntil) {
+      slot.sprinting = false;
+      return;
+    }
 
     const magnitude = Math.hypot(direction.x, direction.z);
     const attackLocked =
@@ -973,8 +976,31 @@ export class GameSession {
       now < slot.pushStateUntil;
 
     if (magnitude < 0.05) {
-      if (slot.state !== "recovering" && !attackLocked) slot.state = "idle";
+      slot.sprinting = false;
+      if (slot.state !== "recovering" && !attackLocked && !slot.tossTargetId) {
+        slot.state = "idle";
+      }
       return;
+    }
+
+    const botSprint =
+      slot.bot &&
+      slot.botAggression >= 0.78 &&
+      !slot.tossTargetId &&
+      slot.stamina > 0.24;
+    const sprintRequested =
+      !slot.tossTargetId &&
+      (slot.bot ? botSprint : slot.input.sprint) &&
+      slot.stamina > GAME_TUNING.stamina.exhaustedThreshold;
+
+    if (sprintRequested) {
+      slot.sprinting = this.spendStamina(
+        slot,
+        GAME_TUNING.stamina.sprintDrainPerSecond / PHYSICS_HZ,
+        now,
+      );
+    } else {
+      slot.sprinting = false;
     }
 
     const controlScale = slot.state === "recovering"
@@ -985,27 +1011,93 @@ export class GameSession {
     const balanceControl =
       GAME_TUNING.movement.minBalanceControl +
       slot.balance * (1 - GAME_TUNING.movement.minBalanceControl);
-    const moveScale = (slot.bot ? slot.botMoveScale : 1) * balanceControl;
-    if (slot.state !== "recovering" && !attackLocked) slot.state = "moving";
+    const carryScale = slot.tossTargetId
+      ? GAME_TUNING.movement.carryMoveScale
+      : 1;
+    const sprintScale = slot.sprinting
+      ? GAME_TUNING.movement.sprintImpulseMultiplier
+      : 1;
+    const moveScale =
+      (slot.bot ? slot.botMoveScale : 1) *
+      balanceControl *
+      carryScale *
+      sprintScale;
+
+    if (
+      slot.state !== "recovering" &&
+      !attackLocked &&
+      !slot.tossTargetId
+    ) {
+      slot.state = "moving";
+    }
+
     slot.facingYaw = Math.atan2(direction.x, direction.z);
     slot.body.applyImpulse(
       {
-        x: direction.x * GAME_TUNING.movement.impulsePerTick * controlScale * moveScale,
+        x:
+          direction.x *
+          GAME_TUNING.movement.impulsePerTick *
+          controlScale *
+          moveScale,
         y: 0,
-        z: direction.z * GAME_TUNING.movement.impulsePerTick * controlScale * moveScale,
+        z:
+          direction.z *
+          GAME_TUNING.movement.impulsePerTick *
+          controlScale *
+          moveScale,
       },
       true,
     );
 
     const velocity = slot.body.linvel();
     const horizontal = Math.hypot(velocity.x, velocity.z);
-    if (horizontal > GAME_TUNING.movement.maxHorizontalSpeed) {
-      const scale = GAME_TUNING.movement.maxHorizontalSpeed / horizontal;
+    const maxSpeed =
+      GAME_TUNING.movement.maxHorizontalSpeed *
+      (slot.sprinting
+        ? GAME_TUNING.movement.sprintMaxSpeedMultiplier
+        : 1) *
+      (slot.tossTargetId ? GAME_TUNING.movement.carryMoveScale : 1);
+
+    if (horizontal > maxSpeed) {
+      const scale = maxSpeed / horizontal;
       slot.body.setLinvel(
         { x: velocity.x * scale, y: velocity.y, z: velocity.z * scale },
         true,
       );
     }
+  }
+
+  private shouldBotGrab(slot: Slot, now: number) {
+    if (
+      slot.tossTargetId ||
+      now < slot.pushReadyAt ||
+      slot.stamina <= 0.24
+    ) {
+      return false;
+    }
+
+    const target = this.slots.find(
+      (candidate) =>
+        candidate.id === slot.botTargetId &&
+        candidate !== slot &&
+        candidate.alive &&
+        !candidate.carriedBy,
+    );
+    if (!target) return false;
+
+    const vulnerable =
+      target.balance <= 0.5 ||
+      target.state === "hit" ||
+      target.state === "ragdoll" ||
+      target.state === "recovering";
+    if (!vulnerable) return false;
+
+    const p = slot.body.translation();
+    const t = target.body.translation();
+    return (
+      Math.hypot(t.x - p.x, t.z - p.z) <=
+      GAME_TUNING.grab.range
+    );
   }
 
   private shouldBotPush(slot: Slot, now: number) {
@@ -1036,16 +1128,26 @@ export class GameSession {
     return facing >= slot.botPushFacing;
   }
 
-  private push(slot: Slot, direction: { x: number; z: number }, now: number) {
-    if (!slot.alive || slot.edgeHanging || now < slot.pushReadyAt) return;
+  private attack(
+    slot: Slot,
+    direction: { x: number; z: number },
+    now: number,
+  ) {
+    if (
+      !slot.alive ||
+      slot.edgeHanging ||
+      now < slot.pushReadyAt
+    ) {
+      return;
+    }
 
     let dx = direction.x;
     let dz = direction.z;
     if (Math.hypot(dx, dz) < 0.05) {
       const velocity = slot.body.linvel();
       const fallback = normalize(velocity.x, velocity.z);
-      dx = fallback.x || 0;
-      dz = fallback.z || 1;
+      dx = fallback.x || Math.sin(slot.facingYaw);
+      dz = fallback.z || Math.cos(slot.facingYaw);
     }
 
     const dir = normalize(dx, dz);
@@ -1059,16 +1161,132 @@ export class GameSession {
       0,
       1,
     );
+
+    const wantsHeavy =
+      slot.sprinting &&
+      runUp >= 0.52 &&
+      slot.stamina >= GAME_TUNING.stamina.heavyCost;
+
+    if (wantsHeavy) {
+      if (!this.spendStamina(slot, GAME_TUNING.stamina.heavyCost, now)) {
+        return;
+      }
+      this.heavyStrike(slot, dir, runUp, now);
+      return;
+    }
+
+    if (!this.spendStamina(slot, GAME_TUNING.stamina.punchCost, now)) {
+      return;
+    }
+    this.punch(slot, dir, now);
+  }
+
+  private punch(
+    slot: Slot,
+    dir: { x: number; z: number },
+    now: number,
+  ) {
+    slot.sprinting = false;
+    slot.facingYaw = Math.atan2(dir.x, dir.z);
+    slot.pushReadyAt =
+      now +
+      GAME_TUNING.punch.cooldownMs *
+        (slot.bot ? slot.botCooldownScale : 1);
+    slot.pushStateUntil = now + GAME_TUNING.punch.animationHoldMs;
+    slot.state = "pushing";
+    slot.body.applyImpulse(
+      {
+        x: dir.x * GAME_TUNING.punch.lungeImpulse,
+        y: 0,
+        z: dir.z * GAME_TUNING.punch.lungeImpulse,
+      },
+      true,
+    );
+
+    const origin = slot.body.translation();
+    for (const target of this.slots) {
+      if (target === slot || !target.alive || target.carriedBy) continue;
+      const p = target.body.translation();
+      const rx = p.x - origin.x;
+      const rz = p.z - origin.z;
+      const distance = Math.hypot(rx, rz);
+      if (
+        distance > GAME_TUNING.punch.hitRange ||
+        distance < 0.001
+      ) {
+        continue;
+      }
+
+      const radial = normalize(rx, rz);
+      const facing = dir.x * radial.x + dir.z * radial.z;
+      if (facing < GAME_TUNING.punch.minimumFacingDot) continue;
+
+      const distanceScale = clamp(
+        1 - distance / GAME_TUNING.punch.hitRange,
+        0.35,
+        1,
+      );
+      const strength =
+        GAME_TUNING.punch.maxStrength * distanceScale;
+
+      target.body.applyImpulseAtPoint(
+        {
+          x: radial.x * strength,
+          y: GAME_TUNING.punch.verticalHitImpulse,
+          z: radial.z * strength,
+        },
+        { x: p.x, y: p.y + 0.45, z: p.z },
+        true,
+      );
+      target.body.applyTorqueImpulse(
+        {
+          x: radial.z * 0.055,
+          y: slot.botOrbit * 0.035,
+          z: -radial.x * 0.055,
+        },
+        true,
+      );
+      target.balance = clamp(
+        target.balance - GAME_TUNING.punch.balanceLoss,
+        GAME_TUNING.balance.minimumAfterHit,
+        1,
+      );
+      target.state = "hit";
+      target.knockedUntil = Math.max(
+        target.knockedUntil,
+        now + GAME_TUNING.punch.staggerMs,
+      );
+      target.lastHitBy = slot.id;
+      target.lastHitAt = now;
+      this.emitEvent(
+        "punch_hit",
+        now,
+        slot.id,
+        target.id,
+        0.38 + distanceScale * 0.22,
+      );
+      break;
+    }
+  }
+
+  private heavyStrike(
+    slot: Slot,
+    dir: { x: number; z: number },
+    runUp: number,
+    now: number,
+  ) {
     const momentumMultiplier =
       GAME_TUNING.push.momentumMinMultiplier +
       (GAME_TUNING.push.momentumMaxMultiplier -
         GAME_TUNING.push.momentumMinMultiplier) *
         runUp;
 
-    if (this.tryContextToss(slot, dir, runUp, now)) return;
-
+    slot.sprinting = false;
     slot.facingYaw = Math.atan2(dir.x, dir.z);
-    slot.pushReadyAt = now + GAME_TUNING.push.cooldownMs * (slot.bot ? slot.botCooldownScale : 1);
+    slot.pushReadyAt =
+      now +
+      GAME_TUNING.push.cooldownMs *
+        (slot.bot ? slot.botCooldownScale : 1);
     slot.pushStateUntil = now + GAME_TUNING.push.animationHoldMs;
     slot.state = "pushing";
     slot.body.applyImpulse(
@@ -1088,7 +1306,12 @@ export class GameSession {
       const rx = p.x - origin.x;
       const rz = p.z - origin.z;
       const distance = Math.hypot(rx, rz);
-      if (distance > GAME_TUNING.push.hitRange || distance < 0.001) continue;
+      if (
+        distance > GAME_TUNING.push.hitRange ||
+        distance < 0.001
+      ) {
+        continue;
+      }
 
       const radial = normalize(rx, rz);
       const facing = dir.x * radial.x + dir.z * radial.z;
@@ -1100,10 +1323,27 @@ export class GameSession {
           GAME_TUNING.push.maxStrength *
             (1 - distance / GAME_TUNING.push.falloffDistance),
         ) * momentumMultiplier;
-      const impact = clamp(strength / GAME_TUNING.push.maxStrength, 0, 1);
+      const impact = clamp(
+        strength / GAME_TUNING.push.maxStrength,
+        0,
+        1,
+      );
+
       target.body.applyImpulseAtPoint(
-        { x: radial.x * strength, y: GAME_TUNING.push.verticalHitImpulse, z: radial.z * strength },
-        { x: p.x, y: p.y + 0.55, z: p.z },
+        {
+          x: radial.x * strength,
+          y: GAME_TUNING.push.verticalHitImpulse,
+          z: radial.z * strength,
+        },
+        { x: p.x, y: p.y + 0.58, z: p.z },
+        true,
+      );
+      target.body.applyTorqueImpulse(
+        {
+          x: radial.z * (0.16 + impact * 0.18),
+          y: slot.botOrbit * (0.08 + impact * 0.08),
+          z: -radial.x * (0.16 + impact * 0.18),
+        },
         true,
       );
       target.balance = clamp(
@@ -1120,79 +1360,8 @@ export class GameSession {
         impact * GAME_TUNING.balance.knockdownImpactMs;
       target.lastHitBy = slot.id;
       target.lastHitAt = now;
-      this.emitEvent("push_hit", now, slot.id, target.id, impact);
+      this.emitEvent("heavy_hit", now, slot.id, target.id, impact);
     }
-  }
-
-  private tryContextToss(
-    slot: Slot,
-    dir: { x: number; z: number },
-    runUp: number,
-    now: number,
-  ) {
-    const origin = slot.body.translation();
-    let target: Slot | undefined;
-    let bestDistance = Number.POSITIVE_INFINITY;
-
-    for (const candidate of this.slots) {
-      if (
-        candidate === slot ||
-        !candidate.alive ||
-        candidate.carriedBy ||
-        candidate.edgeHanging ||
-        candidate.state === "climbing"
-      ) {
-        continue;
-      }
-
-      const vulnerable =
-        candidate.balance <= GAME_TUNING.toss.maxTargetBalance ||
-        candidate.state === "hit" ||
-        candidate.state === "ragdoll" ||
-        candidate.state === "recovering";
-      if (!vulnerable) continue;
-
-      const p = candidate.body.translation();
-      const dx = p.x - origin.x;
-      const dz = p.z - origin.z;
-      const distance = Math.hypot(dx, dz);
-      if (
-        distance >= bestDistance ||
-        distance > GAME_TUNING.toss.range ||
-        distance < 0.001
-      ) {
-        continue;
-      }
-
-      const targetDir = normalize(dx, dz);
-      const facing = dir.x * targetDir.x + dir.z * targetDir.z;
-      if (facing < 0) continue;
-
-      bestDistance = distance;
-      target = candidate;
-    }
-
-    if (!target) return false;
-
-    slot.pushReadyAt =
-      now +
-      GAME_TUNING.toss.cooldownMs *
-        (slot.bot ? slot.botCooldownScale : 1);
-    slot.tossTargetId = target.id;
-    slot.tossStartedAt = now;
-    slot.tossReleaseAt = now + GAME_TUNING.toss.windupMs;
-    slot.tossDirection = { x: dir.x, z: dir.z };
-    slot.tossMomentum = runUp;
-    slot.state = "grabbing";
-    slot.facingYaw = Math.atan2(dir.x, dir.z);
-
-    target.carriedBy = slot.id;
-    target.edgeHanging = false;
-    target.body.setGravityScale(0, true);
-    target.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
-    target.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
-    target.state = "carried";
-    return true;
   }
 
   private updateState(slot: Slot, now: number) {
