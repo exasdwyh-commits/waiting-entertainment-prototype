@@ -38,7 +38,9 @@ Commercial/admin systems remain lower priority than game quality.
 - Rapier rigid-body characters
 - Movement and push impulses
 - Knockdown and upright recovery
-- Simplified ledge catch
+- Ledge catch with timed rescue window
+- Staged physical climb-back instead of instant teleport
+- Failed ledge rescue -> ragdoll fall/recovery
 - Falling elimination
 - Local physics tuning sandbox
 
@@ -78,6 +80,9 @@ Exit condition: real users confirm the physical reactions are fun, readable and 
 - Mobile web controller overlay
 - Virtual joystick
 - Single push action + haptics
+- Authoritative server-driven push cooldown indicator
+- Edge danger ring and dedicated ledge camera
+- Personal procedural audio feedback
 - Zero-install join flow
 
 ## Phase 6 - AI Bots
@@ -111,10 +116,12 @@ Implemented additionally:
 - Animation-state adapter
 - Dynamic spectator framing
 - Impact camera shake
+- Procedural arcade audio (no external audio assets)
+- Ledge spectator callouts and climb-focused camera
 
 Next:
 
-- Stronger hit VFX and sound
+- More advanced hit VFX / particles
 - More advanced camera director
 - More varied Bot personalities
 - Better ledge animation/readability
