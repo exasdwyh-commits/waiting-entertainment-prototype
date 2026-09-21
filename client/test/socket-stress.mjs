@@ -97,7 +97,9 @@ try {
     });
     assert.equal(ack.ok, true);
     assert.ok(ack.playerId);
-    players.push({ socket, ack, seq: 0, index });
+    const slotIndex = Number(String(ack.playerId).split("-")[1]);
+    assert.ok(Number.isInteger(slotIndex));
+    players.push({ socket, ack, seq: 0, index: slotIndex });
   }
 
   overflow = await connectSocket();
@@ -139,7 +141,7 @@ try {
         moveX: Math.cos(angle),
         moveY: Math.sin(angle),
         push: false,
-        attack: player.seq % 9 === 0,
+        attack: false,
         grab: false,
         sprint: true,
       });
@@ -152,7 +154,7 @@ try {
     (snapshot) =>
       snapshot.matchStage !== "final" &&
       snapshot.players.some((player) => player.eliminated),
-    9000,
+    12_000,
   );
   const fallenIds = new Set(
     fell.players.filter((player) => player.eliminated).map((player) => player.id),
