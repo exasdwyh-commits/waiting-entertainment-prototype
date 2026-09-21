@@ -10,10 +10,12 @@ Implemented:
 
 - 8 persistent player slots
 - 1-8 human players with automatic AI fill
-- Server-authoritative Rapier3D physics
+- Single local GameSession with server-authoritative Rapier3D physics
+- 60Hz host physics / 20Hz state snapshots
 - Three.js big-screen renderer
-- Phone virtual joystick + one push button
-- Human disconnect -> AI takeover
+- Phone personal 3D gameplay view + virtual joystick + one push button
+- Human disconnect -> immediate AI takeover
+- Phone refresh / wake / reconnect -> reclaim the same character
 - Circular table arena
 - Push / knockdown / recovery
 - Simplified ledge catch and climb-back
@@ -24,7 +26,9 @@ Implemented:
 - Automatic winner selection and round restart
 - QR join flow
 - Player names on the big screen
+- Dynamic spectator camera + impact shake
 - Two-pass 0.45x slow-motion replay for the final elimination
+- Replaceable local CC0 low-poly GLB character model
 - Local physics tuning sandbox
 - CI build, server runtime smoke test, and Socket end-to-end test
 
@@ -79,8 +83,16 @@ Priority order:
 2. Big-screen spectacle
 3. Three-second learnability
 4. Multiplayer stability
-5. AI fill
-6. Fast creation of additional games
-7. Commercial management systems
+5. Personal phone-screen experience
+6. AI fill
+7. Fast creation of additional games
+8. Commercial management systems
 
 See `docs/RUNNING.md`, `docs/ARCHITECTURE.md`, and `docs/ROADMAP.md`.
+
+
+## Topology boundary
+
+The current product is intentionally **single restaurant / single host / single live game session**.
+
+There is no matchmaking, public room browser, multi-room orchestration, or cloud-authoritative gameplay in the MVP. The phone is a personal game/control screen connected to the restaurant host over LAN.
