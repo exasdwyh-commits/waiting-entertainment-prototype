@@ -91,6 +91,8 @@ Exit condition: real users confirm the physical reactions are fun, readable and 
 - Eliminated controls visually disable until next round
 - Final 10-second tension treatment on phone
 - Personal procedural audio feedback
+- Adaptive phone render resolution based on sustained FPS
+- Hidden `?debug=1` diagnostics: FPS / DPR / LAN RTT / snapshot rate / transport
 - Zero-install join flow
 
 ## Phase 6 - AI Bots
