@@ -27,6 +27,7 @@ export type GameEventType =
   | "push_hit"
   | "punch_hit"
   | "heavy_hit"
+  | "grab"
   | "toss"
   | "big_fall"
   | "edge_save"
