@@ -62,9 +62,24 @@ try {
   assert.ok(initial.players.every((entry) => entry.bot === true));
   assert.ok(
     initial.players.every(
-      (entry) => typeof entry.balance === "number" && entry.balance >= 0 && entry.balance <= 1,
+      (entry) =>
+        typeof entry.balance === "number" &&
+        entry.balance >= 0 &&
+        entry.balance <= 1,
     ),
   );
+  assert.ok(
+    initial.players.every(
+      (entry) =>
+        typeof entry.stamina === "number" &&
+        entry.stamina >= 0 &&
+        entry.stamina <= 1,
+    ),
+  );
+  assert.ok(
+    ["opening", "brawl", "danger", "final"].includes(initial.matchStage),
+  );
+  assert.ok(initial.timeLeftMs > 170_000);
 
   const joinAck = await new Promise((resolve) => {
     player.emit("join", { name: "CI Player" }, resolve);
@@ -86,7 +101,15 @@ try {
   const joinedPlayer = controlled.players.find((entry) => entry.id === joinAck.playerId);
   assert.equal(joinedPlayer.bot, false);
 
-  player.emit("input", { moveX: 1, moveY: 0, push: true, seq: 1 });
+  player.emit("input", {
+    moveX: 1,
+    moveY: 0,
+    push: false,
+    attack: true,
+    grab: false,
+    sprint: true,
+    seq: 1,
+  });
 
   const afterInput = await waitForEvent(
     observer,
@@ -96,6 +119,12 @@ try {
 
   assert.ok(afterInput.serverTimeMs > 0);
   assert.ok(Array.isArray(afterInput.events));
+  const afterInputPlayer = afterInput.players.find(
+    (entry) => entry.id === joinAck.playerId,
+  );
+  assert.ok(afterInputPlayer);
+  assert.equal(typeof afterInputPlayer.sprinting, "boolean");
+  assert.equal(typeof afterInputPlayer.stamina, "number");
 
   player.disconnect();
 
@@ -140,7 +169,7 @@ try {
   assert.equal(humanAgain.bot, false);
 
   console.log(
-    "Socket E2E passed: join -> authoritative input -> Bot takeover -> stable-session recovery.",
+    "Socket E2E passed: join -> staged combat protocol -> authoritative input -> Bot takeover -> stable-session recovery.",
   );
 } finally {
   observer.disconnect();
