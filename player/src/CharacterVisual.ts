@@ -62,7 +62,7 @@ function fitCharacter(root: THREE.Object3D, targetHeight: number) {
   root.updateMatrixWorld(true);
 
   const fitted = new THREE.Box3().setFromObject(root);
-  root.position.y -= fitted.min.y;
+  root.position.y -= (fitted.min.y + fitted.max.y) * 0.5;
 }
 
 function chooseClip(clips: THREE.AnimationClip[], state: PlayerState) {
