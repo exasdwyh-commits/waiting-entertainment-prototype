@@ -340,3 +340,22 @@ body,
   pointer-events: none;
   backdrop-filter: blur(5px);
 }
+
+
+.push.contextual-toss {
+  background: rgba(245,158,11,.94);
+  box-shadow:
+    0 9px 0 rgba(146,64,14,.92),
+    0 0 26px rgba(245,158,11,.38),
+    0 12px 34px rgba(0,0,0,.28);
+}
+
+.push.contextual-toss span {
+  transform: scale(1.04);
+}
+
+.push.action-disabled {
+  pointer-events: none;
+  filter: saturate(.55);
+  opacity: .72;
+}

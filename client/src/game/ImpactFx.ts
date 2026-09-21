@@ -25,16 +25,23 @@ export class ImpactFx {
     importance = 0.5,
   ) {
     const isFall = type === "big_fall" || type === "final_elimination";
+    const isToss = type === "toss";
     const isSave = type === "edge_save";
     const isWin = type === "win";
 
-    const geometry = isFall || isWin
-      ? new THREE.TorusGeometry(isWin ? 0.58 : 0.42, 0.055, 8, 28)
+    const geometry = isFall || isWin || isToss
+      ? new THREE.TorusGeometry(
+          isWin ? 0.58 : isToss ? 0.38 : 0.42,
+          isToss ? 0.065 : 0.055,
+          8,
+          28,
+        )
       : new THREE.TorusGeometry(0.22, 0.045, 7, 20);
 
     const color =
       type === "final_elimination" || isWin ? 0xffd166 :
       isSave ? 0x7dd3fc :
+      isToss ? 0xffa94d :
       type === "push_hit" ? 0xffffff :
       0xfb7185;
 
@@ -48,7 +55,7 @@ export class ImpactFx {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(position[0], Math.max(0.08, position[1]), position[2]);
 
-    if (isFall || isWin || isSave) {
+    if (isFall || isWin || isSave || isToss) {
       mesh.rotation.x = Math.PI / 2;
       mesh.position.y = isWin ? 0.09 : Math.max(0.06, position[1] * 0.25);
     } else {
@@ -64,16 +71,16 @@ export class ImpactFx {
       mesh,
       material,
       startedAt: performance.now(),
-      durationMs: isWin ? 1500 : isFall ? 850 : 430,
+      durationMs: isWin ? 1500 : isFall ? 850 : isToss ? 620 : 430,
       startScale: mesh.scale.x,
-      endScale: isWin ? 3.2 : isFall ? 2.8 : 2.05 + strength * 0.6,
-      rise: isWin ? 0.45 : isFall ? 0.18 : 0.32,
+      endScale: isWin ? 3.2 : isFall ? 2.8 : isToss ? 2.65 : 2.05 + strength * 0.6,
+      rise: isWin ? 0.45 : isFall ? 0.18 : isToss ? 0.42 : 0.32,
       driftX: 0,
       driftZ: 0,
       spin: 0,
     });
 
-    if (type === "push_hit") {
+    if (type === "push_hit" || type === "toss") {
       this.spawnHitShards(position, color, strength);
     }
   }

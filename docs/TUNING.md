@@ -31,6 +31,12 @@ When field testing, report the symptom rather than guessing a numeric fix.
 | 抓边太难 | `ledge.hangWindowMs` increase; `ledge.inwardInputDot` decrease | easier |
 | 爬回桌面太像瞬移 | `ledge.climbDurationMs` | increase moderately |
 | 爬回过程拖沓 | `ledge.climbDurationMs` | decrease |
+| 太容易误触抓人 | `toss.range`, `toss.maxTargetBalance` | decrease |
+| 很难触发抓人 | `toss.range`, `toss.maxTargetBalance` | increase carefully |
+| 抓起过程太慢 | `toss.windupMs` | decrease |
+| 抓起过程看不清 | `toss.windupMs` | increase moderately |
+| 甩人不够爽 | `toss.baseStrength`, `toss.verticalStrength` | increase |
+| 甩人太夸张 | `toss.baseStrength`, `toss.verticalStrength` | decrease |
 
 ## Tuning groups
 
@@ -55,6 +61,21 @@ Controls the one-button attack.
 `maxStrength` and `verticalHitImpulse` affect the victim.
 
 Keep these separate: a satisfying forward burst does not require launching victims excessively.
+
+### Toss
+
+The toss is contextual: it only replaces the normal action when a nearby target is already vulnerable.
+
+Key values:
+
+- `range`: how close the attacker must be;
+- `maxTargetBalance`: how unstable a target must be before becoming throwable;
+- `windupMs`: visible grab/lift time before release;
+- `baseStrength`: horizontal throw strength;
+- `verticalStrength`: upward component;
+- `momentumBonus`: extra reward for entering the grab with speed.
+
+The important design goal is that throwing feels like a payoff for first creating vulnerability, not a universal instant attack.
 
 ### Balance
 

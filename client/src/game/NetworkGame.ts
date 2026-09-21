@@ -187,12 +187,14 @@ export class NetworkGame {
       const impulse =
         event.type === "final_elimination" ? 0.52 :
         event.type === "big_fall" ? 0.32 :
+        event.type === "toss" ? 0.3 + event.importance * 0.18 :
         event.type === "push_hit" ? 0.12 + event.importance * 0.16 :
         0.08;
       this.cameraImpulse = Math.max(this.cameraImpulse, impulse);
       const fovKick =
         event.type === "final_elimination" ? 6 :
         event.type === "big_fall" ? 4 :
+        event.type === "toss" ? 3.5 + event.importance * 2.4 :
         event.type === "push_hit" ? 1.4 + event.importance * 2.2 :
         1.2;
       this.cameraFovKick = Math.max(this.cameraFovKick, fovKick);
@@ -200,6 +202,7 @@ export class NetworkGame {
       const hitStopMs =
         event.type === "final_elimination" ? 88 :
         event.type === "big_fall" ? 62 :
+        event.type === "toss" ? 52 + event.importance * 36 :
         event.type === "push_hit" ? 22 + event.importance * 34 :
         event.type === "edge_save" ? 28 :
         0;
@@ -462,6 +465,8 @@ export class NetworkGame {
         (player.state === "idle" ||
           player.state === "moving" ||
           player.state === "pushing" ||
+          player.state === "grabbing" ||
+          player.state === "throwing" ||
           player.state === "climbing" ||
           player.state === "celebrate") &&
         player.balance >= 0.68 &&
