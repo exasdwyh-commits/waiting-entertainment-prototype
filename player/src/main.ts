@@ -212,10 +212,13 @@ function updateStick(clientX: number, clientY: number) {
   const py = dy * scale;
 
   stick.style.transform = `translate(${px}px, ${py}px)`;
-  moveX = Math.max(-1, Math.min(1, dx / max));
-  // Camera looks toward -Z. Finger-up therefore maps to -Z so the avatar
-  // moves visually toward the top of the phone screen.
-  moveY = Math.max(-1, Math.min(1, dy / max));
+
+  const screenX = Math.max(-1, Math.min(1, dx / max));
+  const screenY = Math.max(-1, Math.min(1, dy / max));
+  const worldInput = personalView.toWorldInput(screenX, screenY);
+
+  moveX = worldInput.x;
+  moveY = worldInput.z;
   sendInput();
 }
 

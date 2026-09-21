@@ -611,15 +611,21 @@ export class GameSession {
       slot.alive = false;
       slot.state = "eliminated";
       slot.body.setEnabled(false);
+
+      let scorerId: string | undefined;
       if (slot.lastHitBy && now - slot.lastHitAt <= 4_000) {
         const scorer = this.slots.find((candidate) => candidate.id === slot.lastHitBy);
-        if (scorer) scorer.score += 1;
+        if (scorer) {
+          scorer.score += 1;
+          scorerId = scorer.id;
+        }
       }
+
       const living = this.slots.filter((candidate) => candidate.alive).length;
       this.emitEvent(
         living <= 1 ? "final_elimination" : "big_fall",
         now,
-        undefined,
+        scorerId,
         slot.id,
         living <= 1 ? 1 : 0.75,
       );
