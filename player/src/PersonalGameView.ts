@@ -257,6 +257,8 @@ export class PersonalGameView {
         (player.state === "idle" ||
           player.state === "moving" ||
           player.state === "pushing" ||
+          player.state === "grabbing" ||
+          player.state === "throwing" ||
           player.state === "climbing" ||
           player.state === "celebrate") &&
         player.balance >= 0.68 &&
