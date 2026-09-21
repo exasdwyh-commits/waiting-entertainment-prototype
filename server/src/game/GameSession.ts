@@ -1,10 +1,10 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import type { Server } from "socket.io";
+import { TABLE_PUSH_GEOMETRY } from "@waiting/shared";
 import type { GameEvent, MatchSnapshot, PlayerInput, PlayerSnapshot, PlayerState } from "@waiting/shared";
 import { GAME_TUNING, validateGameTuning } from "./tuning.js";
 
 const PLAYER_COUNT = 8;
-const ARENA_RADIUS = 6;
 const PHYSICS_HZ = 60;
 const TICK_MS = 1000 / PHYSICS_HZ;
 const SNAPSHOT_INTERVAL_TICKS = 3; // 20Hz network snapshots; physics remains 60Hz.
@@ -165,7 +165,7 @@ export class GameSession {
     );
 
     this.world.createCollider(
-      RAPIER.ColliderDesc.cylinder(0.25, ARENA_RADIUS)
+      RAPIER.ColliderDesc.cylinder(0.25, TABLE_PUSH_GEOMETRY.arenaRadius)
         .setFriction(GAME_TUNING.world.arenaFriction)
         .setRestitution(GAME_TUNING.world.arenaRestitution),
       body,
@@ -241,7 +241,7 @@ export class GameSession {
 
     this.slots.forEach((slot, index) => {
       const angle = (index / PLAYER_COUNT) * Math.PI * 2;
-      const radius = 3.15;
+      const radius = TABLE_PUSH_GEOMETRY.spawnRadius;
       slot.body.setEnabled(true);
       slot.body.setGravityScale(1, true);
       slot.body.setTranslation(
@@ -417,7 +417,7 @@ export class GameSession {
 
     const p = slot.body.translation();
     const radius = Math.hypot(p.x, p.z);
-    const edgeSupport = clamp((ARENA_RADIUS - radius + 0.12) / 0.9, 0.12, 1);
+    const edgeSupport = clamp((TABLE_PUSH_GEOMETRY.arenaRadius - radius + 0.12) / 0.9, 0.12, 1);
     const balanceAssist = 0.22 + slot.balance * 0.78;
     const recoveryBoost = slot.state === "recovering"
       ? GAME_TUNING.balance.uprightRecoveryBoost
@@ -444,7 +444,7 @@ export class GameSession {
   private botDirection(slot: Slot, now: number) {
     const p = slot.body.translation();
     const radius = Math.hypot(p.x, p.z);
-    const edgeDistance = ARENA_RADIUS - radius;
+    const edgeDistance = TABLE_PUSH_GEOMETRY.arenaRadius - radius;
 
     if (edgeDistance < slot.botEdgeCaution) {
       const inward = normalize(-p.x, -p.z);
@@ -479,7 +479,16 @@ export class GameSession {
           (other) => other !== slot && other.botTargetId === candidate.id,
         ).length;
         const targetRadius = Math.hypot(c.x, c.z);
-        const edgeExposure = clamp((targetRadius - 3.8) / 2.2, 0, 1);
+        const edgeExposure = clamp(
+          (targetRadius - TABLE_PUSH_GEOMETRY.dangerStartRadius) /
+            Math.max(
+              0.1,
+              TABLE_PUSH_GEOMETRY.arenaRadius -
+                TABLE_PUSH_GEOMETRY.dangerStartRadius,
+            ),
+          0,
+          1,
+        );
         const crowdPenalty = existingFocus * (candidate.bot ? 1.05 : 1.4);
         const edgeOpportunity = edgeExposure * slot.botEdgeHunter * 1.6;
         const distanceWeight = 1.12 - slot.botAggression * 0.28;
@@ -596,6 +605,22 @@ export class GameSession {
     }
 
     const dir = normalize(dx, dz);
+    const preAttackVelocity = slot.body.linvel();
+    const preAttackSpeed = Math.hypot(
+      preAttackVelocity.x,
+      preAttackVelocity.z,
+    );
+    const runUp = clamp(
+      preAttackSpeed / GAME_TUNING.push.momentumReferenceSpeed,
+      0,
+      1,
+    );
+    const momentumMultiplier =
+      GAME_TUNING.push.momentumMinMultiplier +
+      (GAME_TUNING.push.momentumMaxMultiplier -
+        GAME_TUNING.push.momentumMinMultiplier) *
+        runUp;
+
     slot.facingYaw = Math.atan2(dir.x, dir.z);
     slot.pushReadyAt = now + GAME_TUNING.push.cooldownMs * (slot.bot ? slot.botCooldownScale : 1);
     slot.pushStateUntil = now + GAME_TUNING.push.animationHoldMs;
@@ -623,11 +648,12 @@ export class GameSession {
       const facing = dir.x * radial.x + dir.z * radial.z;
       if (facing < GAME_TUNING.push.minimumFacingDot) continue;
 
-      const strength = Math.max(
-        0.8,
-        GAME_TUNING.push.maxStrength *
-          (1 - distance / GAME_TUNING.push.falloffDistance),
-      );
+      const strength =
+        Math.max(
+          0.8,
+          GAME_TUNING.push.maxStrength *
+            (1 - distance / GAME_TUNING.push.falloffDistance),
+        ) * momentumMultiplier;
       const impact = clamp(strength / GAME_TUNING.push.maxStrength, 0, 1);
       target.body.applyImpulseAtPoint(
         { x: radial.x * strength, y: GAME_TUNING.push.verticalHitImpulse, z: radial.z * strength },
@@ -662,8 +688,8 @@ export class GameSession {
       !slot.edgeHanging &&
       slot.state !== "climbing" &&
       p.y < -0.12 &&
-      radius > ARENA_RADIUS - 0.5 &&
-      radius < ARENA_RADIUS + 1.2
+      radius > TABLE_PUSH_GEOMETRY.arenaRadius - 0.5 &&
+      radius < TABLE_PUSH_GEOMETRY.arenaRadius + 1.2
     ) {
       slot.edgeHanging = true;
       slot.edgeHangUntil = now + GAME_TUNING.ledge.hangWindowMs;
@@ -675,7 +701,7 @@ export class GameSession {
 
       const outward = normalize(p.x, p.z);
       slot.body.setTranslation(
-        { x: outward.x * (ARENA_RADIUS + 0.12), y: -0.35, z: outward.z * (ARENA_RADIUS + 0.12) },
+        { x: outward.x * (TABLE_PUSH_GEOMETRY.arenaRadius + 0.12), y: -0.35, z: outward.z * (TABLE_PUSH_GEOMETRY.arenaRadius + 0.12) },
         true,
       );
     }
