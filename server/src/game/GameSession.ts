@@ -408,6 +408,17 @@ export class GameSession {
     if (this.shouldBroadcast() || this.pendingEvents.length > 0) this.broadcast(now);
   }
 
+  private matchStage(now: number): MatchSnapshot["matchStage"] {
+    if (this.phase === "countdown") return "opening";
+    if (this.phase === "finished") return "final";
+
+    const elapsed = Math.max(0, now - this.startedAt);
+    if (elapsed < GAME_TUNING.match.openingEndMs) return "opening";
+    if (elapsed < GAME_TUNING.match.brawlEndMs) return "brawl";
+    if (elapsed < GAME_TUNING.match.dangerEndMs) return "danger";
+    return "final";
+  }
+
   private currentLazySusanSpeed(now: number) {
     if (this.phase !== "playing") return 0;
 
@@ -419,7 +430,7 @@ export class GameSession {
         GAME_TUNING.environment.lazySusanBaseSpeed) *
         progress;
 
-    if (ROUND_MS - elapsed <= 10_000) {
+    if (this.matchStage(now) === "final") {
       speed *= GAME_TUNING.environment.finalTenSpeedMultiplier;
     }
 
@@ -1501,6 +1512,7 @@ export class GameSession {
       serverTimeMs: now,
       timeLeftMs,
       phase: this.phase,
+      matchStage: this.matchStage(now),
       countdownLeftMs: this.phase === "countdown"
         ? Math.max(0, this.countdownUntil - now)
         : undefined,
@@ -1521,9 +1533,16 @@ export class GameSession {
           rotation: [q.x, q.y, q.z, q.w],
           facingYaw: slot.facingYaw,
           balance: slot.balance,
+          stamina: clamp(
+            slot.stamina / GAME_TUNING.stamina.max,
+            0,
+            1,
+          ),
+          sprinting: slot.sprinting,
           velocity: [v.x, v.y, v.z],
           score: slot.score,
           pushCooldownLeftMs: Math.max(0, slot.pushReadyAt - now),
+          grabTargetId: slot.tossTargetId,
           state: slot.state,
           eliminated: !slot.alive,
           bot: slot.bot,
