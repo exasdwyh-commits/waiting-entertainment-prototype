@@ -29,6 +29,10 @@ type Slot = {
   recoverUntil: number;
   edgeHangUntil: number;
   edgeHanging: boolean;
+  climbStartedAt: number;
+  climbUntil: number;
+  climbFrom?: { x: number; y: number; z: number };
+  climbTo?: { x: number; y: number; z: number };
   score: number;
   lastHitBy?: string;
   lastHitAt: number;
@@ -191,6 +195,8 @@ export class GameSession {
         recoverUntil: 0,
         edgeHangUntil: 0,
         edgeHanging: false,
+        climbStartedAt: 0,
+        climbUntil: 0,
         score: 0,
         lastHitAt: 0,
         botRetargetAt: 0,
@@ -231,6 +237,10 @@ export class GameSession {
       slot.alive = true;
       slot.edgeHanging = false;
       slot.edgeHangUntil = 0;
+      slot.climbStartedAt = 0;
+      slot.climbUntil = 0;
+      slot.climbFrom = undefined;
+      slot.climbTo = undefined;
       slot.knockedUntil = 0;
       slot.recoverUntil = 0;
       slot.pushReadyAt = this.countdownUntil + 800;
@@ -268,6 +278,7 @@ export class GameSession {
       if (!slot.alive) continue;
 
       this.advanceRecovery(slot, now);
+      if (this.advanceClimb(slot, now)) continue;
 
       const direction = slot.bot ? this.botDirection(slot, now) : this.inputDirection(slot);
       this.drive(slot, direction, now);
@@ -323,6 +334,37 @@ export class GameSession {
     if (slot.state === "recovering" && now >= slot.recoverUntil) {
       slot.state = "idle";
     }
+  }
+
+  private advanceClimb(slot: Slot, now: number) {
+    if (slot.state !== "climbing" || !slot.climbFrom || !slot.climbTo) return false;
+
+    const duration = Math.max(1, slot.climbUntil - slot.climbStartedAt);
+    const t = clamp((now - slot.climbStartedAt) / duration, 0, 1);
+    const eased = t * t * (3 - 2 * t);
+    const from = slot.climbFrom;
+    const to = slot.climbTo;
+
+    slot.body.setTranslation(
+      {
+        x: from.x + (to.x - from.x) * eased,
+        y: from.y + (to.y - from.y) * eased,
+        z: from.z + (to.z - from.z) * eased,
+      },
+      true,
+    );
+    slot.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    slot.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+
+    if (t >= 1) {
+      slot.body.setGravityScale(1, true);
+      slot.state = "recovering";
+      slot.recoverUntil = now + 360;
+      slot.climbFrom = undefined;
+      slot.climbTo = undefined;
+    }
+
+    return true;
   }
 
   private applyUprightAssist(slot: Slot, now: number) {
@@ -508,6 +550,7 @@ export class GameSession {
 
     if (
       !slot.edgeHanging &&
+      slot.state !== "climbing" &&
       p.y < -0.12 &&
       radius > ARENA_RADIUS - 0.5 &&
       radius < ARENA_RADIUS + 1.2
@@ -538,14 +581,20 @@ export class GameSession {
         : controllerPointsInward;
 
       if (inwardIntent) {
-        slot.body.setGravityScale(1, true);
-        slot.body.setTranslation(
-          { x: hp.x + inward.x * 1.25, y: 0.95, z: hp.z + inward.z * 1.25 },
-          true,
-        );
-        slot.body.setLinvel({ x: inward.x * 1.4, y: 1.45, z: inward.z * 1.4 }, true);
         slot.edgeHanging = false;
-        slot.state = "recovering";
+        slot.state = "climbing";
+        slot.climbStartedAt = now;
+        slot.climbUntil = now + 680;
+        slot.climbFrom = { x: hp.x, y: hp.y, z: hp.z };
+        slot.climbTo = {
+          x: hp.x + inward.x * 1.45,
+          y: 0.96,
+          z: hp.z + inward.z * 1.45,
+        };
+        slot.facingYaw = Math.atan2(inward.x, inward.z);
+        slot.body.setGravityScale(0, true);
+        slot.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        slot.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
         this.emitEvent("edge_save", now, slot.id, undefined, 0.8);
         return;
       }
@@ -553,6 +602,8 @@ export class GameSession {
       if (now >= slot.edgeHangUntil) {
         slot.body.setGravityScale(1, true);
         slot.edgeHanging = false;
+        slot.state = "ragdoll";
+        slot.knockedUntil = now + 420;
       }
     }
 
@@ -626,6 +677,7 @@ export class GameSession {
           facingYaw: slot.facingYaw,
           velocity: [v.x, v.y, v.z],
           score: slot.score,
+          pushCooldownLeftMs: Math.max(0, slot.pushReadyAt - now),
           state: slot.state,
           eliminated: !slot.alive,
           bot: slot.bot,
