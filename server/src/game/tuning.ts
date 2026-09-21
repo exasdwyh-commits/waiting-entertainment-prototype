@@ -5,6 +5,8 @@ export const GAME_TUNING = {
     brawlEndMs: 135_000,
     dangerEndMs: 165_000,
     preFinalRespawnMs: 2_000,
+    respawnProtectionMs: 1_100,
+    respawnCandidateCount: 16,
     resultMs: 8_000,
   },
 
@@ -146,6 +148,14 @@ export function validateGameTuning() {
   requireFinitePositive(
     "match.preFinalRespawnMs",
     GAME_TUNING.match.preFinalRespawnMs,
+  );
+  requireFinitePositive(
+    "match.respawnProtectionMs",
+    GAME_TUNING.match.respawnProtectionMs,
+  );
+  requireFinitePositive(
+    "match.respawnCandidateCount",
+    GAME_TUNING.match.respawnCandidateCount,
   );
   if (
     !(
