@@ -448,7 +448,8 @@ export class GameSession {
         const edgeExposure = clamp((targetRadius - 3.8) / 2.2, 0, 1);
         const crowdPenalty = existingFocus * (candidate.bot ? 1.05 : 1.4);
         const edgeOpportunity = edgeExposure * slot.botEdgeHunter * 1.6;
-        const score = distance + crowdPenalty - edgeOpportunity;
+        const distanceWeight = 1.12 - slot.botAggression * 0.28;
+        const score = distance * distanceWeight + crowdPenalty - edgeOpportunity;
 
         if (score < best) {
           best = score;
@@ -457,7 +458,11 @@ export class GameSession {
       }
 
       slot.botTargetId = target?.id;
-      slot.botRetargetAt = now + 650 + (Number(slot.id.split("-")[1]) % 4) * 130;
+      const personalityDelay = 760 - slot.botAggression * 190;
+      slot.botRetargetAt =
+        now +
+        personalityDelay +
+        (Number(slot.id.split("-")[1]) % 4) * 110;
     }
 
     if (!target) return { x: 0, z: 0 };
