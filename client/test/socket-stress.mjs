@@ -130,16 +130,25 @@ try {
   measuredStartedAt = performance.now();
   snapshotCount = 0;
 
-  // Drive every player radially outward. This deterministically exercises
-  // edge hang -> fall -> pre-Final elimination -> respawn -> protection.
+  // Continuously drive every player away from the live table center.
+  // Using current authoritative positions (rather than original spawn angles)
+  // keeps the fall test deterministic even after collisions / lazy-Susan drift.
   inputTimer = setInterval(() => {
+    if (!latest) return;
+
     for (const player of players) {
-      const angle = (player.index / PLAYER_COUNT) * Math.PI * 2;
+      const state = latest.players.find(
+        (entry) => entry.id === player.ack.playerId,
+      );
+      if (!state || state.eliminated) continue;
+
+      const [x, , z] = state.position;
+      const length = Math.hypot(x, z) || 1;
       player.seq += 1;
       player.socket.emit("input", {
         seq: player.seq,
-        moveX: Math.cos(angle),
-        moveY: Math.sin(angle),
+        moveX: x / length,
+        moveY: z / length,
         push: false,
         attack: false,
         grab: false,
@@ -154,7 +163,7 @@ try {
     (snapshot) =>
       snapshot.matchStage !== "final" &&
       snapshot.players.some((player) => player.eliminated),
-    12_000,
+    18_000,
   );
   const fallenIds = new Set(
     fell.players.filter((player) => player.eliminated).map((player) => player.id),
