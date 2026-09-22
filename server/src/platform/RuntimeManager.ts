@@ -102,10 +102,14 @@ export class RuntimeManager {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
       } catch (error) {
         const entry = this.entry(manifest.id);
-        entry.state = "unhealthy";
-        entry.message =
+        const message =
           "start action failed: " +
           (error instanceof Error ? error.message : String(error));
+        if (entry.managed) await this.stop(manifest.id);
+        const failed = this.entry(manifest.id);
+        failed.state = "failed";
+        failed.checkedAt = Date.now();
+        failed.message = message;
         throw new Error("runtime-start-action-failed");
       }
     }
@@ -190,6 +194,7 @@ export class RuntimeManager {
       });
     } catch (error) {
       entry.state = "failed";
+      entry.checkedAt = Date.now();
       entry.message = error instanceof Error ? error.message : String(error);
       throw new Error("runtime-start-failed");
     }
@@ -292,13 +297,15 @@ export class RuntimeManager {
       await sleep(HEALTH_POLL_MS);
     }
 
-    entry.state = "unhealthy";
     const tail = entry.logs.slice(-3).join(" | ");
-    entry.message = tail
+    const message = tail
       ? "health timeout · " + tail.slice(-500)
       : "health endpoint did not become ready";
     await this.stop(manifest.id);
-    entry.state = "failed";
+    const failed = this.entry(manifest.id);
+    failed.state = "failed";
+    failed.checkedAt = Date.now();
+    failed.message = message;
     throw new Error("runtime-health-timeout");
   }
 
