@@ -5,6 +5,7 @@ const API = location.protocol + "//" + location.hostname + ":3001/api/platform";
 const root = document.querySelector<HTMLDivElement>("#app")!;
 let snapshot: PlatformSnapshot | null = null;
 let busy = false;
+const runtimeLogText = new Map<string, string>();
 
 function esc(value: unknown): string {
   return String(value ?? "")
@@ -125,6 +126,14 @@ function gameCard(
         ? "runtime-badge runtime-badge--online"
         : "runtime-badge";
 
+  const runtimeTools = game.runtime.kind === "process"
+    ? '<div class="runtime-tools">' +
+        '<button class="secondary" data-runtime-check="' + esc(game.id) + '">检查运行时</button>' +
+        '<button class="ghost" data-runtime-logs="' + esc(game.id) + '">查看日志</button>' +
+      '</div>'
+    : '';
+  const runtimeLog = runtimeLogText.get(game.id);
+
   return '<article class="game-card">' +
     '<div class="game-card__top"><span class="game-type">' + esc(game.category) + '</span>' +
     '<span class="tier tier--' + game.commercial.tier + '">' + game.commercial.tier.toUpperCase() + '</span></div>' +
@@ -134,6 +143,8 @@ function gameCard(
     '<span>' + (game.capabilities.highlights ? "精彩导播" : "基础导播") + '</span></div>' +
     '<div class="' + runtimeClass + '">' + esc(runtimeText(runtime)) + '</div>' +
     (runtime?.message ? '<div class="runtime-message">' + esc(runtime.message) + '</div>' : '') +
+    runtimeTools +
+    (runtimeLog ? '<pre class="runtime-log">' + esc(runtimeLog) + '</pre>' : '') +
     '<button class="primary" data-create-game="' + esc(game.id) + '" ' + (disabled ? "disabled" : "") + '>' + buttonText + '</button>' +
     '</article>';
 }
@@ -208,6 +219,47 @@ function toast(message: string, error = false) {
   window.setTimeout(() => node.classList.remove("toast--show"), 2200);
 }
 
+async function checkRuntime(gameId: string) {
+  try {
+    const body = await api("/runtimes/" + encodeURIComponent(gameId) + "/check", {
+      method: "POST",
+      body: "{}",
+    }) as { runtime: GameRuntimeStatus };
+    if (snapshot) {
+      const next = snapshot.runtimes.filter((runtime) => runtime.gameId !== gameId);
+      next.push(body.runtime);
+      snapshot = { ...snapshot, runtimes: next };
+      render();
+    }
+    toast(runtimeText(body.runtime));
+  } catch (error) {
+    toast(error instanceof Error ? error.message : "运行时检查失败", true);
+  }
+}
+
+async function showRuntimeLogs(gameId: string) {
+  try {
+    const body = await api("/runtimes/" + encodeURIComponent(gameId) + "/logs") as {
+      runtime: GameRuntimeStatus;
+      logs: string[];
+    };
+    runtimeLogText.set(
+      gameId,
+      body.logs.length
+        ? body.logs.slice(-8).join("\n")
+        : "暂无运行日志。运行时尚未由 Hub 启动，或当前没有输出。",
+    );
+    if (snapshot) {
+      const next = snapshot.runtimes.filter((runtime) => runtime.gameId !== gameId);
+      next.push(body.runtime);
+      snapshot = { ...snapshot, runtimes: next };
+    }
+    render();
+  } catch (error) {
+    toast(error instanceof Error ? error.message : "读取运行日志失败", true);
+  }
+}
+
 async function mutate(path: string, body?: unknown) {
   if (busy) return;
   busy = true;
@@ -224,6 +276,18 @@ async function mutate(path: string, body?: unknown) {
 function bindEvents() {
   document.querySelectorAll<HTMLButtonElement>("[data-create-game]").forEach((button) => {
     button.addEventListener("click", () => void mutate("/rounds", { gameId: button.dataset.createGame }));
+  });
+  document.querySelectorAll<HTMLButtonElement>("[data-runtime-check]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const gameId = button.dataset.runtimeCheck;
+      if (gameId) void checkRuntime(gameId);
+    });
+  });
+  document.querySelectorAll<HTMLButtonElement>("[data-runtime-logs]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const gameId = button.dataset.runtimeLogs;
+      if (gameId) void showRuntimeLogs(gameId);
+    });
   });
   document.querySelectorAll<HTMLButtonElement>("[data-round-action]").forEach((button) => {
     button.addEventListener("click", () => void mutate("/rounds/" + button.dataset.roundId + "/" + button.dataset.roundAction));
