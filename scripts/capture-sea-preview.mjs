@@ -14,9 +14,23 @@ try {
     viewport: { width: 1280, height: 720 },
     deviceScaleFactor: 1,
   });
+  const browserErrors = [];
+  display.on("pageerror", (error) => browserErrors.push(String(error)));
   await display.goto(base + "/display", { waitUntil: "domcontentloaded" });
-  await display.waitForSelector("#scene canvas", { timeout: 15_000 });
-  await display.waitForTimeout(2_500);
+  await display.waitForSelector("#scene canvas", {
+    state: "attached",
+    timeout: 15_000,
+  }).catch(() => {
+    throw new Error(
+      "Sea Battle canvas was not mounted. browserErrors=" +
+      JSON.stringify(browserErrors),
+    );
+  });
+  await display.waitForFunction(() => {
+    const canvas = document.querySelector("#scene canvas");
+    return Boolean(canvas && canvas.width > 0 && canvas.height > 0);
+  }, null, { timeout: 15_000 });
+  await display.waitForTimeout(1_500);
 
   const start = await fetch(base + "/api/start", { method: "POST" });
   if (!start.ok) throw new Error("POST /api/start failed: " + start.status);
