@@ -19,6 +19,8 @@ root.innerHTML =
     '<section id="result" class="scene scene--result" hidden><span class="eyebrow">ROUND COMPLETE</span><h1>本轮结束</h1>' +
       '<p>精彩回放 / 排名接口将在导播 SDK 阶段接入</p><div class="result-line"></div></section>' +
     '<div class="corner-brand"><span>WE</span><strong id="mode-label">IDLE_MEDIA</strong></div>' +
+    '<section id="runtime-alert" class="runtime-alert" hidden><span class="runtime-alert__eyebrow">GAME RUNTIME INTERRUPTED</span>' +
+      '<strong id="runtime-alert-title">游戏运行中断</strong><p id="runtime-alert-copy">请联系主持人检查游戏进程。</p></section>' +
     '<aside id="queue-overlay" class="queue-overlay" hidden><span class="bell">●</span><div><small>请准备入座</small>' +
       '<strong id="queue-number">A000</strong><span id="queue-party">2 人桌 · 请前往前台</span></div></aside>' +
     '<div id="offline" class="offline" hidden>Hub 离线 · 正在重连</div>' +
@@ -42,6 +44,9 @@ const queueOverlay = document.querySelector<HTMLElement>("#queue-overlay")!;
 const queueNumber = document.querySelector<HTMLElement>("#queue-number")!;
 const queueParty = document.querySelector<HTMLElement>("#queue-party")!;
 const offline = document.querySelector<HTMLElement>("#offline")!;
+const runtimeAlert = document.querySelector<HTMLElement>("#runtime-alert")!;
+const runtimeAlertTitle = document.querySelector<HTMLElement>("#runtime-alert-title")!;
+const runtimeAlertCopy = document.querySelector<HTMLElement>("#runtime-alert-copy")!;
 
 let lastQrCode = "";
 let lastFrameUrl = "";
@@ -120,7 +125,24 @@ async function refresh() {
     const state = snapshot.broadcast;
     const round = state.round;
     const game = round ? snapshot.games.find((item) => item.id === round.gameId) : undefined;
+    const runtime = game
+      ? snapshot.runtimes.find((item) => item.gameId === game.id)
+      : undefined;
+    const runtimeDegraded =
+      state.mode === "LIVE_GAME" &&
+      game?.runtime.kind === "process" &&
+      runtime?.state !== "running";
+
     setScene(state.mode);
+    runtimeAlert.hidden = !runtimeDegraded;
+    gameFrame.classList.toggle("game-frame--degraded", runtimeDegraded);
+    if (runtimeDegraded) {
+      runtimeAlertTitle.textContent = (game?.name ?? "当前游戏") + " 运行中断";
+      const detail = runtime?.message?.trim();
+      runtimeAlertCopy.textContent = detail
+        ? "请主持人检查运行时：" + detail
+        : "请主持人检查游戏进程，可尝试健康检查或结束本轮。";
+    }
 
     if (round && game) {
       if (state.mode === "RECRUITING") {
