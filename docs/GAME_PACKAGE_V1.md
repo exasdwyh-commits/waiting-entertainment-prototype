@@ -16,8 +16,11 @@ A game is content managed by Waiting Entertainment Hub. It must not own restaura
   "runtime": {
     "kind": "process",
     "healthPath": "/info",
+    "healthProtocol": "pilot-racer/1",
     "command": ["node", "server.mjs"],
-    "workingDirectoryEnv": "PILOT_RACER_DIR"
+    "workingDirectoryEnv": "PILOT_RACER_DIR",
+    "port": 9010,
+    "startPath": "/api/start"
   },
   "entrypoints": {
     "display": "http://{host}:9010/display",
@@ -63,7 +66,7 @@ The big screen is composed by the Hub Broadcast Shell. The game display is embed
 ### 5. Runtime types
 
 - `embedded` — runtime is part of the main application process.
-- `process` — Hub launches and health-checks an external local process.
+- `process` — Hub launches and health-checks an external local process. Process packages should declare a stable local `port`; `healthProtocol` is recommended so the Hub cannot mistake an unrelated service on that port for the game. `startPath` is optional and lets the host trigger the actual match only after the roster is locked.
 
 ### 6. Commercial tier is metadata, not the lock itself
 
@@ -78,6 +81,6 @@ These may be added as optional fields without changing `schemaVersion`:
 - game-specific settings schema
 - content packs / theme packs
 - minimum host hardware profile
-- runtime port allocation hints
+- dynamic runtime port allocation (v1 currently uses a declared local port)
 - update channel
 - custom brand package metadata

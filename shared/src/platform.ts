@@ -40,8 +40,11 @@ export interface GameManifestV1 {
   runtime: {
     kind: RuntimeKind;
     healthPath: string;
+    healthProtocol?: string;
     command?: string[];
     workingDirectoryEnv?: string;
+    port?: number;
+    startPath?: string;
   };
   entrypoints: {
     display: string;
@@ -63,6 +66,28 @@ export interface GameManifestV1 {
     tier: GameTier;
     entitlements: string[];
   };
+}
+
+export type RuntimeState =
+  | "embedded"
+  | "not-configured"
+  | "stopped"
+  | "starting"
+  | "running"
+  | "unhealthy"
+  | "failed";
+
+export interface GameRuntimeStatus {
+  gameId: string;
+  kind: RuntimeKind;
+  state: RuntimeState;
+  configured: boolean;
+  managed: boolean;
+  port?: number;
+  pid?: number;
+  startedAt?: number;
+  checkedAt: number;
+  message?: string;
 }
 
 export interface StoreLicense {
@@ -118,6 +143,7 @@ export interface BroadcastState {
 export interface PlatformSnapshot {
   license: StoreLicense;
   games: GameManifestV1[];
+  runtimes: GameRuntimeStatus[];
   rounds: EntertainmentRound[];
   queue: QueueTicket[];
   broadcast: BroadcastState;

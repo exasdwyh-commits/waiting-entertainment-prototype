@@ -49,6 +49,15 @@ function errorStatus(message: string): number {
     return 404;
   }
   if (message === "game-not-entitled") return 403;
+  if (
+    message === "runtime-not-configured" ||
+    message === "runtime-start-failed" ||
+    message === "runtime-health-timeout" ||
+    message === "runtime-start-action-failed" ||
+    message === "runtime-port-missing"
+  ) {
+    return 503;
+  }
   if (message === "round-full" || message === "active-round-exists") return 409;
   if (
     message.startsWith("invalid-round-transition") ||
@@ -91,9 +100,11 @@ export async function handlePlatformRequest(
     }
 
     if (req.method === "GET" && url.pathname === "/api/platform/games") {
+      const games = hub.registry.listAuthorized();
       json(res, 200, {
         license: hub.license,
-        games: hub.registry.listAuthorized(),
+        games,
+        runtimes: hub.runtime.list(games),
         allGames: hub.registry.listAll(),
       });
       return true;
@@ -136,11 +147,37 @@ export async function handlePlatformRequest(
         finish: "finished",
         cancel: "cancelled",
       };
-      const round = hub.transitionRound(roundMatch[1], transitions[roundMatch[2]]);
-      if (roundMatch[2] === "start") {
-        await hooks.onRoundStarted?.(round);
+      const roundId = roundMatch[1];
+      const action = roundMatch[2];
+      const current = hub.rounds.get(roundId);
+      if (!current) throw new Error("round-not-found");
+      const manifest = hub.registry.requireAuthorized(current.gameId);
+
+      if (action === "lock" && manifest.runtime.kind === "process") {
+        if (current.status !== "recruiting") {
+          throw new Error(`invalid-round-transition:${current.status}->locked`);
+        }
+        await hub.runtime.prepareRound(manifest, current);
       }
-      json(res, 200, { round });
+
+      if (action === "start") {
+        if (current.status !== "locked") {
+          throw new Error(`invalid-round-transition:${current.status}->running`);
+        }
+        await hub.runtime.beginRound(manifest, current);
+        await hooks.onRoundStarted?.(current);
+      }
+
+      const round = hub.transitionRound(roundId, transitions[action]);
+
+      if (action === "finish" || action === "cancel") {
+        await hub.runtime.endRound(manifest);
+      }
+
+      json(res, 200, {
+        round,
+        runtime: hub.runtime.status(manifest),
+      });
       return true;
     }
 
@@ -174,6 +211,24 @@ export async function handlePlatformRequest(
       };
       json(res, 200, {
         ticket: hub.transitionQueue(queueMatch[1], transitions[queueMatch[2]]),
+      });
+      return true;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/platform/runtimes") {
+      const games = hub.registry.listAuthorized();
+      json(res, 200, { runtimes: hub.runtime.list(games) });
+      return true;
+    }
+
+    const runtimeLogsMatch = url.pathname.match(
+      /^\/api\/platform\/runtimes\/([^/]+)\/logs$/,
+    );
+    if (req.method === "GET" && runtimeLogsMatch) {
+      const manifest = hub.registry.requireAuthorized(runtimeLogsMatch[1]);
+      json(res, 200, {
+        runtime: hub.runtime.status(manifest),
+        logs: hub.runtime.logs(manifest.id),
       });
       return true;
     }

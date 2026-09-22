@@ -1,4 +1,4 @@
-import type { EntertainmentRound, GameManifestV1, PlatformSnapshot, QueueTicket } from "@waiting/shared";
+import type { EntertainmentRound, GameManifestV1, GameRuntimeStatus, PlatformSnapshot, QueueTicket } from "@waiting/shared";
 import "./style.css";
 
 const API = location.protocol + "//" + location.hostname + ":3001/api/platform";
@@ -93,10 +93,38 @@ function renderRound(round: EntertainmentRound | undefined, games: GameManifestV
     '<div class="actions">' + roundActions(round) + '</div></section>';
 }
 
-function gameCard(game: GameManifestV1, active?: EntertainmentRound): string {
-  const external = game.runtime.kind === "process";
-  const disabled = Boolean(active) || external;
-  const buttonText = external ? "等待 RuntimeManager" : active ? "已有活动场次" : "开放本轮报名";
+function runtimeText(runtime: GameRuntimeStatus | undefined): string {
+  if (!runtime) return "运行状态未知";
+  return {
+    embedded: "内置运行时",
+    "not-configured": "未配置本地游戏目录",
+    stopped: "本地游戏已就绪",
+    starting: "正在启动游戏",
+    running: "游戏进程运行中",
+    unhealthy: "游戏进程异常",
+    failed: "游戏启动失败",
+  }[runtime.state];
+}
+
+function gameCard(
+  game: GameManifestV1,
+  runtime: GameRuntimeStatus | undefined,
+  active?: EntertainmentRound,
+): string {
+  const unavailable = game.runtime.kind === "process" && !runtime?.configured;
+  const disabled = Boolean(active) || unavailable;
+  const buttonText = active
+    ? "已有活动场次"
+    : unavailable
+      ? "未配置游戏目录"
+      : "开放本轮报名";
+  const runtimeClass =
+    runtime?.state === "failed" || runtime?.state === "unhealthy"
+      ? "runtime-badge runtime-badge--error"
+      : runtime?.state === "running" || runtime?.state === "embedded"
+        ? "runtime-badge runtime-badge--online"
+        : "runtime-badge";
+
   return '<article class="game-card">' +
     '<div class="game-card__top"><span class="game-type">' + esc(game.category) + '</span>' +
     '<span class="tier tier--' + game.commercial.tier + '">' + game.commercial.tier.toUpperCase() + '</span></div>' +
@@ -104,6 +132,8 @@ function gameCard(game: GameManifestV1, active?: EntertainmentRound): string {
     '<div class="game-meta"><span>' + game.players.min + '–' + game.players.max + ' 人</span>' +
     '<span>' + (game.capabilities.aiFill ? "AI 补位" : "真人局") + '</span>' +
     '<span>' + (game.capabilities.highlights ? "精彩导播" : "基础导播") + '</span></div>' +
+    '<div class="' + runtimeClass + '">' + esc(runtimeText(runtime)) + '</div>' +
+    (runtime?.message ? '<div class="runtime-message">' + esc(runtime.message) + '</div>' : '') +
     '<button class="primary" data-create-game="' + esc(game.id) + '" ' + (disabled ? "disabled" : "") + '>' + buttonText + '</button>' +
     '</article>';
 }
@@ -148,7 +178,13 @@ function render() {
     '<div class="workspace"><section class="main-column">' + renderRound(active, snapshot.games) +
     '<section class="section-block"><div class="section-title"><div><span class="eyebrow">GAME LIBRARY</span><h2>互动游戏库</h2></div>' +
     '<span class="section-note">授权内容由门店 Entitlements 决定</span></div><div class="game-grid">' +
-    snapshot.games.map((game) => gameCard(game, active)).join("") + '</div></section></section>' +
+    snapshot.games.map((game) =>
+      gameCard(
+        game,
+        snapshot?.runtimes.find((runtime) => runtime.gameId === game.id),
+        active,
+      ),
+    ).join("") + '</div></section></section>' +
     '<aside class="side-column"><section class="queue-panel"><div class="section-title compact"><div>' +
     '<span class="eyebrow">RESTAURANT QUEUE</span><h2>等位叫号</h2></div><span class="queue-count">' + waitingCount + ' 桌等待</span></div>' +
     '<form id="queue-form" class="queue-form"><label><span>人数</span><input name="partySize" type="number" min="1" max="30" value="2" required /></label>' +

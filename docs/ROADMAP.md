@@ -203,7 +203,7 @@ Next:
 
 ## Phase 8 - Waiting Entertainment Hub
 
-**Status: In progress — foundation branch started**
+**Status: In progress — operational shell + external runtime integration implemented**
 
 Extract reusable platform systems while keeping each game's simulation independent:
 
@@ -216,17 +216,32 @@ Extract reusable platform systems while keeping each game's simulation independe
 - Shared session/network conventions where they are genuinely reusable
 - Deployment runtime and local health checks
 
-Foundation implemented on the current Hub branch:
+Implemented:
 
 - Shared platform contracts
 - Entitlement-aware registry
-- In-memory RoundManager
+- Host-created RoundManager with fresh per-round join codes
 - Independent QueueService
-- Broadcast state composition
+- Broadcast state composition + restaurant queue overlay
+- Host Console on `:5175`
+- Broadcast Shell on `:5176`
+- Guest per-round signup on `:5177`
 - Local `/api/platform/*` host APIs
 - Game Package Manifest v1 specification
+- Embedded Table Push King hosted-round gating
+- RuntimeManager for external local game processes
+- Runtime readiness / failure state surfaced in the Host Console
+- Process warmup on roster lock, health protocol verification, start action and managed shutdown
+- Pilot Racer adapter via `PILOT_RACER_DIR`
 
-Next: Host Console UI, Broadcast Shell UI, persistence, RuntimeManager process launch/health checks, and pilot-racer adapter.
+Next:
+
+- Persist queue + store/content settings across Hub restarts
+- Media library / idle attract playlist
+- Game enable/disable/order controls separate from license entitlements
+- Signed per-round admission tokens for external game packages
+- Package discovery from installed manifests instead of only built-in manifests
+- Field validation with real phones, restaurant TV and host workflow.
 
 Candidate games:
 

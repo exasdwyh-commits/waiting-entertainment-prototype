@@ -26,6 +26,10 @@ assert.match(cors.headers.get("access-control-allow-methods") ?? "", /POST/);
 const games = await api("/api/platform/games");
 assert.equal(games.license.plan, "BASE");
 assert.ok(games.games.some((game) => game.id === "table-push-king"));
+assert.ok(games.games.some((game) => game.id === "pilot-racer"));
+const pilotRuntime = games.runtimes.find((runtime) => runtime.gameId === "pilot-racer");
+assert.equal(pilotRuntime.state, "not-configured");
+assert.equal(pilotRuntime.configured, false);
 
 const created = await api("/api/platform/rounds", {
   method: "POST",
@@ -122,4 +126,12 @@ const finished = await api(`/api/platform/rounds/${created.round.id}/finish`, {
 });
 assert.equal(finished.round.status, "finished");
 
-console.log("Platform smoke test passed: CORS, single active round, round admission, independent queue and broadcast composition are healthy.");
+const unconfiguredPilot = await fetch(base + "/api/platform/rounds", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ gameId: "pilot-racer" }),
+});
+assert.equal(unconfiguredPilot.status, 503);
+assert.equal((await unconfiguredPilot.json()).error, "runtime-not-configured");
+
+console.log("Platform smoke test passed: CORS, single active round, round admission, runtime configuration guard, independent queue and broadcast composition are healthy.");
