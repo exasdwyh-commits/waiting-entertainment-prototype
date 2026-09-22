@@ -120,6 +120,19 @@ button:disabled { cursor: not-allowed; opacity: .38; }
 .runtime-message {
   min-height: 28px; margin: -4px 0 10px; color: #697689; font-size: 10px; line-height: 1.4;
 }
+.runtime-tools {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 0 0 10px;
+}
+.runtime-tools button {
+  padding: 8px 9px; font-size: 10px;
+}
+.runtime-log {
+  max-height: 130px; margin: 0 0 10px; padding: 10px;
+  overflow: auto; white-space: pre-wrap; word-break: break-word;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: #080c12; color: #98a8bb;
+  font: 10px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
 .queue-form { display: grid; grid-template-columns: 80px 1fr auto; gap: 8px; margin-bottom: 15px; align-items: end; }
 .queue-form label span { display: block; margin-bottom: 5px; color: var(--muted); font-size: 10px; }
 .queue-form input {
