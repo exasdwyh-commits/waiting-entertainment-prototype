@@ -315,7 +315,7 @@ test("leader bounty creates a comeback target and streak bonuses reward consecut
   assert.equal(leader.alive, false);
   assert.equal(attacker.bountyKills, 1);
   assert.equal(attacker.killStreak, 1);
-  assert.equal(attacker.score, 18, "10 sink + 6 bounty added to prior score");
+  assert.equal(attacker.score, 20, "hit + sink + bounty are all authoritative score");
   assert.ok(state.events.some((event) => event.type === "bounty_sink"));
 
   secondVictim.hp = 5;
