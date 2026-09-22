@@ -138,6 +138,31 @@ export class GameSession {
     };
   }
 
+  debugForceFall(socketId: string) {
+    const slot = this.slots.find(
+      (candidate) => candidate.socketId === socketId && candidate.alive,
+    );
+    if (!slot) return false;
+
+    if (slot.tossTargetId) {
+      const carried = this.slots.find(
+        (candidate) =>
+          candidate.id === slot.tossTargetId &&
+          candidate.carriedBy === slot.id,
+      );
+      if (carried) this.dropTossTarget(slot, carried, Date.now());
+      else this.clearToss(slot);
+    }
+
+    const p = slot.body.translation();
+    slot.edgeHanging = false;
+    slot.state = "ragdoll";
+    slot.body.setGravityScale(1, true);
+    slot.body.setTranslation({ x: p.x, y: -3.1, z: p.z }, true);
+    slot.body.setLinvel({ x: 0, y: -1, z: 0 }, true);
+    return true;
+  }
+
   leave(socketId: string) {
     const slot = this.slots.find((candidate) => candidate.socketId === socketId);
     if (!slot) return;
