@@ -2,13 +2,25 @@ import { createServer } from "node:http";
 import { Server } from "socket.io";
 import type { PlayerInput } from "@waiting/shared";
 import { GameSession } from "./game/GameSession.js";
+import { PlatformHub } from "./platform/PlatformHub.js";
+import { handlePlatformRequest } from "./platform/httpApi.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
+const platform = new PlatformHub();
 
-const httpServer = createServer((req, res) => {
+const httpServer = createServer(async (req, res) => {
+  if (await handlePlatformRequest(req, res, platform)) return;
+
   if (req.url === "/health") {
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ ok: true, mode: "authoritative", topology: "single-local-session" }));
+    res.end(
+      JSON.stringify({
+        ok: true,
+        mode: "authoritative",
+        topology: "single-local-session",
+        platform: "hub-foundation",
+      }),
+    );
     return;
   }
 

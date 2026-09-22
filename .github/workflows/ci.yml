@@ -16,7 +16,7 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run build
-      - name: Smoke and ten-client combat stress
+      - name: Smoke, platform, and ten-client combat stress
         run: |
           start_server () {
             LOG_FILE="$1"
@@ -41,6 +41,7 @@ jobs:
 
           start_server /tmp/waiting-server-smoke.log node server/dist/index.js
           node client/test/socket-smoke.mjs
+          node client/test/platform-smoke.mjs
           kill "$SERVER_PID" 2>/dev/null || true
           wait "$SERVER_PID" 2>/dev/null || true
           sleep 0.5
