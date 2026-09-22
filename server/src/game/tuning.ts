@@ -113,6 +113,43 @@ export const GAME_TUNING = {
     wakeProtectionMs: 620,
   },
 
+  weapons: {
+    pickupRange: 1.35,
+    pickupFacingDot: -0.18,
+    respawnMs: 6_500,
+    firstSpawnDelayMs: 22_000,
+    pan: {
+      staminaCost: 0.1,
+      cooldownMs: 620,
+      animationHoldMs: 290,
+      hitRange: 1.48,
+      strength: 2.7,
+      verticalHitImpulse: 0.34,
+      balanceLoss: 0.34,
+      koDamage: 0.23,
+    },
+    spatula: {
+      staminaCost: 0.16,
+      cooldownMs: 920,
+      animationHoldMs: 390,
+      hitRange: 1.82,
+      strength: 3.65,
+      verticalHitImpulse: 0.55,
+      balanceLoss: 0.5,
+      koDamage: 0.35,
+    },
+    plate: {
+      staminaCost: 0.08,
+      throwSpeed: 8.2,
+      throwLift: 0.32,
+      hitRadius: 0.72,
+      strength: 2.45,
+      balanceLoss: 0.3,
+      koDamage: 0.18,
+      lifetimeMs: 2_200,
+    },
+  },
+
   punch: {
     cooldownMs: 360,
     animationHoldMs: 210,
@@ -307,6 +344,25 @@ export function validateGameTuning() {
   requireFinitePositive("ko.maxDurationMs", GAME_TUNING.ko.maxDurationMs);
   requireFinitePositive("ko.wakeDurationMs", GAME_TUNING.ko.wakeDurationMs);
   requireFinitePositive("ko.wakeProtectionMs", GAME_TUNING.ko.wakeProtectionMs);
+
+  requireFinitePositive("weapons.pickupRange", GAME_TUNING.weapons.pickupRange);
+  requireFinitePositive("weapons.respawnMs", GAME_TUNING.weapons.respawnMs);
+  requireFinitePositive("weapons.firstSpawnDelayMs", GAME_TUNING.weapons.firstSpawnDelayMs);
+  requireUnitRange("weapons.pan.staminaCost", GAME_TUNING.weapons.pan.staminaCost);
+  requireFinitePositive("weapons.pan.cooldownMs", GAME_TUNING.weapons.pan.cooldownMs);
+  requireFinitePositive("weapons.pan.hitRange", GAME_TUNING.weapons.pan.hitRange);
+  requireUnitRange("weapons.pan.balanceLoss", GAME_TUNING.weapons.pan.balanceLoss);
+  requireUnitRange("weapons.pan.koDamage", GAME_TUNING.weapons.pan.koDamage);
+  requireUnitRange("weapons.spatula.staminaCost", GAME_TUNING.weapons.spatula.staminaCost);
+  requireFinitePositive("weapons.spatula.cooldownMs", GAME_TUNING.weapons.spatula.cooldownMs);
+  requireFinitePositive("weapons.spatula.hitRange", GAME_TUNING.weapons.spatula.hitRange);
+  requireUnitRange("weapons.spatula.balanceLoss", GAME_TUNING.weapons.spatula.balanceLoss);
+  requireUnitRange("weapons.spatula.koDamage", GAME_TUNING.weapons.spatula.koDamage);
+  requireUnitRange("weapons.plate.staminaCost", GAME_TUNING.weapons.plate.staminaCost);
+  requireFinitePositive("weapons.plate.throwSpeed", GAME_TUNING.weapons.plate.throwSpeed);
+  requireFinitePositive("weapons.plate.hitRadius", GAME_TUNING.weapons.plate.hitRadius);
+  requireUnitRange("weapons.plate.balanceLoss", GAME_TUNING.weapons.plate.balanceLoss);
+  requireUnitRange("weapons.plate.koDamage", GAME_TUNING.weapons.plate.koDamage);
 
   requireFinitePositive("punch.cooldownMs", GAME_TUNING.punch.cooldownMs);
   requireFinitePositive("punch.animationHoldMs", GAME_TUNING.punch.animationHoldMs);
