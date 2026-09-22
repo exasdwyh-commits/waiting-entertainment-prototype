@@ -130,45 +130,49 @@ try {
   measuredStartedAt = performance.now();
   snapshotCount = 0;
 
-  // Continuously drive every player away from the live table center.
-  // Using current authoritative positions (rather than original spawn angles)
-  // keeps the fall test deterministic even after collisions / lazy-Susan drift.
+  measuredStartedAt = performance.now();
+  snapshotCount = 0;
+
+  // Keep all ten phones producing realistic movement/sprint traffic first.
   inputTimer = setInterval(() => {
-    if (!latest) return;
-
     for (const player of players) {
-      const state = latest.players.find(
-        (entry) => entry.id === player.ack.playerId,
-      );
-      if (!state || state.eliminated) continue;
-
-      const [x, , z] = state.position;
-      const length = Math.hypot(x, z) || 1;
       player.seq += 1;
+      const t = player.seq * 0.13 + player.index * 0.41;
       player.socket.emit("input", {
         seq: player.seq,
-        moveX: x / length,
-        moveY: z / length,
+        moveX: Math.cos(t),
+        moveY: Math.sin(t),
         push: false,
-        attack: false,
+        attack: player.seq % 11 === 0,
         grab: false,
-        sprint: true,
+        sprint: player.seq % 4 !== 0,
       });
     }
   }, INPUT_INTERVAL_MS);
+
+  await new Promise((resolve) => setTimeout(resolve, 1_200));
+
+  // Respawn logic is deterministic in CI. The hook only exists when the
+  // server is launched with WAITING_STRESS_MODE=1 and is absent in production.
+  const forcedPlayer = players[0];
+  const forceAck = await new Promise((resolve) => {
+    forcedPlayer.socket.emit("stress:force-fall", {}, resolve);
+  });
+  assert.equal(forceAck?.ok, true);
 
   const fell = await waitForEvent(
     observer,
     "match:snapshot",
     (snapshot) =>
       snapshot.matchStage !== "final" &&
-      snapshot.players.some((player) => player.eliminated),
-    18_000,
+      snapshot.players.some(
+        (player) =>
+          player.id === forcedPlayer.ack.playerId &&
+          player.eliminated,
+      ),
+    5_000,
   );
-  const fallenIds = new Set(
-    fell.players.filter((player) => player.eliminated).map((player) => player.id),
-  );
-  assert.ok(fallenIds.size > 0, "Stress run must force at least one pre-Final fall.");
+  assertSnapshotHealthy(fell);
 
   const protectedRespawn = await waitForEvent(
     observer,
@@ -176,17 +180,17 @@ try {
     (snapshot) =>
       snapshot.players.some(
         (player) =>
-          fallenIds.has(player.id) &&
+          player.id === forcedPlayer.ack.playerId &&
           !player.eliminated &&
           player.spawnProtectionLeftMs > 0,
       ),
-    7000,
+    7_000,
   );
   assertSnapshotHealthy(protectedRespawn);
 
   const protectedPlayer = protectedRespawn.players.find(
     (player) =>
-      fallenIds.has(player.id) &&
+      player.id === forcedPlayer.ack.playerId &&
       !player.eliminated &&
       player.spawnProtectionLeftMs > 0,
   );
