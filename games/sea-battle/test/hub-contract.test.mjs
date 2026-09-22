@@ -1,0 +1,31 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const app = readFileSync(new URL("../public/app.mjs", import.meta.url), "utf8");
+const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
+const manifest = JSON.parse(readFileSync(new URL("../game-package.json", import.meta.url), "utf8"));
+
+test("Sea Battle package follows Hub process contract", () => {
+  assert.equal(manifest.runtime.kind, "process");
+  assert.equal(manifest.runtime.healthProtocol, "sea-battle/1");
+  assert.equal(manifest.runtime.workingDirectoryEnv, "SEA_BATTLE_DIR");
+  assert.equal(manifest.runtime.port, 9020);
+  assert.equal(manifest.runtime.startPath, "/api/start");
+  assert.deepEqual(manifest.commercial.entitlements, ["game:sea-battle"]);
+});
+
+test("Hub-admitted guests autojoin without a duplicate nickname screen", () => {
+  assert.match(app, /query\.get\("hub"\) === "1"/);
+  assert.match(app, /query\.get\("name"\)/);
+  assert.match(app, /socket\.emit\("join", \{ token, name: hubName \}\)/);
+  assert.match(css, /body\.hub-admission #join-card\{display:none\}/);
+  assert.match(css, /body\.hub-mode #display-tools\{display:none\}/);
+});
+
+test("managed round shutdown returns phones to the Hub round page", () => {
+  assert.match(app, /returnToHubWhenRoundEnds/);
+  assert.match(app, /:3001\/api\/platform/);
+  assert.match(app, /:5177\/join\//);
+  assert.match(app, /finished", "cancelled", "expired"/);
+});
