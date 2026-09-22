@@ -334,6 +334,21 @@ broadsideTargetRing.position.y = 0.08;
 broadsideTargetRing.visible = false;
 scene.add(broadsideTargetRing);
 
+const bountyRing = new THREE.Mesh(
+  new THREE.RingGeometry(2.0, 2.5, 42),
+  new THREE.MeshBasicMaterial({
+    color: "#ffe36e",
+    transparent: true,
+    opacity: 0.9,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  }),
+);
+bountyRing.rotation.x = -Math.PI / 2;
+bountyRing.position.y = 0.1;
+bountyRing.visible = false;
+scene.add(bountyRing);
+
 let state = null;
 let myId = null;
 let token = "";
@@ -550,7 +565,10 @@ function updateUi() {
     const boat = state.boats[state.order[position]];
     const li = document.createElement("li");
     li.classList.toggle("me", boat.id === myId);
-    li.innerHTML = `<b>${String(position + 1).padStart(2, "0")}</b><span>${boat.name}<small> · Lv.${boat.level}</small></span><strong>${boat.score}</strong>`;
+    const bounty = boat.id === state.bountyId;
+    const streak = boat.killStreak > 1 ? ` · 连沉×${boat.killStreak}` : "";
+    li.classList.toggle("bounty", bounty);
+    li.innerHTML = `<b>${bounty ? "♛" : String(position + 1).padStart(2, "0")}</b><span>${boat.name}<small> · Lv.${boat.level}${streak}</small></span><strong>${boat.score}</strong>`;
     ranks.append(li);
   }
 
@@ -589,6 +607,20 @@ function updateUi() {
   $("player-name").textContent = me.name;
   $("level").textContent = `LV.${me.level}`;
   $("score").textContent = `${me.score} PTS`;
+  const bountyBoat = Number.isInteger(state.bountyId) ? state.boats[state.bountyId] : null;
+  const bonus = $("combat-bonus");
+  if (bonus) {
+    if (state.bountyId === me.id) {
+      bonus.textContent = "♛ 悬赏旗舰 · 击沉你可获 +6";
+      bonus.classList.add("hot");
+    } else if (bountyBoat) {
+      bonus.textContent = `🎯 悬赏：${bountyBoat.name} +6${me.killStreak > 1 ? ` · 连沉×${me.killStreak}` : ""}`;
+      bonus.classList.remove("hot");
+    } else {
+      bonus.textContent = me.killStreak > 1 ? `🔥 连沉×${me.killStreak}` : "领先舰达到 8 分后进入悬赏";
+      bonus.classList.remove("hot");
+    }
+  }
   $("hp-value").textContent = `${Math.max(0, Math.round(me.hp))}/${Math.round(me.maxHp)}`;
   $("energy-value").textContent = `${Math.round(me.energy)}/${Math.round(me.maxEnergy)}`;
   $("xp-value").textContent = `${me.xp}/${me.nextLevelXp}`;
@@ -698,6 +730,17 @@ function animate(now) {
     }
 
     syncProjectiles();
+
+    const bountyBoat = Number.isInteger(state.bountyId) ? state.boats[state.bountyId] : null;
+    if (bountyBoat?.alive) {
+      bountyRing.visible = true;
+      bountyRing.position.set(bountyBoat.x, 0.1, bountyBoat.z);
+      const pulse = 1 + Math.sin(now * 0.008) * 0.08;
+      bountyRing.scale.setScalar((1 + bountyBoat.radius * 0.12) * pulse);
+      bountyRing.material.opacity = 0.65 + Math.sin(now * 0.01) * 0.2;
+    } else {
+      bountyRing.visible = false;
+    }
 
     if (state.monster?.alive) {
       monster.visible = true;

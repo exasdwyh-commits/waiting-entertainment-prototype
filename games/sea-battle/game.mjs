@@ -133,6 +133,9 @@ export function newBoat(id) {
     lastFireSide: 0,
     lastCollisionAt: -Infinity,
     lastStormAt: -Infinity,
+    killStreak: 0,
+    bestStreak: 0,
+    bountyKills: 0,
   };
 }
 
@@ -419,23 +422,53 @@ function fireBroadside(state, boat) {
   return true;
 }
 
+export function currentBountyId(state) {
+  if (state.phase !== "racing") return null;
+  const order = ranking(state).filter((boat) => boat.alive);
+  const leader = order[0];
+  if (!leader || leader.score < 8) return null;
+  return leader.id;
+}
+
 function sinkBoat(state, victim, killerId) {
   if (!victim.alive) return;
+  const bountyId = currentBountyId(state);
   victim.alive = false;
   victim.deaths += 1;
   victim.speed = 0;
   victim.respawnAt = state.time + RESPAWN_SECONDS;
   victim.choices = [];
   const killer = Number.isInteger(killerId) ? state.boats[killerId] : null;
+  victim.killStreak = 0;
+  let bountyBonus = 0;
+  let streakBonus = 0;
   if (killer && killer.id !== victim.id) {
     killer.kills += 1;
-    killer.score += 10;
+    killer.killStreak += 1;
+    killer.bestStreak = Math.max(killer.bestStreak, killer.killStreak);
+    streakBonus = Math.min(4, Math.max(0, killer.killStreak - 1) * 2);
+    if (victim.id === bountyId) {
+      bountyBonus = 6;
+      killer.bountyKills += 1;
+    }
+    killer.score += 10 + streakBonus + bountyBonus;
     grantXp(state, killer, 1);
   }
-  emit(state, "sink", victim.id,
-    killer ? `${killer.name} 击沉 ${victim.name}` : `${victim.name} 沉没`,
-    4,
-    { killerId: killer?.id ?? null },
+  const extras = [
+    bountyBonus ? "悬赏 +6" : "",
+    streakBonus ? `连沉 +${streakBonus}` : "",
+  ].filter(Boolean).join(" · ");
+  emit(state, bountyBonus ? "bounty_sink" : "sink", victim.id,
+    killer
+      ? `${killer.name} 击沉 ${victim.name}${extras ? ` · ${extras}` : ""}`
+      : `${victim.name} 沉没`,
+    bountyBonus ? 5 : 4,
+    {
+      killerId: killer?.id ?? null,
+      bountyBonus,
+      streakBonus,
+      killStreak: killer?.killStreak ?? 0,
+    },
   );
 }
 
@@ -786,6 +819,7 @@ export function snapshot(state) {
     stage: state.phase === "racing" ? battleStage(state) : state.stage,
     safeRadius: safeRadius(state),
     winnerId: state.winnerId,
+    bountyId: currentBountyId(state),
     order: ranking(state).map((boat) => boat.id),
     events: state.events.slice(0, 8),
     crates: state.crates.map((crate) => ({
@@ -844,6 +878,9 @@ export function snapshot(state) {
       lastFireSide: boat.lastFireSide,
       lastCollisionAt: boat.lastCollisionAt,
       lastStormAt: boat.lastStormAt,
+      killStreak: boat.killStreak,
+      bestStreak: boat.bestStreak,
+      bountyKills: boat.bountyKills,
     })),
   };
 }

@@ -7,9 +7,11 @@ import {
   applyInput,
   battleStage,
   chooseUpgrade,
+  currentBountyId,
   makeGame,
   ranking,
   safeRadius,
+  snapshot,
   startGame,
   stepGame,
 } from "../game.mjs";
@@ -285,4 +287,68 @@ test("round ends by score after the clock expires", () => {
   assert.equal(state.phase, "result");
   assert.equal(state.winnerId, 3);
   assert.equal(ranking(state)[0].id, 3);
+});
+
+
+test("leader bounty creates a comeback target and streak bonuses reward consecutive sinks", () => {
+  const state = running(121);
+  humanize(state);
+  for (const boat of state.boats) {
+    boat.x = 40 + boat.id;
+    boat.z = 40;
+    boat.hp = boat.maxHp;
+  }
+  const attacker = state.boats[0];
+  const leader = state.boats[1];
+  const secondVictim = state.boats[2];
+  attacker.score = 2;
+  leader.score = 20;
+  leader.hp = 5;
+  assert.equal(currentBountyId(state), leader.id);
+
+  state.projectiles.push({
+    id: ++state.projectileId, ownerId: attacker.id,
+    x: leader.x, z: leader.z, vx: 0, vz: 0,
+    damage: 20, radius: 0.3, bornAt: state.time, life: 2, alive: true,
+  });
+  stepGame(state, 1 / 120);
+  assert.equal(leader.alive, false);
+  assert.equal(attacker.bountyKills, 1);
+  assert.equal(attacker.killStreak, 1);
+  assert.equal(attacker.score, 20, "hit + sink + bounty are all authoritative score");
+  assert.ok(state.events.some((event) => event.type === "bounty_sink"));
+
+  secondVictim.hp = 5;
+  state.projectiles.push({
+    id: ++state.projectileId, ownerId: attacker.id,
+    x: secondVictim.x, z: secondVictim.z, vx: 0, vz: 0,
+    damage: 20, radius: 0.3, bornAt: state.time, life: 2, alive: true,
+  });
+  stepGame(state, 1 / 120);
+  assert.equal(attacker.killStreak, 2);
+  assert.equal(attacker.bestStreak, 2);
+  assert.ok(attacker.score >= 30, "second consecutive sink receives streak bonus");
+
+  attacker.killStreak = 3;
+  attacker.hp = 1;
+  state.projectiles.push({
+    id: ++state.projectileId, ownerId: secondVictim.id,
+    x: attacker.x, z: attacker.z, vx: 0, vz: 0,
+    damage: 20, radius: 0.3, bornAt: state.time, life: 2, alive: true,
+  });
+  secondVictim.alive = true;
+  secondVictim.invulnerableUntil = 0;
+  stepGame(state, 1 / 120);
+  assert.equal(attacker.killStreak, 0, "being sunk resets the current streak");
+});
+
+test("snapshot exposes bounty and streak state for phone and broadcast UI", () => {
+  const state = running(122);
+  humanize(state);
+  state.boats[3].score = 12;
+  state.boats[3].killStreak = 2;
+  const snap = snapshot(state);
+  assert.equal(snap.bountyId, 3);
+  assert.equal(snap.boats[3].killStreak, 2);
+  assert.equal(snap.boats[3].bestStreak, 0);
 });
