@@ -1,4 +1,5 @@
 import * as THREE from "/three/three.module.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 const $ = (id) => document.getElementById(id);
 const query = new URLSearchParams(location.search);
@@ -93,6 +94,10 @@ scene.add(safeZoneRing);
 const waterNormalColor = new THREE.Color("#087f91");
 const waterStormColor = new THREE.Color("#274d67");
 
+const proceduralIslandRoot = new THREE.Group();
+const assetIslandRoot = new THREE.Group();
+scene.add(proceduralIslandRoot, assetIslandRoot);
+
 const islandMat = new THREE.MeshStandardMaterial({ color: "#7f6848", roughness: 0.92 });
 for (let i = 0; i < 13; i++) {
   const a = i / 13 * Math.PI * 2 + 0.16;
@@ -105,11 +110,14 @@ for (let i = 0; i < 13; i++) {
   rock.scale.y = 0.8 + (i % 2) * 0.45;
   rock.castShadow = true;
   rock.receiveShadow = true;
-  scene.add(rock);
+  proceduralIslandRoot.add(rock);
 }
 
 function makeBoat(color) {
   const group = new THREE.Group();
+  const visualRoot = new THREE.Group();
+  const assetRoot = new THREE.Group();
+  group.add(visualRoot, assetRoot);
 
   const hullMat = new THREE.MeshPhysicalMaterial({
     color,
@@ -125,7 +133,7 @@ function makeBoat(color) {
   );
   hull.position.y = 0.55;
   hull.castShadow = true;
-  group.add(hull);
+  visualRoot.add(hull);
 
   const bow = new THREE.Mesh(
     new THREE.ConeGeometry(1.18, 2.1, 4),
@@ -135,7 +143,7 @@ function makeBoat(color) {
   bow.rotation.z = Math.PI / 4;
   bow.position.set(0, 0.55, 3.25);
   bow.castShadow = true;
-  group.add(bow);
+  visualRoot.add(bow);
 
   const deck = new THREE.Mesh(
     new THREE.BoxGeometry(1.35, 0.42, 1.7),
@@ -143,7 +151,7 @@ function makeBoat(color) {
   );
   deck.position.set(0, 1.12, -0.2);
   deck.castShadow = true;
-  group.add(deck);
+  visualRoot.add(deck);
 
   const mast = new THREE.Mesh(
     new THREE.CylinderGeometry(0.07, 0.09, 2.9, 8),
@@ -151,7 +159,7 @@ function makeBoat(color) {
   );
   mast.position.set(0, 2.1, -0.45);
   mast.castShadow = true;
-  group.add(mast);
+  visualRoot.add(mast);
 
   const sail = new THREE.Mesh(
     new THREE.PlaneGeometry(1.8, 1.7),
@@ -163,18 +171,39 @@ function makeBoat(color) {
   );
   sail.position.set(0.08, 2.25, -0.35);
   sail.rotation.y = Math.PI / 2;
-  group.add(sail);
+  visualRoot.add(sail);
 
-  const cannonMat = new THREE.MeshStandardMaterial({ color: "#29323b", roughness: 0.35, metalness: 0.7 });
+  const cannonMat = new THREE.MeshStandardMaterial({
+    color: "#29323b",
+    roughness: 0.35,
+    metalness: 0.7,
+  });
   for (const side of [-1, 1]) {
     for (const z of [-0.9, 0.9]) {
-      const cannon = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 1.0, 8), cannonMat);
+      const cannon = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12, 0.14, 1.0, 8),
+        cannonMat,
+      );
       cannon.rotation.z = Math.PI / 2;
       cannon.position.set(side * 1.4, 0.86, z);
       cannon.castShadow = true;
-      group.add(cannon);
+      visualRoot.add(cannon);
     }
   }
+
+  const identityRing = new THREE.Mesh(
+    new THREE.RingGeometry(1.42, 1.55, 32),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.58,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  identityRing.rotation.x = -Math.PI / 2;
+  identityRing.position.y = 0.04;
+  group.add(identityRing);
 
   const wakeGeometry = new THREE.BufferGeometry();
   wakeGeometry.setAttribute(
@@ -197,8 +226,6 @@ function makeBoat(color) {
   );
   wake.position.y = 0.025;
   group.add(wake);
-  group.userData.wake = wake;
-  group.userData.hullMat = hullMat;
 
   const flashMat = new THREE.MeshBasicMaterial({
     color: "#ffe7a3",
@@ -207,13 +234,21 @@ function makeBoat(color) {
     depthWrite: false,
   });
   for (const side of [-1, 1]) {
-    const flash = new THREE.Mesh(new THREE.SphereGeometry(0.42, 8, 6), flashMat.clone());
+    const flash = new THREE.Mesh(
+      new THREE.SphereGeometry(0.42, 8, 6),
+      flashMat.clone(),
+    );
     flash.position.set(side * 1.85, 0.92, 0);
     flash.visible = false;
     group.add(flash);
     if (side < 0) group.userData.flashLeft = flash;
     else group.userData.flashRight = flash;
   }
+
+  group.userData.wake = wake;
+  group.userData.proceduralVisual = visualRoot;
+  group.userData.assetRoot = assetRoot;
+  group.userData.hitMaterials = [hullMat];
 
   scene.add(group);
   return group;
@@ -258,6 +293,10 @@ const projectileMat = new THREE.MeshStandardMaterial({
 const projectileMeshes = new Map();
 
 const monster = new THREE.Group();
+const monsterProcedural = new THREE.Group();
+const monsterAssetRoot = new THREE.Group();
+monster.add(monsterProcedural, monsterAssetRoot);
+
 const monsterBody = new THREE.Mesh(
   new THREE.SphereGeometry(4.4, 20, 14),
   new THREE.MeshStandardMaterial({
@@ -269,7 +308,7 @@ const monsterBody = new THREE.Mesh(
 );
 monsterBody.position.y = 1.55;
 monsterBody.scale.y = 0.72;
-monster.add(monsterBody);
+monsterProcedural.add(monsterBody);
 
 for (const x of [-1.35, 1.35]) {
   const eye = new THREE.Mesh(
@@ -277,7 +316,7 @@ for (const x of [-1.35, 1.35]) {
     new THREE.MeshBasicMaterial({ color: "#ff5d9b" }),
   );
   eye.position.set(x, 2.35, 3.3);
-  monster.add(eye);
+  monsterProcedural.add(eye);
 }
 
 for (let i = 0; i < 7; i++) {
@@ -290,7 +329,7 @@ for (let i = 0; i < 7; i++) {
   tentacle.rotation.z = 0.55 + (i % 2) * 0.3;
   tentacle.rotation.y = -a;
   tentacle.userData.phase = i;
-  monster.add(tentacle);
+  monsterProcedural.add(tentacle);
 }
 monster.visible = false;
 scene.add(monster);
@@ -348,6 +387,134 @@ bountyRing.rotation.x = -Math.PI / 2;
 bountyRing.position.y = 0.1;
 bountyRing.visible = false;
 scene.add(bountyRing);
+
+const gltfLoader = new GLTFLoader();
+const modelCache = new Map();
+
+function finiteNumber(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function applyAssetTransform(root, config = {}) {
+  const scale = finiteNumber(config.scale, 1);
+  root.scale.setScalar(scale > 0 ? scale : 1);
+  root.rotation.y = finiteNumber(config.rotationY, 0);
+  root.position.set(
+    finiteNumber(config.offsetX ?? config.x, 0),
+    finiteNumber(config.offsetY ?? config.y, 0),
+    finiteNumber(config.offsetZ ?? config.z, 0),
+  );
+}
+
+async function sourceModel(url) {
+  if (!modelCache.has(url)) {
+    modelCache.set(
+      url,
+      gltfLoader.loadAsync(url).then((gltf) => gltf.scene),
+    );
+  }
+  return await modelCache.get(url);
+}
+
+function cloneStaticModel(source) {
+  const root = source.clone(true);
+  const hitMaterials = [];
+  root.traverse((object) => {
+    if (!object.isMesh) return;
+    object.castShadow = true;
+    object.receiveShadow = true;
+    const materials = Array.isArray(object.material)
+      ? object.material
+      : [object.material];
+    const cloned = materials.map((material) => material?.clone?.() ?? material);
+    object.material = Array.isArray(object.material) ? cloned : cloned[0];
+    for (const material of cloned) {
+      if (material?.emissive?.setRGB) hitMaterials.push(material);
+    }
+  });
+  return { root, hitMaterials };
+}
+
+async function hydrateShipAsset(config) {
+  if (!config?.url) return false;
+  const source = await sourceModel(config.url);
+  for (const boat of boatMeshes) {
+    const { root, hitMaterials } = cloneStaticModel(source);
+    applyAssetTransform(root, config);
+    boat.userData.assetRoot.clear();
+    boat.userData.assetRoot.add(root);
+    boat.userData.proceduralVisual.visible = false;
+    boat.userData.hitMaterials = hitMaterials;
+  }
+  return true;
+}
+
+async function hydrateMonsterAsset(config) {
+  if (!config?.url) return false;
+  const source = await sourceModel(config.url);
+  const { root } = cloneStaticModel(source);
+  applyAssetTransform(root, config);
+  monsterAssetRoot.clear();
+  monsterAssetRoot.add(root);
+  monsterProcedural.visible = false;
+  return true;
+}
+
+async function hydrateIslandAssets(configs) {
+  if (!Array.isArray(configs) || configs.length === 0) return false;
+  const loaded = [];
+  for (const config of configs) {
+    if (!config?.url) continue;
+    try {
+      const source = await sourceModel(config.url);
+      const { root } = cloneStaticModel(source);
+      applyAssetTransform(root, config);
+      loaded.push(root);
+    } catch (error) {
+      console.warn("Sea Battle island asset fallback:", config.url, error);
+    }
+  }
+  if (!loaded.length) return false;
+  assetIslandRoot.clear();
+  for (const root of loaded) assetIslandRoot.add(root);
+  proceduralIslandRoot.visible = false;
+  return true;
+}
+
+async function loadVisualAssets() {
+  try {
+    const response = await fetch("/assets/sea-battle-assets.json", {
+      cache: "no-store",
+    });
+    if (!response.ok) return;
+    const manifest = await response.json();
+    if (manifest?.schemaVersion !== 1) {
+      console.warn("Sea Battle asset manifest schema is unsupported.");
+      return;
+    }
+
+    const tasks = [
+      hydrateShipAsset(manifest.ship).catch((error) => {
+        console.warn("Sea Battle ship asset fallback:", error);
+        return false;
+      }),
+      hydrateMonsterAsset(manifest.monster).catch((error) => {
+        console.warn("Sea Battle monster asset fallback:", error);
+        return false;
+      }),
+      hydrateIslandAssets(manifest.islands),
+    ];
+    const [shipLoaded, monsterLoaded, islandsLoaded] = await Promise.all(tasks);
+    document.body.dataset.assetMode =
+      shipLoaded || monsterLoaded || islandsLoaded ? "external" : "procedural";
+  } catch (error) {
+    console.warn("Sea Battle asset manifest fallback:", error);
+    document.body.dataset.assetMode = "procedural";
+  }
+}
+
+void loadVisualAssets();
 
 let state = null;
 let myId = null;
@@ -717,8 +884,10 @@ function animate(now) {
 
       const hitAge = state.time - (boat.lastHitAt ?? -999);
       const hitGlow = hitAge >= 0 && hitAge < 0.24 ? 1 - hitAge / 0.24 : 0;
-      mesh.userData.hullMat.emissive.setRGB(hitGlow * 0.9, hitGlow * 0.14, hitGlow * 0.05);
-      mesh.userData.hullMat.emissiveIntensity = hitGlow * 1.7;
+      for (const material of mesh.userData.hitMaterials ?? []) {
+        material.emissive.setRGB(hitGlow * 0.9, hitGlow * 0.14, hitGlow * 0.05);
+        material.emissiveIntensity = hitGlow * 1.7;
+      }
     }
 
     for (const crate of state.crates) {
@@ -752,7 +921,7 @@ function animate(now) {
       const haloPulse = 1 + Math.sin(now * 0.006) * 0.08;
       monsterHalo.scale.setScalar(haloPulse);
       monsterHalo.material.opacity = 0.42 + Math.sin(now * 0.008) * 0.12;
-      for (const child of monster.children) {
+      for (const child of monsterProcedural.children) {
         if (child.userData.phase !== undefined) {
           child.rotation.x = Math.sin(now * 0.002 + child.userData.phase) * 0.35;
         }
