@@ -7,6 +7,8 @@ export const RESPAWN_SECONDS = 3;
 export const RESPAWN_INVULN = 1.6;
 export const MONSTER_FIRST_AT = 32;
 export const MONSTER_RESPAWN = 38;
+export const CRATE_MAGNET_RADIUS = 5.2;
+export const CRATE_PICKUP_MARGIN = 1.65;
 
 export const UPGRADE_DEFS = {
   speed: { label: "疾风船体", desc: "基础速度与加速上限提高" },
@@ -82,6 +84,8 @@ export function newBoat(id) {
     fireInterval: 1.25,
     cannonCount: 1,
     nextFireAt: 0,
+    broadsideSide: 0,
+    broadsideTargetId: null,
     radius: 1.15,
     energy: 80,
     maxEnergy: 80,
@@ -128,9 +132,16 @@ export function makeGame(options = {}) {
     monster: null,
     nextMonsterAt: MONSTER_FIRST_AT,
     winnerId: null,
+    director: {
+      focusId: 0,
+      kind: "overview",
+      reason: "海域巡游",
+      until: 0,
+    },
   };
   state.boats = Array.from({ length: CAPACITY }, (_, id) => newBoat(id));
   state.crates = Array.from({ length: CRATE_COUNT }, (_, id) => makeCrate(state, id));
+  state.nextMonsterAt = 26 + random(state) * 16;
   return state;
 }
 
@@ -145,6 +156,19 @@ function emit(state, type, boatId, text, priority = 1, data = {}) {
     ...data,
   });
   state.events.length = Math.min(state.events.length, 12);
+
+  if (priority < 3 || state.phase === "demo") return;
+  let focusId = Number.isInteger(boatId) ? boatId : null;
+  let kind = "battle";
+  if (type === "sink" && Number.isInteger(data.killerId)) focusId = data.killerId;
+  if (type.startsWith("monster_")) kind = "monster";
+  if (type === "finish") kind = "result";
+  state.director = {
+    focusId,
+    kind,
+    reason: text,
+    until: state.time + (priority >= 5 ? 5.2 : 3.4),
+  };
 }
 
 export function startGame(state) {
@@ -154,8 +178,9 @@ export function startGame(state) {
   state.remaining = state.seconds;
   state.projectiles = [];
   state.monster = null;
-  state.nextMonsterAt = MONSTER_FIRST_AT;
+  state.nextMonsterAt = state.time + 26 + random(state) * 16;
   state.winnerId = null;
+  state.director = { focusId: 0, kind: "overview", reason: "准备出航", until: state.time + 5 };
   state.events = [];
   for (const boat of state.boats) {
     const keep = {
@@ -303,8 +328,8 @@ function aiInput(state, boat) {
   boat.throttle = boat.energy > 12 || Math.abs(delta) < 0.4;
 }
 
-function fireBroadside(state, boat) {
-  if (state.time < boat.nextFireAt || !boat.alive) return false;
+export function broadsideSolution(state, boat) {
+  if (!boat?.alive) return null;
   const forward = { x: Math.sin(boat.heading), z: Math.cos(boat.heading) };
   const right = { x: Math.cos(boat.heading), z: -Math.sin(boat.heading) };
 
@@ -324,10 +349,22 @@ function fireBroadside(state, boat) {
     const sideDot = nx * right.x + nz * right.z;
     const forwardDot = nx * forward.x + nz * forward.z;
     if (Math.abs(sideDot) < 0.7 || Math.abs(forwardDot) > 0.72) continue;
-    if (!best || distance < best.distance) best = { ...candidate, distance, side: Math.sign(sideDot) || 1 };
+    if (!best || distance < best.distance) {
+      best = {
+        ...candidate,
+        distance,
+        side: Math.sign(sideDot) || 1,
+        targetId: candidate.kind === "boat" ? candidate.target.id : null,
+      };
+    }
   }
+  return best;
+}
 
-  if (!best) return false;
+function fireBroadside(state, boat, solution = broadsideSolution(state, boat)) {
+  if (state.time < boat.nextFireAt || !boat.alive || !solution) return false;
+  const right = { x: Math.cos(boat.heading), z: -Math.sin(boat.heading) };
+  const best = solution;
 
   const rightSign = best.side;
   boat.nextFireAt = state.time + boat.fireInterval;
@@ -510,7 +547,7 @@ function stepProjectiles(state, dt) {
             killer.score += 25;
             grantXp(state, killer, 2);
           }
-          state.nextMonsterAt = state.time + MONSTER_RESPAWN;
+          state.nextMonsterAt = state.time + 30 + random(state) * 20;
           emit(state, "monster_kill", projectile.ownerId,
             `${killer?.name ?? "船队"} 击退深海巨兽！`, 5);
         }
@@ -522,7 +559,7 @@ function stepProjectiles(state, dt) {
 
 function collectCrates(state, boat) {
   for (const crate of state.crates) {
-    if (!crate.active || dist2(boat, crate) > (boat.radius + 1.0) ** 2) continue;
+    if (!crate.active || dist2(boat, crate) > (boat.radius + CRATE_PICKUP_MARGIN) ** 2) continue;
     crate.active = false;
     crate.respawnAt = state.time + 7;
     boat.score += 2;
@@ -533,13 +570,34 @@ function collectCrates(state, boat) {
   }
 }
 
-function stepCrates(state) {
+function stepCrates(state, dt) {
   for (const crate of state.crates) {
-    if (crate.active || state.time < crate.respawnAt) continue;
-    const p = randomPoint(state, 6, WORLD_RADIUS - 8);
-    crate.x = p.x;
-    crate.z = p.z;
-    crate.active = true;
+    if (!crate.active) {
+      if (state.time < crate.respawnAt) continue;
+      const p = randomPoint(state, 6, WORLD_RADIUS - 8);
+      crate.x = p.x;
+      crate.z = p.z;
+      crate.active = true;
+      continue;
+    }
+
+    let nearest = null;
+    let nearestD2 = CRATE_MAGNET_RADIUS * CRATE_MAGNET_RADIUS;
+    for (const boat of state.boats) {
+      if (!boat.alive) continue;
+      const d2 = dist2(crate, boat);
+      if (d2 < nearestD2) {
+        nearestD2 = d2;
+        nearest = boat;
+      }
+    }
+    if (!nearest) continue;
+
+    const distance = Math.sqrt(nearestD2) || 1;
+    const attraction = clamp(1 - distance / CRATE_MAGNET_RADIUS, 0.12, 1);
+    const speed = 3.2 + attraction * 7.5;
+    crate.x += (nearest.x - crate.x) / distance * speed * dt;
+    crate.z += (nearest.z - crate.z) / distance * speed * dt;
   }
 }
 
@@ -581,7 +639,10 @@ function stepBoat(state, boat, dt) {
   }
 
   collectCrates(state, boat);
-  fireBroadside(state, boat);
+  const solution = broadsideSolution(state, boat);
+  boat.broadsideSide = solution?.side ?? 0;
+  boat.broadsideTargetId = solution?.targetId ?? null;
+  fireBroadside(state, boat, solution);
 }
 
 export function resolveBoatCollisions(state) {
@@ -665,7 +726,7 @@ export function stepGame(state, dt) {
       stepBoat(state, boat, dt);
     }
     stepProjectiles(state, dt);
-    stepCrates(state);
+    stepCrates(state, dt);
     return;
   }
 
@@ -677,7 +738,17 @@ export function stepGame(state, dt) {
   resolveBoatCollisions(state);
   stepProjectiles(state, dt);
   stepMonster(state, dt);
-  stepCrates(state);
+  stepCrates(state, dt);
+
+  if (state.time > state.director.until) {
+    const leader = ranking(state).find((boat) => boat.alive) ?? ranking(state)[0];
+    state.director = {
+      focusId: leader?.id ?? null,
+      kind: "overview",
+      reason: leader ? `${leader.name} 暂列海域第一` : "海域巡游",
+      until: state.time + 4.5,
+    };
+  }
 
   if (state.remaining <= 0) {
     const order = ranking(state);
@@ -702,6 +773,7 @@ export function snapshot(state) {
     seconds: state.seconds,
     countdown: state.countdown,
     winnerId: state.winnerId,
+    director: { ...state.director },
     order: ranking(state).map((boat) => boat.id),
     events: state.events.slice(0, 8),
     crates: state.crates.map((crate) => ({
@@ -742,6 +814,9 @@ export function snapshot(state) {
       damage: boat.damage,
       fireInterval: boat.fireInterval,
       cannonCount: boat.cannonCount,
+      nextFireAt: boat.nextFireAt,
+      broadsideSide: boat.broadsideSide,
+      broadsideTargetId: boat.broadsideTargetId,
       radius: boat.radius,
       energy: boat.energy,
       maxEnergy: boat.maxEnergy,
