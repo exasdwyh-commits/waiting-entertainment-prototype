@@ -32,6 +32,8 @@ assert.match(screenCss, /\.queue-overlay \{\s*position: absolute; z-index: 20/);
 assert.match(screen, /shellQueue/);
 assert.match(screen, /refreshIssued/);
 assert.match(screen, /refreshId < refreshApplied/);
+assert.match(screen, /addEventListener\("focus"/);
+assert.match(screen, /visibilitychange/);
 assert.match(client, /shellOwnsQueue/);
 assert.match(preview, /#queue-overlay:not\(\[hidden\]\)/);
 
