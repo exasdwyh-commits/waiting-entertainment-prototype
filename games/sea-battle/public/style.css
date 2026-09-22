@@ -59,3 +59,6 @@ body:not(.display) #display-tools,body:not(.display) #events{display:none}
 body:not(.display) #leaderboard{width:205px}
 @media(max-width:900px){header{top:12px;left:18px;right:18px}.brand b{font-size:17px}.brand span{font-size:8px}.clock strong{font-size:26px}#leaderboard{top:68px;left:18px;width:176px;padding:9px}#ranks li{height:25px;font-size:9px}footer{display:none}#join-card{width:310px;padding:20px;right:4vw}#join-card h1{font-size:27px}#events{display:none}}
 @media(max-height:500px){#leaderboard{max-height:190px;overflow:hidden}.player-card{top:58px}.bars{top:58px}#steer-pad{bottom:20px;height:92px;width:130px}#throttle{bottom:18px;width:92px;height:92px}#upgrade-card{padding:14px}.upgrade-option{padding:12px 9px}}
+
+body.hub-mode #display-tools{display:none}
+body.hub-admission #join-card{display:none}
