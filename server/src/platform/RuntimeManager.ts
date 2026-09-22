@@ -1,5 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type {
   EntertainmentRound,
   GameManifestV1,
@@ -20,7 +22,15 @@ type ProcessConfig = {
   cwd: string;
   command: string[];
   port: number;
+  source: "environment" | "bundled";
 };
+
+type HealthProbe =
+  | { state: "healthy" }
+  | { state: "offline" }
+  | { state: "unexpected"; detail: string };
+
+const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 const HEALTH_TIMEOUT_MS = 10_000;
 const HEALTH_POLL_MS = 180;
@@ -49,6 +59,7 @@ export class RuntimeManager {
         configured: true,
         managed: true,
         checkedAt: 0,
+        configSource: "embedded",
       };
     }
 
@@ -62,6 +73,7 @@ export class RuntimeManager {
       state: configured ? (entry?.state ?? "stopped") : "not-configured",
       configured,
       managed: entry?.managed ?? false,
+      ...(config ? { configSource: config.source, workingDirectory: config.cwd } : {}),
       ...(manifest.runtime.port ? { port: manifest.runtime.port } : {}),
       ...(entry?.child?.pid ? { pid: entry.child.pid } : {}),
       ...(entry?.startedAt ? { startedAt: entry.startedAt } : {}),
@@ -95,12 +107,20 @@ export class RuntimeManager {
       return this.status(manifest);
     }
 
-    const healthy = await this.isHealthy(manifest);
+    const probe = await this.probeHealth(manifest);
     entry.checkedAt = now;
 
-    if (healthy) {
+    if (probe.state === "healthy") {
       entry.state = "running";
       entry.message = undefined;
+      if (!entry.child) entry.managed = false;
+      return this.status(manifest);
+    }
+
+    if (probe.state === "unexpected") {
+      entry.state = "failed";
+      entry.message =
+        `port ${config.port} is occupied by an unexpected service · ${probe.detail}`;
       if (!entry.child) entry.managed = false;
       return this.status(manifest);
     }
@@ -199,13 +219,23 @@ export class RuntimeManager {
     const config = this.processConfig(manifest);
     if (!config) throw new Error("runtime-not-configured");
 
-    if (await this.isHealthy(manifest)) {
+    const initialProbe = await this.probeHealth(manifest);
+    if (initialProbe.state === "healthy") {
       const entry = this.entry(manifest.id);
       entry.state = "running";
       entry.checkedAt = Date.now();
       entry.message = undefined;
       if (!entry.child) entry.managed = false;
       return this.status(manifest);
+    }
+    if (initialProbe.state === "unexpected") {
+      const entry = this.entry(manifest.id);
+      entry.state = "failed";
+      entry.managed = false;
+      entry.checkedAt = Date.now();
+      entry.message =
+        `port ${config.port} is occupied by an unexpected service · ${initialProbe.detail}`;
+      throw new Error("runtime-port-conflict");
     }
 
     const previous = this.entries.get(manifest.id);
@@ -328,19 +358,32 @@ export class RuntimeManager {
   private processConfig(manifest: GameManifestV1): ProcessConfig | undefined {
     if (manifest.runtime.kind !== "process") return undefined;
     const envName = manifest.runtime.workingDirectoryEnv;
-    const cwd = envName ? process.env[envName]?.trim() : "";
+    const envCwd = envName ? process.env[envName]?.trim() : "";
+    const bundledCwd = manifest.runtime.bundledPath
+      ? resolve(PROJECT_ROOT, manifest.runtime.bundledPath)
+      : "";
+    const cwd = envCwd || bundledCwd;
+    const source: ProcessConfig["source"] = envCwd ? "environment" : "bundled";
     const command = manifest.runtime.command;
     const port = manifest.runtime.port;
     if (!cwd || !existsSync(cwd) || !command?.length || !port) return undefined;
-    return { cwd, command, port };
+    return { cwd, command, port, source };
   }
 
   private configurationMessage(manifest: GameManifestV1): string {
     const envName = manifest.runtime.workingDirectoryEnv;
-    if (!envName) return "working directory env is not declared";
-    const cwd = process.env[envName]?.trim();
-    if (!cwd) return `set ${envName} to the local game directory`;
-    if (!existsSync(cwd)) return `${envName} does not point to an existing directory`;
+    const envCwd = envName ? process.env[envName]?.trim() : "";
+    if (envCwd && !existsSync(envCwd)) {
+      return `${envName} does not point to an existing directory`;
+    }
+    if (manifest.runtime.bundledPath) {
+      const bundled = resolve(PROJECT_ROOT, manifest.runtime.bundledPath);
+      if (!existsSync(bundled)) return `bundled package path not found: ${manifest.runtime.bundledPath}`;
+    } else if (envName && !envCwd) {
+      return `set ${envName} to the local game directory`;
+    } else if (!envName) {
+      return "working directory is not declared";
+    }
     if (!manifest.runtime.command?.length) return "runtime command is missing";
     if (!manifest.runtime.port) return "runtime port is missing";
     return "runtime is not configured";
@@ -354,11 +397,20 @@ export class RuntimeManager {
 
     while (Date.now() < deadline) {
       if (entry.state === "failed") throw new Error("runtime-start-failed");
-      if (await this.isHealthy(manifest)) {
+      const probe = await this.probeHealth(manifest);
+      if (probe.state === "healthy") {
         entry.state = "running";
         entry.checkedAt = Date.now();
         entry.message = undefined;
         return;
+      }
+      if (probe.state === "unexpected") {
+        await this.stop(manifest.id);
+        const failed = this.entry(manifest.id);
+        failed.state = "failed";
+        failed.checkedAt = Date.now();
+        failed.message = `health protocol mismatch · ${probe.detail}`;
+        throw new Error("runtime-health-protocol-mismatch");
       }
       await sleep(HEALTH_POLL_MS);
     }
@@ -375,25 +427,37 @@ export class RuntimeManager {
     throw new Error("runtime-health-timeout");
   }
 
-  private async isHealthy(manifest: GameManifestV1): Promise<boolean> {
-    if (manifest.runtime.kind === "embedded") return true;
+  private async probeHealth(manifest: GameManifestV1): Promise<HealthProbe> {
+    if (manifest.runtime.kind === "embedded") return { state: "healthy" };
     const port = manifest.runtime.port;
-    if (!port) return false;
+    if (!port) return { state: "offline" };
 
     try {
       const response = await fetch(
         `http://127.0.0.1:${port}${manifest.runtime.healthPath}`,
         { signal: AbortSignal.timeout(800) },
       );
-      if (!response.ok) return false;
-      if (!manifest.runtime.healthProtocol) return true;
+      if (!response.ok) {
+        return {
+          state: "unexpected",
+          detail: `health endpoint returned HTTP ${response.status}`,
+        };
+      }
+      if (!manifest.runtime.healthProtocol) return { state: "healthy" };
 
       const body = await response.json().catch(() => null) as
         | { protocol?: string }
         | null;
-      return body?.protocol === manifest.runtime.healthProtocol;
+      if (body?.protocol === manifest.runtime.healthProtocol) {
+        return { state: "healthy" };
+      }
+      return {
+        state: "unexpected",
+        detail:
+          `expected protocol ${manifest.runtime.healthProtocol}, got ${body?.protocol ?? "missing protocol"}`,
+      };
     } catch {
-      return false;
+      return { state: "offline" };
     }
   }
 }
