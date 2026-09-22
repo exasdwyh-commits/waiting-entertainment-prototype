@@ -329,6 +329,7 @@ function fireBroadside(state, boat) {
 
   if (!best) return false;
 
+  const rightSign = best.side;
   boat.nextFireAt = state.time + boat.fireInterval;
   boat.lastFireAt = state.time;
   boat.lastFireSide = rightSign;
@@ -337,7 +338,6 @@ function fireBroadside(state, boat) {
   boat.knockX -= right.x * rightSign * (0.35 + boat.cannonCount * 0.08);
   boat.knockZ -= right.z * rightSign * (0.35 + boat.cannonCount * 0.08);
   const count = boat.cannonCount;
-  const rightSign = best.side;
   const baseAngle = boat.heading + rightSign * Math.PI / 2;
 
   for (let i = 0; i < count; i++) {
