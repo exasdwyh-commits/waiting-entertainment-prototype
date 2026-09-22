@@ -17,6 +17,11 @@ async function api(path, options = {}) {
   return body;
 }
 
+const cors = await fetch(base + "/api/platform", { method: "OPTIONS" });
+assert.equal(cors.status, 204);
+assert.equal(cors.headers.get("access-control-allow-origin"), "*");
+assert.match(cors.headers.get("access-control-allow-methods") ?? "", /POST/);
+
 const games = await api("/api/platform/games");
 assert.equal(games.license.plan, "BASE");
 assert.ok(games.games.some((game) => game.id === "table-push-king"));
@@ -28,6 +33,14 @@ const created = await api("/api/platform/rounds", {
 assert.equal(created.round.status, "recruiting");
 assert.equal(created.round.playerLimit, 2);
 assert.match(created.round.code, /^[A-Z0-9]{6}$/);
+
+const duplicateRound = await fetch(base + "/api/platform/rounds", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ gameId: "table-push-king" }),
+});
+assert.equal(duplicateRound.status, 409);
+assert.equal((await duplicateRound.json()).error, "active-round-exists");
 
 const joined = await api(`/api/platform/join/${created.round.code}`, {
   method: "POST",
@@ -67,4 +80,4 @@ const finished = await api(`/api/platform/rounds/${created.round.id}/finish`, {
 });
 assert.equal(finished.round.status, "finished");
 
-console.log("Platform smoke test passed: rounds and queue remain independent and compose at broadcast.");
+console.log("Platform smoke test passed: CORS, single active round, independent queue and broadcast composition are healthy.");
