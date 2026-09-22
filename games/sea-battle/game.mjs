@@ -414,6 +414,7 @@ function fireBroadside(state, boat) {
 
   emit(state, "broadside", boat.id, `${boat.name} 侧舷齐射`, 1, {
     targetKind: best.kind,
+    targetId: best.kind === "boat" ? best.target.id : null,
   });
   return true;
 }
