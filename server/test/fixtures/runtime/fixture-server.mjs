@@ -2,18 +2,19 @@ import { createServer } from "node:http";
 
 const port = Number(process.env.PORT ?? 19090);
 const roomCode = process.env.ROOM_CODE ?? "NONE";
+const fixtureSeconds = Number(process.env.FIXTURE_SECONDS ?? 0);
 let starts = 0;
 
 const server = createServer((req, res) => {
   if (req.url === "/info") {
     res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ ok: true, protocol: "runtime-fixture/1", roomCode, starts }));
+    res.end(JSON.stringify({ ok: true, protocol: "runtime-fixture/1", roomCode, starts, fixtureSeconds }));
     return;
   }
   if (req.url === "/api/start" && req.method === "POST") {
     starts += 1;
     res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ ok: true, starts, roomCode }));
+    res.end(JSON.stringify({ ok: true, starts, roomCode, fixtureSeconds }));
     return;
   }
   res.writeHead(404);

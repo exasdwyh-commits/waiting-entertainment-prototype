@@ -43,6 +43,14 @@ try {
   if ((await host.locator(".manage-card").count()) < 3) {
     throw new Error("Game management did not render the full package catalog.");
   }
+  if ((await host.locator("[data-settings-form]").count()) < 2) {
+    throw new Error("Editable Game Package settings were not rendered.");
+  }
+  const pilotSettings = host.locator('[data-settings-form="pilot-racer"]');
+  await pilotSettings.waitFor({ timeout: 8_000 });
+  if ((await pilotSettings.locator('[data-setting-key="laps"]').count()) !== 1) {
+    throw new Error("Pilot Racer settings form is missing the laps control.");
+  }
   await host.screenshot({
     path: "docs/screenshots/hub-game-management.png",
     fullPage: true,

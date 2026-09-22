@@ -1,11 +1,14 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
   EntertainmentRound,
   GameManifestV1,
   GameRuntimeStatus,
+  GameSettingRuntimeState,
+  GameSettingValue,
+  GameSettingV1,
 } from "@waiting/shared";
 
 type RuntimeEntry = {
@@ -49,6 +52,15 @@ function appendLog(entry: RuntimeEntry, chunk: unknown) {
 
 export class RuntimeManager {
   private readonly entries = new Map<string, RuntimeEntry>();
+  private readonly settingOverrides = new Map<string, Record<string, GameSettingValue>>();
+  private readonly settingsPath: string;
+
+  constructor(options: { settingsPath?: string } = {}) {
+    this.settingsPath =
+      (options.settingsPath ?? process.env.WAITING_SETTINGS_FILE?.trim()) ||
+      resolve(PROJECT_ROOT, ".waiting-data/game-settings.json");
+    this.loadSettings();
+  }
 
   status(manifest: GameManifestV1): GameRuntimeStatus {
     if (manifest.runtime.kind === "embedded") {
@@ -86,6 +98,157 @@ export class RuntimeManager {
 
   list(manifests: readonly GameManifestV1[]): GameRuntimeStatus[] {
     return manifests.map((manifest) => this.status(manifest));
+  }
+
+  settings(manifest: GameManifestV1): GameSettingRuntimeState[] {
+    const overrides = this.settingOverrides.get(manifest.id) ?? {};
+    return (manifest.settings ?? []).map((setting) => {
+      if (Object.prototype.hasOwnProperty.call(overrides, setting.key)) {
+        return {
+          key: setting.key,
+          value: overrides[setting.key],
+          source: "saved" as const,
+        };
+      }
+
+      const envValue = setting.env ? process.env[setting.env] : undefined;
+      if (envValue !== undefined && envValue !== "") {
+        try {
+          return {
+            key: setting.key,
+            value: this.normalizeSetting(setting, envValue),
+            source: "environment" as const,
+          };
+        } catch {
+          // Invalid deployment env values should not leak into the child
+          // process. Fall back to the manifest default below.
+        }
+      }
+
+      return {
+        key: setting.key,
+        value: structuredClone(setting.default),
+        source: "default" as const,
+      };
+    });
+  }
+
+  setSettings(
+    manifest: GameManifestV1,
+    values: Record<string, unknown>,
+  ): GameSettingRuntimeState[] {
+    const definitions = new Map(
+      (manifest.settings ?? []).map((setting) => [setting.key, setting] as const),
+    );
+    const unknown = Object.keys(values).find((key) => !definitions.has(key));
+    if (unknown) throw new Error(`runtime-setting-unknown:${unknown}`);
+
+    const next = {
+      ...(this.settingOverrides.get(manifest.id) ?? {}),
+    };
+
+    for (const [key, raw] of Object.entries(values)) {
+      const definition = definitions.get(key)!;
+      if (raw === null) {
+        delete next[key];
+        continue;
+      }
+      next[key] = this.normalizeSetting(definition, raw);
+    }
+
+    if (Object.keys(next).length > 0) {
+      this.settingOverrides.set(manifest.id, next);
+    } else {
+      this.settingOverrides.delete(manifest.id);
+    }
+    this.persistSettings();
+    return this.settings(manifest);
+  }
+
+  private settingEnvironment(manifest: GameManifestV1): Record<string, string> {
+    const state = new Map(
+      this.settings(manifest).map((item) => [item.key, item]),
+    );
+    const env: Record<string, string> = {};
+    for (const definition of manifest.settings ?? []) {
+      if (!definition.wired || !definition.env) continue;
+      const current = state.get(definition.key);
+      if (!current) continue;
+      env[definition.env] = String(current.value);
+    }
+    return env;
+  }
+
+  private normalizeSetting(
+    definition: GameSettingV1,
+    raw: unknown,
+  ): GameSettingValue {
+    if (definition.type === "number") {
+      const value =
+        typeof raw === "number" ? raw :
+        typeof raw === "string" && raw.trim() ? Number(raw) :
+        Number.NaN;
+      if (!Number.isFinite(value)) {
+        throw new Error(`runtime-setting-invalid:${definition.key}`);
+      }
+      if (definition.min !== undefined && value < definition.min) {
+        throw new Error(`runtime-setting-min:${definition.key}`);
+      }
+      if (definition.max !== undefined && value > definition.max) {
+        throw new Error(`runtime-setting-max:${definition.key}`);
+      }
+      return value;
+    }
+
+    if (definition.type === "boolean") {
+      if (typeof raw === "boolean") return raw;
+      if (raw === "true" || raw === "1" || raw === 1) return true;
+      if (raw === "false" || raw === "0" || raw === 0) return false;
+      throw new Error(`runtime-setting-invalid:${definition.key}`);
+    }
+
+    const value = String(raw ?? "");
+    if (definition.type === "enum") {
+      if (!definition.options?.some((option) => option.value === value)) {
+        throw new Error(`runtime-setting-option:${definition.key}`);
+      }
+      return value;
+    }
+
+    return value;
+  }
+
+  private loadSettings(): void {
+    if (!existsSync(this.settingsPath)) return;
+    try {
+      const raw = JSON.parse(readFileSync(this.settingsPath, "utf8")) as unknown;
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return;
+      for (const [gameId, value] of Object.entries(raw)) {
+        if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+        const safe: Record<string, GameSettingValue> = {};
+        for (const [key, candidate] of Object.entries(value)) {
+          if (
+            typeof candidate === "string" ||
+            typeof candidate === "number" ||
+            typeof candidate === "boolean"
+          ) {
+            safe[key] = candidate;
+          }
+        }
+        if (Object.keys(safe).length) this.settingOverrides.set(gameId, safe);
+      }
+    } catch {
+      // A corrupt optional settings file must not take the venue offline.
+    }
+  }
+
+  private persistSettings(): void {
+    const directory = dirname(this.settingsPath);
+    mkdirSync(directory, { recursive: true });
+    const body = Object.fromEntries(this.settingOverrides);
+    const temp = this.settingsPath + ".tmp";
+    writeFileSync(temp, JSON.stringify(body, null, 2) + "\n", "utf8");
+    renameSync(temp, this.settingsPath);
   }
 
   async refresh(
@@ -261,6 +424,7 @@ export class RuntimeManager {
         cwd: config.cwd,
         env: {
           ...process.env,
+          ...this.settingEnvironment(manifest),
           PORT: String(config.port),
           HOST: "0.0.0.0",
           ...(roomCode ? { ROOM_CODE: roomCode } : {}),
