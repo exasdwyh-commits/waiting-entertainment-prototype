@@ -33,6 +33,13 @@ export class RoundManager {
   create(manifest: GameManifestV1, playerLimit?: number): EntertainmentRound {
     this.expireStaleRounds();
 
+    const active = [...this.rounds.values()].find((round) =>
+      ["recruiting", "locked", "running"].includes(round.status),
+    );
+    if (active) {
+      throw new Error("active-round-exists");
+    }
+
     const limit = Math.min(
       manifest.players.max,
       Math.max(manifest.players.min, playerLimit ?? manifest.players.max),
