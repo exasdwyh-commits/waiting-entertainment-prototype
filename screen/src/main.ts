@@ -146,9 +146,12 @@ async function refresh() {
       }
     }
 
-    if (state.mode === "LIVE_GAME") {
-      // The embedded game renders live queue calls in its own DOM so the
-      // overlay remains responsive even under heavy WebGL load.
+    const gameOwnsLiveQueueOverlay =
+      state.mode === "LIVE_GAME" && game?.runtime.kind === "embedded";
+
+    if (gameOwnsLiveQueueOverlay) {
+      // Embedded games can render the call inside their own DOM. External
+      // process games stay behind the shell-level overlay.
       queueOverlay.hidden = true;
       if (queueOverlayTimer !== undefined) {
         window.clearTimeout(queueOverlayTimer);
