@@ -16,6 +16,8 @@ assert.match(host, /data-runtime-stop/);
 assert.match(host, /data-runtime-check/);
 assert.match(host, /data-runtime-logs/);
 assert.match(host, /configSource/);
+assert.match(host, /game\.settings/);
+assert.match(host, /默认参数/);
 assert.match(host, /round-card--degraded/);
 assert.match(hostCss, /\.manage-grid/);
 assert.match(hostCss, /\.round-runtime-alert/);
