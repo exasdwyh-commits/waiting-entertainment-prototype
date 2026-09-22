@@ -976,6 +976,7 @@ export class GameSession {
     slot.state = "grabbing";
     slot.facingYaw = Math.atan2(dir.x, dir.z);
 
+    if (best.heldWeaponId) this.dropHeldWeapon(best, now, 0.5);
     best.carriedBy = slot.id;
     best.struggleProgress = 0;
     best.lastStruggleAt = 0;
@@ -2695,6 +2696,7 @@ export class GameSession {
       radius > TABLE_PUSH_GEOMETRY.arenaRadius - 0.5 &&
       radius < TABLE_PUSH_GEOMETRY.arenaRadius + 1.2
     ) {
+      if (slot.heldWeaponId) this.dropHeldWeapon(slot, now, 0.45);
       slot.edgeHanging = true;
       slot.edgeHangUntil = now + GAME_TUNING.ledge.hangWindowMs;
       slot.balance = Math.min(slot.balance, GAME_TUNING.ledge.hangBalanceCap);
