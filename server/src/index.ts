@@ -37,6 +37,15 @@ io.on("connection", (socket) => {
     session.input(socket.id, payload ?? {});
   });
 
+  if (process.env.WAITING_STRESS_MODE === "1") {
+    socket.on(
+      "stress:force-fall",
+      (_payload: unknown, ack?: (value: { ok: boolean }) => void) => {
+        ack?.({ ok: session.debugForceFall(socket.id) });
+      },
+    );
+  }
+
   socket.on(
     "latency:ping",
     (_payload: unknown, ack?: (value: { ok: true }) => void) => {
