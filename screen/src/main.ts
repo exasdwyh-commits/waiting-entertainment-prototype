@@ -52,6 +52,8 @@ let lastQrCode = "";
 let lastFrameUrl = "";
 let lastQueueCallKey = "";
 let queueOverlayTimer: number | undefined;
+let refreshIssued = 0;
+let refreshApplied = 0;
 
 function presentQueueCall(overlay: NonNullable<PlatformSnapshot["broadcast"]["queueOverlay"]>) {
   const key = overlay.ticketId + ":" + overlay.calledAt;
@@ -117,10 +119,16 @@ function escapeText(value: unknown): string {
 }
 
 async function refresh() {
+  const refreshId = ++refreshIssued;
   try {
     const response = await fetch(API, { cache: "no-store" });
     if (!response.ok) throw new Error("platform-offline");
     const snapshot = (await response.json()) as PlatformSnapshot;
+    // Polls can overlap. Never let an older response overwrite a newer venue
+    // state (for example hiding a queue call that a later snapshot already
+    // presented).
+    if (refreshId < refreshApplied) return;
+    refreshApplied = refreshId;
     offline.hidden = true;
 
     const state = snapshot.broadcast;
@@ -182,7 +190,7 @@ async function refresh() {
       }
     }
   } catch {
-    offline.hidden = false;
+    if (refreshId >= refreshApplied) offline.hidden = false;
   }
 }
 
