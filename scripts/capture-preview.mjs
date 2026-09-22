@@ -29,30 +29,15 @@ async function platform(path = "", options = {}) {
 }
 
 try {
-  // Exercise Hub surfaces first so round/signup regressions fail quickly.
-  const created = await platform("/rounds", {
-    method: "POST",
-    body: JSON.stringify({ gameId: "table-push-king", playerLimit: 4 }),
-  });
-  const round = created.round;
-  if (!round?.code || !round?.id) {
-    throw new Error("Hub round creation did not return id/code.");
-  }
-
   const host = await browser.newPage({
     viewport: { width: 1600, height: 1000 },
     deviceScaleFactor: 1,
   });
   await host.goto("http://127.0.0.1:5175", { waitUntil: "networkidle" });
-  await host.waitForSelector(".round-code");
-  await host.screenshot({
-    path: "docs/screenshots/hub-host.png",
-    fullPage: true,
-  });
 
-  // The management workspace is a release surface, not a hidden admin route.
-  // Capture it with an active round so runtime safety/ownership states are
-  // represented in the real browser output.
+  // Capture game management before creating the timed regression round. This
+  // keeps the original 18-second replay baseline deterministic instead of
+  // spending part of the round budget on an unrelated admin screenshot.
   await host.locator('[data-view="games"]').click();
   await host.locator(".management").waitFor({ timeout: 8_000 });
   if ((await host.locator(".manage-card").count()) < 3) {
@@ -64,6 +49,22 @@ try {
   });
   await host.locator('[data-view="live"]').click();
   await host.locator(".workspace").waitFor({ timeout: 8_000 });
+
+  // Exercise Hub round/signup surfaces after the management capture so the
+  // timed round starts with its full budget.
+  const created = await platform("/rounds", {
+    method: "POST",
+    body: JSON.stringify({ gameId: "table-push-king", playerLimit: 4 }),
+  });
+  const round = created.round;
+  if (!round?.code || !round?.id) {
+    throw new Error("Hub round creation did not return id/code.");
+  }
+  await host.waitForSelector(".round-code", { timeout: 8_000 });
+  await host.screenshot({
+    path: "docs/screenshots/hub-host.png",
+    fullPage: true,
+  });
 
   const screen = await browser.newPage({
     viewport: { width: 1600, height: 900 },
