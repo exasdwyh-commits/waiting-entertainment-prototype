@@ -45,6 +45,24 @@ const offline = document.querySelector<HTMLElement>("#offline")!;
 
 let lastQrCode = "";
 let lastFrameUrl = "";
+let lastQueueCallKey = "";
+let queueOverlayTimer: number | undefined;
+
+function presentQueueCall(overlay: NonNullable<PlatformSnapshot["broadcast"]["queueOverlay"]>) {
+  const key = overlay.ticketId + ":" + overlay.calledAt;
+  if (key === lastQueueCallKey) return;
+
+  lastQueueCallKey = key;
+  queueNumber.textContent = overlay.number;
+  queueParty.textContent = overlay.partySize + " 人桌 · 请前往前台";
+  queueOverlay.hidden = false;
+
+  if (queueOverlayTimer !== undefined) window.clearTimeout(queueOverlayTimer);
+  queueOverlayTimer = window.setTimeout(() => {
+    queueOverlay.hidden = true;
+    queueOverlayTimer = undefined;
+  }, 10_000);
+}
 
 function entryUrl(game: GameManifestV1, kind: "display" | "player"): string {
   const raw = game.entrypoints[kind].replaceAll("{host}", location.hostname);
@@ -129,11 +147,13 @@ async function refresh() {
     }
 
     if (state.queueOverlay) {
-      queueNumber.textContent = state.queueOverlay.number;
-      queueParty.textContent = state.queueOverlay.partySize + " 人桌 · 请前往前台";
-      queueOverlay.hidden = false;
+      presentQueueCall(state.queueOverlay);
     } else {
       queueOverlay.hidden = true;
+      if (queueOverlayTimer !== undefined) {
+        window.clearTimeout(queueOverlayTimer);
+        queueOverlayTimer = undefined;
+      }
     }
   } catch {
     offline.hidden = false;
