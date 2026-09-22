@@ -112,12 +112,15 @@ function gameCard(
   active?: EntertainmentRound,
 ): string {
   const unavailable = game.runtime.kind === "process" && !runtime?.configured;
-  const disabled = Boolean(active) || unavailable;
+  const contentDisabled = snapshot?.content.disabledGameIds.includes(game.id) ?? false;
+  const disabled = Boolean(active) || unavailable || contentDisabled;
   const buttonText = active
     ? "已有活动场次"
-    : unavailable
-      ? "未配置游戏目录"
-      : "开放本轮报名";
+    : contentDisabled
+      ? "门店已隐藏"
+      : unavailable
+        ? "未配置游戏目录"
+        : "开放本轮报名";
   const runtimeClass =
     runtime?.state === "failed" || runtime?.state === "unhealthy"
       ? "runtime-badge runtime-badge--error"
