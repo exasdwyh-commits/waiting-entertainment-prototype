@@ -279,6 +279,9 @@ export class NetworkGame {
         event.type === "kick_hit" || event.type === "struggle_break"
           ? 0.12 + event.importance * 0.12 :
         event.type === "ko" ? 0.34 :
+        event.type === "weapon_hit" ? 0.28 + event.importance * 0.14 :
+        event.type === "weapon_throw" ? 0.1 :
+        event.type === "weapon_pickup" ? 0.025 :
         event.type === "punch_hit" || event.type === "push_hit"
           ? 0.08 + event.importance * 0.1 :
         event.type === "grab" ? 0.035 :
@@ -294,6 +297,9 @@ export class NetworkGame {
         event.type === "kick_hit" || event.type === "struggle_break"
           ? 1.7 + event.importance * 1.6 :
         event.type === "ko" ? 4.2 :
+        event.type === "weapon_hit" ? 3.4 + event.importance * 2 :
+        event.type === "weapon_throw" ? 1.2 :
+        event.type === "weapon_pickup" ? 0.25 :
         event.type === "punch_hit" || event.type === "push_hit"
           ? 0.8 + event.importance * 1.4 :
         event.type === "grab" ? 0.35 :
@@ -310,6 +316,8 @@ export class NetworkGame {
         event.type === "kick_hit" || event.type === "struggle_break"
           ? 24 + event.importance * 22 :
         event.type === "ko" ? 74 :
+        event.type === "weapon_hit" ? 48 + event.importance * 32 :
+        event.type === "weapon_throw" ? 12 :
         event.type === "punch_hit" || event.type === "push_hit"
           ? 14 + event.importance * 18 :
         event.type === "edge_save" ? 28 :
@@ -346,6 +354,8 @@ export class NetworkGame {
         event.type === "dropkick_hit" ||
         event.type === "ko" ||
         event.type === "struggle_break" ||
+        event.type === "weapon_hit" ||
+        event.type === "weapon_throw" ||
         event.type === "toss"
       ) {
         targetView?.visual?.addImpact(
@@ -353,6 +363,7 @@ export class NetworkGame {
           event.type === "headbutt_hit" ||
           event.type === "dropkick_hit" ||
           event.type === "ko" ||
+          event.type === "weapon_hit" ||
           event.type === "toss"
             ? Math.max(0.85, event.importance)
             : event.importance,
@@ -361,7 +372,8 @@ export class NetworkGame {
         actorView?.visual?.addImpact(
           event.type === "heavy_hit" ||
           event.type === "headbutt_hit" ||
-          event.type === "dropkick_hit"
+          event.type === "dropkick_hit" ||
+          event.type === "weapon_hit"
             ? 0.72
             : 0.38,
           false,
@@ -396,6 +408,7 @@ export class NetworkGame {
           event.type === "toss" ||
           event.type === "dropkick_hit" ||
           event.type === "ko" ||
+          event.type === "weapon_hit" ||
           event.type === "edge_save" ||
           event.type === "big_fall" ||
           event.type === "final_elimination"
@@ -438,9 +451,11 @@ export class NetworkGame {
             ? 70 + event.importance * 20
             : event.type === "dropkick_hit"
               ? 68 + event.importance * 24
-              : event.type === "ko"
-                ? 64 + event.importance * 22
-                : event.type === "toss"
+              : event.type === "weapon_hit"
+                ? 66 + event.importance * 24
+                : event.type === "ko"
+                  ? 64 + event.importance * 22
+                  : event.type === "toss"
                   ? 62 + event.importance * 22
                   : event.type === "edge_save"
                     ? 56 + event.importance * 18
