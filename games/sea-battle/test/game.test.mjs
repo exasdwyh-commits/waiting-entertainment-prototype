@@ -352,3 +352,45 @@ test("snapshot exposes bounty and streak state for phone and broadcast UI", () =
   assert.equal(snap.boats[3].killStreak, 2);
   assert.equal(snap.boats[3].bestStreak, 0);
 });
+
+
+test("fatal hit preserves the bounty target that was marked before hit score changes ranking", () => {
+  const state = running(123);
+  humanize(state);
+  for (const boat of state.boats) {
+    boat.x = 35 + boat.id;
+    boat.z = 35;
+    boat.hp = boat.maxHp;
+    if (boat.id > 1) {
+      boat.alive = false;
+      boat.respawnAt = Infinity;
+    }
+  }
+  const attacker = state.boats[0];
+  const leader = state.boats[1];
+  attacker.x = -20;
+  attacker.z = 0;
+  leader.x = 0;
+  leader.z = 0;
+  leader.invulnerableUntil = 0;
+  attacker.score = 7;
+  leader.score = 8;
+  leader.hp = 5;
+  assert.equal(currentBountyId(state), leader.id);
+
+  state.projectiles.push({
+    id: ++state.projectileId, ownerId: attacker.id,
+    x: leader.x, z: leader.z, vx: 0, vz: 0,
+    damage: 20, radius: 0.3, bornAt: state.time, life: 2, alive: true,
+  });
+  // Tiny tick isolates projectile resolution from auto-forward movement and
+  // hull collision correction while still exercising the real step order.
+  stepGame(state, 1e-6);
+
+  assert.equal(leader.alive, false);
+  assert.equal(attacker.bountyKills, 1);
+  assert.equal(attacker.score, 25, "7 + hit 2 + sink 10 + bounty 6");
+  assert.ok(state.events.some((event) =>
+    event.type === "bounty_sink" && event.boatId === leader.id
+  ));
+});
