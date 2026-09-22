@@ -112,12 +112,15 @@ function gameCard(
   active?: EntertainmentRound,
 ): string {
   const unavailable = game.runtime.kind === "process" && !runtime?.configured;
-  const disabled = Boolean(active) || unavailable;
+  const contentDisabled = snapshot?.content.disabledGameIds.includes(game.id) ?? false;
+  const disabled = Boolean(active) || unavailable || contentDisabled;
   const buttonText = active
     ? "已有活动场次"
-    : unavailable
-      ? "未配置游戏目录"
-      : "开放本轮报名";
+    : contentDisabled
+      ? "门店已隐藏"
+      : unavailable
+        ? "未配置游戏目录"
+        : "开放本轮报名";
   const runtimeClass =
     runtime?.state === "failed" || runtime?.state === "unhealthy"
       ? "runtime-badge runtime-badge--error"
@@ -136,6 +139,66 @@ function gameCard(
     (runtime?.message ? '<div class="runtime-message">' + esc(runtime.message) + '</div>' : '') +
     '<button class="primary" data-create-game="' + esc(game.id) + '" ' + (disabled ? "disabled" : "") + '>' + buttonText + '</button>' +
     '</article>';
+}
+
+function contentGameRows(games: GameManifestV1[]): string {
+  if (!snapshot) return "";
+  const disabled = new Set(snapshot.content.disabledGameIds);
+  return games.map((game, index) => {
+    const enabled = !disabled.has(game.id);
+    return '<div class="content-row">' +
+      '<div class="content-order">' + String(index + 1).padStart(2, "0") + '</div>' +
+      '<div class="content-copy"><strong>' + esc(game.name) + '</strong><span>' +
+        (enabled ? "已在门店游戏库启用" : "已隐藏，不影响授权") + '</span></div>' +
+      '<div class="content-actions">' +
+        '<button class="ghost small-action" data-content-game-action="up" data-game-id="' + esc(game.id) + '">↑</button>' +
+        '<button class="ghost small-action" data-content-game-action="down" data-game-id="' + esc(game.id) + '">↓</button>' +
+        '<button class="' + (enabled ? "secondary" : "primary") + ' small-action" data-content-game-action="' +
+          (enabled ? "disable" : "enable") + '" data-game-id="' + esc(game.id) + '">' +
+          (enabled ? "隐藏" : "启用") + '</button>' +
+      '</div></div>';
+  }).join("");
+}
+
+function mediaRows(): string {
+  if (!snapshot) return "";
+  return snapshot.content.media.map((item, index) =>
+    '<div class="content-row media-row">' +
+      '<div class="content-order">' + String(index + 1).padStart(2, "0") + '</div>' +
+      '<div class="content-copy"><strong>' + esc(item.title) + '</strong><span>' +
+        esc(item.kind.toUpperCase()) + ' · ' + item.durationSeconds + 's · ' +
+        (item.enabled ? "大屏轮播中" : "已停用") + '</span>' +
+        (item.source ? '<small>' + esc(item.source) + '</small>' : '') +
+      '</div><div class="content-actions">' +
+        '<button class="ghost small-action" data-media-action="up" data-media-id="' + item.id + '">↑</button>' +
+        '<button class="ghost small-action" data-media-action="down" data-media-id="' + item.id + '">↓</button>' +
+        '<button class="' + (item.enabled ? "secondary" : "primary") + ' small-action" data-media-action="' +
+          (item.enabled ? "disable" : "enable") + '" data-media-id="' + item.id + '">' +
+          (item.enabled ? "停用" : "启用") + '</button>' +
+        (item.id === "system-welcome"
+          ? ""
+          : '<button class="ghost danger-text small-action" data-media-action="delete" data-media-id="' + item.id + '">删除</button>') +
+      '</div></div>'
+  ).join("");
+}
+
+function renderContentManager(games: GameManifestV1[]): string {
+  return '<section class="section-block content-manager">' +
+    '<div class="section-title"><div><span class="eyebrow">CONTENT MANAGEMENT</span><h2>游戏与媒体内容管理</h2></div>' +
+    '<span class="section-note">授权决定“能不能用”，这里决定“门店展示什么”</span></div>' +
+    '<div class="content-grid"><div><h3 class="content-subtitle">游戏上架与顺序</h3><div class="content-list">' +
+      contentGameRows(games) + '</div></div>' +
+    '<div><h3 class="content-subtitle">大屏候场媒体库</h3>' +
+      '<form id="media-form" class="media-form">' +
+        '<select name="kind"><option value="message">文字</option><option value="image">图片 URL</option><option value="video">视频 URL</option></select>' +
+        '<input name="title" maxlength="60" placeholder="素材名称" />' +
+        '<input name="source" maxlength="500" placeholder="图片/视频 URL；文字可留空" />' +
+        '<input name="headline" maxlength="80" placeholder="大屏主标题" />' +
+        '<input name="subline" maxlength="140" placeholder="副标题" />' +
+        '<input name="durationSeconds" type="number" min="3" max="120" value="10" title="轮播秒数" />' +
+        '<button class="primary" type="submit">添加素材</button>' +
+      '</form><div class="content-list media-list">' + mediaRows() + '</div></div></div>' +
+    '</section>';
 }
 
 function queueRow(ticket: QueueTicket): string {
@@ -184,7 +247,7 @@ function render() {
         snapshot?.runtimes.find((runtime) => runtime.gameId === game.id),
         active,
       ),
-    ).join("") + '</div></section></section>' +
+    ).join("") + '</div></section>' + renderContentManager(snapshot.games) + '</section>' +
     '<aside class="side-column"><section class="queue-panel"><div class="section-title compact"><div>' +
     '<span class="eyebrow">RESTAURANT QUEUE</span><h2>等位叫号</h2></div><span class="queue-count">' + waitingCount + ' 桌等待</span></div>' +
     '<form id="queue-form" class="queue-form"><label><span>人数</span><input name="partySize" type="number" min="1" max="30" value="2" required /></label>' +
@@ -231,6 +294,35 @@ function bindEvents() {
   document.querySelectorAll<HTMLButtonElement>("[data-queue-action]").forEach((button) => {
     button.addEventListener("click", () => void mutate("/queue/" + button.dataset.ticketId + "/" + button.dataset.queueAction));
   });
+  document.querySelectorAll<HTMLButtonElement>("[data-content-game-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      void mutate(
+        "/content/games/" + button.dataset.gameId + "/" + button.dataset.contentGameAction,
+      );
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>("[data-media-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      void mutate(
+        "/content/media/" + button.dataset.mediaId + "/" + button.dataset.mediaAction,
+      );
+    });
+  });
+
+  document.querySelector<HTMLFormElement>("#media-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget as HTMLFormElement);
+    void mutate("/content/media", {
+      kind: String(form.get("kind") ?? "message"),
+      title: String(form.get("title") ?? ""),
+      source: String(form.get("source") ?? ""),
+      headline: String(form.get("headline") ?? ""),
+      subline: String(form.get("subline") ?? ""),
+      durationSeconds: Number(form.get("durationSeconds")),
+    });
+  });
+
   document.querySelector<HTMLFormElement>("#queue-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget as HTMLFormElement);

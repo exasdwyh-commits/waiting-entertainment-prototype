@@ -134,4 +134,52 @@ const unconfiguredPilot = await fetch(base + "/api/platform/rounds", {
 assert.equal(unconfiguredPilot.status, 503);
 assert.equal((await unconfiguredPilot.json()).error, "runtime-not-configured");
 
-console.log("Platform smoke test passed: CORS, single active round, round admission, runtime configuration guard, independent queue and broadcast composition are healthy.");
+const disabledGame = await api("/api/platform/content/games/table-push-king/disable", {
+  method: "POST",
+  body: "{}",
+});
+assert.ok(disabledGame.content.disabledGameIds.includes("table-push-king"));
+
+const disabledRound = await fetch(base + "/api/platform/rounds", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ gameId: "table-push-king" }),
+});
+assert.equal(disabledRound.status, 409);
+assert.equal((await disabledRound.json()).error, "game-disabled");
+
+await api("/api/platform/content/games/table-push-king/enable", {
+  method: "POST",
+  body: "{}",
+});
+
+const addedMedia = await api("/api/platform/content/media", {
+  method: "POST",
+  body: JSON.stringify({
+    kind: "message",
+    title: "CI 候场素材",
+    headline: "下一轮马上开始",
+    durationSeconds: 5,
+  }),
+});
+assert.equal(addedMedia.media.kind, "message");
+
+const disabledMedia = await api(
+  `/api/platform/content/media/${addedMedia.media.id}/disable`,
+  { method: "POST", body: "{}" },
+);
+assert.equal(
+  disabledMedia.content.media.find((item) => item.id === addedMedia.media.id).enabled,
+  false,
+);
+
+const removedMedia = await api(
+  `/api/platform/content/media/${addedMedia.media.id}/delete`,
+  { method: "POST", body: "{}" },
+);
+assert.equal(
+  removedMedia.content.media.some((item) => item.id === addedMedia.media.id),
+  false,
+);
+
+console.log("Platform smoke test passed: CORS, single active round, round admission, runtime configuration guard, persistent content controls, independent queue and broadcast composition are healthy.");

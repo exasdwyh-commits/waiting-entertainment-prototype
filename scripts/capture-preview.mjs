@@ -29,7 +29,40 @@ async function platform(path = "", options = {}) {
 }
 
 try {
-  // Exercise Hub surfaces first so round/signup regressions fail quickly.
+  // Verify the idle media library before creating an active game round.
+  const previewMedia = await platform("/content/media", {
+    method: "POST",
+    body: JSON.stringify({
+      kind: "message",
+      title: "Visual Preview Media",
+      headline: "今晚一起玩一局",
+      subline: "候场媒体库已接管大屏空闲时段",
+      durationSeconds: 8,
+    }),
+  });
+  await platform("/content/media/" + previewMedia.media.id + "/up", {
+    method: "POST",
+    body: "{}",
+  });
+
+  const idleScreen = await browser.newPage({
+    viewport: { width: 1600, height: 900 },
+    deviceScaleFactor: 1,
+  });
+  await idleScreen.goto("http://127.0.0.1:5176", {
+    waitUntil: "domcontentloaded",
+  });
+  await idleScreen.waitForFunction(
+    () => document.querySelector("#idle-headline")?.textContent === "今晚一起玩一局",
+    { timeout: 10_000 },
+  );
+  await idleScreen.screenshot({
+    path: "docs/screenshots/hub-broadcast-idle-media.png",
+    fullPage: true,
+  });
+  await idleScreen.close();
+
+  // Exercise hosted round/signup surfaces next.
   const created = await platform("/rounds", {
     method: "POST",
     body: JSON.stringify({ gameId: "table-push-king", playerLimit: 4 }),

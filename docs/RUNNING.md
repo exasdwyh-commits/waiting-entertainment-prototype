@@ -55,6 +55,60 @@ The normal hosted flow now starts from the platform surfaces rather than the leg
 
 A new round gets a new code. Old round codes do not serve as permanent store join codes.
 
+## Persistent local state
+
+The Hub now keeps restaurant operational state in a small local JSON file instead of losing everything on restart.
+
+Default:
+
+```text
+data/platform-state.json
+```
+
+Override it when packaging or testing:
+
+```bash
+WAITING_STATE_FILE=/absolute/path/store-001.json npm run dev
+```
+
+Persisted:
+
+- queue tickets and queue-number sequence;
+- per-store game enable/disable state;
+- game display order;
+- idle-screen media library and media order.
+
+Not persisted as runnable state:
+
+- active entertainment rounds;
+- live player sockets;
+- child game processes.
+
+A host restart therefore restores store operations/content but requires a fresh game round/code. Writes use a temporary file + atomic rename.
+
+## Game and media content management
+
+The Host Console includes **游戏与媒体内容管理** below the game library.
+
+Game controls are deliberately separate from licensing:
+
+- entitlements decide whether a store owns a game;
+- content settings decide whether that authorized game is currently shown/enabled at the venue;
+- authorized games can be reordered without creating product forks.
+
+Idle media supports:
+
+- text/message cards;
+- image URLs;
+- video URLs;
+- per-item duration;
+- enable/disable;
+- ordering and deletion.
+
+When there is no active entertainment round, the Broadcast Shell automatically rotates enabled media. Restaurant queue calls still override the idle presentation.
+
+For this phase, image/video assets are URL-based. Local upload/copy workflows can be layered onto the same MediaItem model later without changing the Broadcast Shell contract.
+
 ## Queue / calling behavior
 
 Restaurant queue state is independent from entertainment rounds.
@@ -125,6 +179,9 @@ GitHub Actions verifies:
 - Broadcast Shell state composition;
 - ten-client concurrent combat stress;
 - external RuntimeManager launch, health check, room-code propagation, start action and shutdown with a disposable fixture process;
+- queue numbering/state and content/media persistence across a simulated restart;
+- game visibility and media-management API mutations;
+- idle media Broadcast Shell visual preview;
 - existing big-screen / phone visual preview workflow.
 
 Real-device LAN, touch, heat and venue operations still require field validation.

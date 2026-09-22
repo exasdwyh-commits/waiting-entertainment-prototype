@@ -233,12 +233,12 @@ Implemented:
 - Runtime readiness / failure state surfaced in the Host Console
 - Process warmup on roster lock, health protocol verification, start action and managed shutdown
 - Pilot Racer adapter via `PILOT_RACER_DIR`
+- Atomic local persistence for queue numbering/state and store content settings
+- Game enable/disable/order controls separate from license entitlements
+- Idle media library with message/image/video items and Broadcast Shell rotation
 
 Next:
 
-- Persist queue + store/content settings across Hub restarts
-- Media library / idle attract playlist
-- Game enable/disable/order controls separate from license entitlements
 - Signed per-round admission tokens for external game packages
 - Package discovery from installed manifests instead of only built-in manifests
 - Field validation with real phones, restaurant TV and host workflow.

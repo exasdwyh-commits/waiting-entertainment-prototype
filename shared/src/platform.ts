@@ -90,6 +90,26 @@ export interface GameRuntimeStatus {
   message?: string;
 }
 
+export type MediaKind = "message" | "image" | "video";
+
+export interface MediaItem {
+  id: string;
+  kind: MediaKind;
+  title: string;
+  source?: string;
+  headline?: string;
+  subline?: string;
+  durationSeconds: number;
+  enabled: boolean;
+  createdAt: number;
+}
+
+export interface ContentSettings {
+  gameOrder: string[];
+  disabledGameIds: string[];
+  media: MediaItem[];
+}
+
 export interface StoreLicense {
   storeId: string;
   plan: "BASE" | "PRO" | "CUSTOM";
@@ -146,5 +166,6 @@ export interface PlatformSnapshot {
   runtimes: GameRuntimeStatus[];
   rounds: EntertainmentRound[];
   queue: QueueTicket[];
+  content: ContentSettings;
   broadcast: BroadcastState;
 }

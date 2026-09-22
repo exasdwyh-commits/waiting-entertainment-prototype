@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { EntertainmentRound, QueueTicketStatus, RoundStatus } from "@waiting/shared";
+import type { EntertainmentRound, MediaKind, QueueTicketStatus, RoundStatus } from "@waiting/shared";
 import { PlatformHub } from "./PlatformHub.js";
 
 const MAX_BODY_BYTES = 16 * 1024;
@@ -45,7 +45,12 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
 }
 
 function errorStatus(message: string): number {
-  if (message === "unknown-game" || message === "round-not-found" || message === "queue-ticket-not-found") {
+  if (
+    message === "unknown-game" ||
+    message === "round-not-found" ||
+    message === "queue-ticket-not-found" ||
+    message === "media-not-found"
+  ) {
     return 404;
   }
   if (message === "game-not-entitled") return 403;
@@ -58,7 +63,11 @@ function errorStatus(message: string): number {
   ) {
     return 503;
   }
-  if (message === "round-full" || message === "active-round-exists") return 409;
+  if (
+    message === "round-full" ||
+    message === "active-round-exists" ||
+    message === "game-disabled"
+  ) return 409;
   if (
     message.startsWith("invalid-round-transition") ||
     message.startsWith("invalid-queue-transition") ||
@@ -212,6 +221,68 @@ export async function handlePlatformRequest(
       json(res, 200, {
         ticket: hub.transitionQueue(queueMatch[1], transitions[queueMatch[2]]),
       });
+      return true;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/platform/content") {
+      json(res, 200, { content: hub.content.snapshot() });
+      return true;
+    }
+
+    const contentGameMatch = url.pathname.match(
+      /^\/api\/platform\/content\/games\/([^/]+)\/(enable|disable|up|down)$/,
+    );
+    if (req.method === "POST" && contentGameMatch) {
+      const gameId = contentGameMatch[1];
+      const action = contentGameMatch[2];
+      hub.registry.requireAuthorized(gameId);
+      const content =
+        action === "enable" || action === "disable"
+          ? hub.content.setGameEnabled(gameId, action === "enable")
+          : hub.content.moveGame(gameId, action);
+      json(res, 200, { content });
+      return true;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/platform/content/media") {
+      const body = await readJson(req);
+      const kind =
+        body.kind === "message" || body.kind === "image" || body.kind === "video"
+          ? (body.kind as MediaKind)
+          : undefined;
+      if (!kind) throw new Error("invalid-media-kind");
+
+      const media = hub.content.addMedia({
+        kind,
+        title: typeof body.title === "string" ? body.title : undefined,
+        source: typeof body.source === "string" ? body.source : undefined,
+        headline: typeof body.headline === "string" ? body.headline : undefined,
+        subline: typeof body.subline === "string" ? body.subline : undefined,
+        durationSeconds:
+          typeof body.durationSeconds === "number"
+            ? body.durationSeconds
+            : Number(body.durationSeconds),
+      });
+      json(res, 201, { media, content: hub.content.snapshot() });
+      return true;
+    }
+
+    const mediaActionMatch = url.pathname.match(
+      /^\/api\/platform\/content\/media\/([^/]+)\/(enable|disable|up|down|delete)$/,
+    );
+    if (req.method === "POST" && mediaActionMatch) {
+      const mediaId = mediaActionMatch[1];
+      const action = mediaActionMatch[2];
+      let content;
+      if (action === "enable" || action === "disable") {
+        hub.content.setMediaEnabled(mediaId, action === "enable");
+        content = hub.content.snapshot();
+      } else if (action === "delete") {
+        content = hub.content.removeMedia(mediaId);
+      } else {
+        content = hub.content.moveMedia(mediaId, action);
+      }
+      json(res, 200, { content });
       return true;
     }
 

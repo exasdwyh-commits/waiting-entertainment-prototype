@@ -8,8 +8,13 @@ const root = document.querySelector<HTMLDivElement>("#app")!;
 root.innerHTML =
   '<main class="broadcast-shell">' +
     '<iframe id="game-frame" class="game-frame" title="游戏导播画面"></iframe>' +
-    '<section id="idle" class="scene scene--idle"><div class="brand-lockup"><span>WAITING</span><strong>ENTERTAINMENT</strong></div>' +
-      '<h1>现场互动正在准备</h1><p>留意主持人和大屏，下一轮很快开始</p></section>' +
+    '<section id="idle" class="scene scene--idle">' +
+      '<img id="idle-image" class="idle-media" alt="" hidden>' +
+      '<video id="idle-video" class="idle-media" muted playsinline autoplay loop hidden></video>' +
+      '<div class="idle-shade"></div><div class="idle-content">' +
+      '<div class="brand-lockup"><span>WAITING</span><strong>ENTERTAINMENT</strong></div>' +
+      '<h1 id="idle-headline">现场互动正在准备</h1><p id="idle-subline">留意主持人和大屏，下一轮很快开始</p>' +
+      '</div></section>' +
     '<section id="recruit" class="scene scene--recruit" hidden><div class="recruit-copy"><span class="eyebrow">OPEN REGISTRATION</span>' +
       '<h1 id="game-name">现场互动</h1><p id="game-summary"></p><div class="seat-progress"><strong id="seat-count">0 / 0</strong><span>已报名</span></div>' +
       '<div id="player-names" class="player-names"></div></div><div class="qr-card"><canvas id="qr" width="280" height="280"></canvas>' +
@@ -26,6 +31,10 @@ root.innerHTML =
 
 const gameFrame = document.querySelector<HTMLIFrameElement>("#game-frame")!;
 const idle = document.querySelector<HTMLElement>("#idle")!;
+const idleImage = document.querySelector<HTMLImageElement>("#idle-image")!;
+const idleVideo = document.querySelector<HTMLVideoElement>("#idle-video")!;
+const idleHeadline = document.querySelector<HTMLElement>("#idle-headline")!;
+const idleSubline = document.querySelector<HTMLElement>("#idle-subline")!;
 const recruit = document.querySelector<HTMLElement>("#recruit")!;
 const ready = document.querySelector<HTMLElement>("#ready")!;
 const result = document.querySelector<HTMLElement>("#result")!;
@@ -47,6 +56,10 @@ let lastQrCode = "";
 let lastFrameUrl = "";
 let lastQueueCallKey = "";
 let queueOverlayTimer: number | undefined;
+let idleSignature = "";
+let idleIndex = 0;
+let idleStartedAt = 0;
+let lastIdleItemId = "";
 
 function presentQueueCall(overlay: NonNullable<PlatformSnapshot["broadcast"]["queueOverlay"]>) {
   const key = overlay.ticketId + ":" + overlay.calledAt;
@@ -75,6 +88,66 @@ function hubDisplayUrl(game: GameManifestV1): string {
   const url = new URL(base);
   url.searchParams.set("hub", "1");
   return url.toString();
+}
+
+function renderIdleMedia(media: PlatformSnapshot["content"]["media"]) {
+  const enabled = media.filter((item) => item.enabled);
+  const signature = enabled
+    .map((item) => [item.id, item.kind, item.source, item.durationSeconds, item.headline, item.subline].join("|"))
+    .join("::");
+
+  if (signature !== idleSignature) {
+    idleSignature = signature;
+    idleIndex = 0;
+    idleStartedAt = Date.now();
+    lastIdleItemId = "";
+  }
+
+  if (!enabled.length) {
+    idleImage.hidden = true;
+    idleVideo.hidden = true;
+    idleVideo.pause();
+    idleHeadline.textContent = "现场互动正在准备";
+    idleSubline.textContent = "留意主持人和大屏，下一轮很快开始";
+    return;
+  }
+
+  const now = Date.now();
+  const current = enabled[idleIndex % enabled.length];
+  if (!idleStartedAt) idleStartedAt = now;
+  if (now - idleStartedAt >= current.durationSeconds * 1000) {
+    idleIndex = (idleIndex + 1) % enabled.length;
+    idleStartedAt = now;
+    lastIdleItemId = "";
+  }
+
+  const item = enabled[idleIndex % enabled.length];
+  if (item.id === lastIdleItemId) return;
+  lastIdleItemId = item.id;
+
+  idleHeadline.textContent = item.headline || item.title || "WAITING ENTERTAINMENT";
+  idleSubline.textContent =
+    item.subline ||
+    (item.kind === "message"
+      ? "留意主持人和大屏，下一轮很快开始"
+      : "");
+
+  idleImage.hidden = item.kind !== "image" || !item.source;
+  idleVideo.hidden = item.kind !== "video" || !item.source;
+
+  if (!idleImage.hidden && item.source) {
+    idleImage.src = item.source;
+  } else {
+    idleImage.removeAttribute("src");
+  }
+
+  if (!idleVideo.hidden && item.source) {
+    if (idleVideo.src !== item.source) idleVideo.src = item.source;
+    void idleVideo.play().catch(() => {});
+  } else {
+    idleVideo.pause();
+    idleVideo.removeAttribute("src");
+  }
 }
 
 function setScene(mode: PlatformSnapshot["broadcast"]["mode"]) {
@@ -121,6 +194,7 @@ async function refresh() {
     const round = state.round;
     const game = round ? snapshot.games.find((item) => item.id === round.gameId) : undefined;
     setScene(state.mode);
+    if (state.mode === "IDLE_MEDIA") renderIdleMedia(snapshot.content.media);
 
     if (round && game) {
       if (state.mode === "RECRUITING") {

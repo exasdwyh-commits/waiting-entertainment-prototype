@@ -11,6 +11,8 @@ import { GameRegistry } from "./GameRegistry.js";
 import { QueueService } from "./QueueService.js";
 import { RoundManager } from "./RoundManager.js";
 import { RuntimeManager } from "./RuntimeManager.js";
+import { LocalStateStore } from "./LocalStateStore.js";
+import { ContentService } from "./ContentService.js";
 
 function parseEntitlements(value: string | undefined): string[] {
   return (value ?? "")
@@ -45,27 +47,34 @@ export function createStoreLicenseFromEnv(): StoreLicense {
 export class PlatformHub {
   readonly registry: GameRegistry;
   readonly rounds = new RoundManager();
-  readonly queue = new QueueService();
   readonly runtime = new RuntimeManager();
+  readonly store: LocalStateStore;
+  readonly queue: QueueService;
+  readonly content: ContentService;
 
   constructor(readonly license: StoreLicense = createStoreLicenseFromEnv()) {
     this.registry = new GameRegistry(license);
+    this.store = new LocalStateStore();
+    this.queue = new QueueService(this.store);
+    this.content = new ContentService(this.store);
   }
 
   snapshot(): PlatformSnapshot {
-    const games = this.registry.listAuthorized();
+    const games = this.content.orderGames(this.registry.listAuthorized());
     return {
       license: structuredClone(this.license),
       games,
       runtimes: this.runtime.list(games),
       rounds: this.rounds.list(),
       queue: this.queue.list(),
+      content: this.content.snapshot(),
       broadcast: this.broadcastState(),
     };
   }
 
   createRound(gameId: string, playerLimit?: number): EntertainmentRound {
     const manifest = this.registry.requireAuthorized(gameId);
+    if (!this.content.isGameEnabled(gameId)) throw new Error("game-disabled");
     this.runtime.assertConfigured(manifest);
     return this.rounds.create(manifest, playerLimit);
   }
@@ -105,7 +114,7 @@ export class PlatformHub {
 
     const called = this.queue.latestCalled();
     let queueOverlay: QueueOverlay | undefined;
-    if (called?.calledAt) {
+    if (called?.calledAt && Date.now() - called.calledAt <= 10_000) {
       queueOverlay = {
         ticketId: called.id,
         number: called.number,
