@@ -141,7 +141,7 @@ try {
 
   await guest.locator('input[name="name"]').fill("Preview Guest");
   await guest.locator("#join-form button").click();
-  await guest.waitForURL(/:5174\//, { timeout: 10_000 });
+  await guest.waitForURL(/:5174\//, { timeout: 10_000, waitUntil: "domcontentloaded" });
   await guest.waitForFunction(
     () =>
       document.querySelector("#status")?.textContent?.includes("等待主持人开局"),
