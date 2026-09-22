@@ -659,6 +659,7 @@ function stepBoat(state, boat, dt) {
   }
 
   applyStormPressure(state, boat, dt);
+  if (!boat.alive) return;
   collectCrates(state, boat);
   fireBroadside(state, boat);
 }
