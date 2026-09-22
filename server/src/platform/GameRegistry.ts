@@ -67,6 +67,42 @@ export const BUILTIN_GAME_MANIFESTS: readonly GameManifestV1[] = [
       codeTtlSeconds: 300,
       lateJoin: false,
     },
+    settings: [
+      {
+        key: "trackId",
+        label: "默认赛道",
+        type: "enum",
+        env: "TRACK",
+        wired: true,
+        default: "bay",
+        options: [
+          { value: "bay", label: "海湾大奖赛" },
+          { value: "ridge", label: "山脊赛道" },
+        ],
+      },
+      {
+        key: "laps",
+        label: "单局圈数",
+        type: "number",
+        env: "LAPS",
+        wired: true,
+        default: 3,
+        min: 1,
+        max: 10,
+        step: 1,
+      },
+      {
+        key: "seconds",
+        label: "时长上限",
+        type: "number",
+        env: "RACE_SECONDS",
+        wired: true,
+        default: 150,
+        min: 30,
+        max: 300,
+        step: 10,
+      },
+    ],
     commercial: {
       tier: "base",
       entitlements: ["game:pilot-racer"],
@@ -86,6 +122,7 @@ export const BUILTIN_GAME_MANIFESTS: readonly GameManifestV1[] = [
       healthProtocol: "sea-battle/1",
       command: ["node", "server.mjs"],
       workingDirectoryEnv: "SEA_BATTLE_DIR",
+      bundledPath: "games/sea-battle",
       port: 9020,
       startPath: "/api/start",
     },
@@ -105,6 +142,20 @@ export const BUILTIN_GAME_MANIFESTS: readonly GameManifestV1[] = [
       codeTtlSeconds: 300,
       lateJoin: false,
     },
+    settings: [
+      {
+        key: "seconds",
+        label: "单局时长",
+        type: "number",
+        env: "RACE_SECONDS",
+        wired: true,
+        default: 180,
+        min: 60,
+        max: 300,
+        step: 10,
+        description: "三阶段海战节奏的总时长，修改后在下次启动进程时生效。",
+      },
+    ],
     commercial: {
       tier: "pro",
       entitlements: ["game:sea-battle"],
@@ -180,10 +231,45 @@ export function validateGameManifests(
       manifestError(id, `missing-entitlement:${expectedEntitlement}`);
     }
 
+    if (manifest.settings) {
+      const settingKeys = new Set<string>();
+      for (const setting of manifest.settings) {
+        if (!setting.key?.trim() || settingKeys.has(setting.key)) {
+          manifestError(id, "invalid-setting-key");
+        }
+        settingKeys.add(setting.key);
+        if (!setting.label?.trim()) manifestError(id, "setting-label");
+        if (!["text", "number", "enum", "boolean"].includes(setting.type)) {
+          manifestError(id, "setting-type");
+        }
+        if (setting.type === "enum" && !setting.options?.length) {
+          manifestError(id, "setting-options");
+        }
+        if (
+          setting.wired &&
+          manifest.runtime.kind === "process" &&
+          !setting.env?.trim()
+        ) {
+          manifestError(id, "wired-setting-env");
+        }
+      }
+    }
+
     if (manifest.runtime.kind === "process") {
       if (!manifest.runtime.command?.length) manifestError(id, "process-command");
-      if (!manifest.runtime.workingDirectoryEnv?.trim()) {
-        manifestError(id, "process-working-directory-env");
+      if (
+        !manifest.runtime.workingDirectoryEnv?.trim() &&
+        !manifest.runtime.bundledPath?.trim()
+      ) {
+        manifestError(id, "process-working-directory");
+      }
+      if (
+        manifest.runtime.bundledPath !== undefined &&
+        (!manifest.runtime.bundledPath.trim() ||
+          manifest.runtime.bundledPath.includes("..") ||
+          manifest.runtime.bundledPath.startsWith("/"))
+      ) {
+        manifestError(id, "process-bundled-path");
       }
       if (!manifest.runtime.healthProtocol?.trim()) {
         manifestError(id, "process-health-protocol");
@@ -202,6 +288,7 @@ export function validateGameManifests(
       if (
         manifest.runtime.command?.length ||
         manifest.runtime.workingDirectoryEnv ||
+        manifest.runtime.bundledPath ||
         manifest.runtime.port ||
         manifest.runtime.healthProtocol ||
         manifest.runtime.startPath

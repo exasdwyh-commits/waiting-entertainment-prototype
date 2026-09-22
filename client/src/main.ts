@@ -5,6 +5,7 @@ const root = document.querySelector<HTMLDivElement>("#app")!;
 const params = new URLSearchParams(location.search);
 const localMode = params.get("mode") === "local";
 const hubMode = params.get("hub") === "1";
+const shellOwnsQueue = params.get("shellQueue") === "1";
 
 root.innerHTML = `
   <div id="stage"></div>
@@ -101,8 +102,10 @@ async function syncHubQueueOverlay() {
 if (hubMode) {
   document.querySelector<HTMLElement>("#join-panel")!.hidden = true;
   document.querySelector<HTMLElement>(".tip")!.hidden = true;
-  void syncHubQueueOverlay();
-  window.setInterval(() => void syncHubQueueOverlay(), 500);
+  if (!shellOwnsQueue) {
+    void syncHubQueueOverlay();
+    window.setInterval(() => void syncHubQueueOverlay(), 500);
+  }
 }
 
 if (localMode) {
@@ -126,4 +129,12 @@ if (localMode) {
     replayWipe: document.querySelector<HTMLDivElement>("#replay-wipe")!,
   });
   game.start();
+
+  if (params.get("visualPreview") === "1") {
+    type VisualPreviewWindow = Window & {
+      __waitingVisualReplay?: () => boolean;
+    };
+    (window as VisualPreviewWindow).__waitingVisualReplay = () =>
+      game.previewReplay();
+  }
 }

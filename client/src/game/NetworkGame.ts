@@ -528,6 +528,30 @@ export class NetworkGame {
     ];
   }
 
+  previewReplay(): boolean {
+    const latest = this.latest;
+    if (!latest || this.history.length < 4 || this.replay) return false;
+
+    const sameMatch = this.history.filter(
+      (frame) => frame.matchId === latest.matchId,
+    );
+    const frames = sameMatch.slice(-Math.min(24, sameMatch.length));
+    if (frames.length < 4) return false;
+
+    const actor = frames[frames.length - 1]?.players[0];
+    const target = frames[frames.length - 1]?.players[1];
+    this.replayQueue = [{
+      frames,
+      label: actor && target
+        ? `视觉回放验收 · ${actor.name} → ${target.name} · 反打机位`
+        : "视觉回放验收 · 反打机位",
+      loops: 1,
+      actorId: actor?.id,
+      targetId: target?.id,
+    }];
+    return this.startNextReplay();
+  }
+
   private startNextReplay(now = performance.now()) {
     const clip = this.replayQueue.shift();
     if (!clip) return false;

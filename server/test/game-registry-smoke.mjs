@@ -19,6 +19,12 @@ const license = {
   ],
 };
 assert.doesNotThrow(() => new GameRegistry(license, BUILTIN_GAME_MANIFESTS));
+const sea = BUILTIN_GAME_MANIFESTS.find((manifest) => manifest.id === "sea-battle");
+assert.equal(sea?.version, "0.2.0");
+assert.equal(sea?.runtime.bundledPath, "games/sea-battle");
+assert.equal(sea?.settings?.find((setting) => setting.key === "seconds")?.default, 180);
+const racer = BUILTIN_GAME_MANIFESTS.find((manifest) => manifest.id === "pilot-racer");
+assert.equal(racer?.settings?.find((setting) => setting.key === "seconds")?.default, 150);
 
 {
   const manifests = clone(BUILTIN_GAME_MANIFESTS);
@@ -88,3 +94,13 @@ assert.doesNotThrow(() => new GameRegistry(license, BUILTIN_GAME_MANIFESTS));
 }
 
 console.log("GameRegistry smoke passed: ids, ports, LAN entrypoints, player ranges, entitlement identity, and runtime contracts are validated.");
+
+
+{
+  const manifests = clone(BUILTIN_GAME_MANIFESTS);
+  manifests[2].runtime.bundledPath = "../escape";
+  assert.throws(
+    () => validateGameManifests(manifests),
+    /manifest-invalid:sea-battle:process-bundled-path/,
+  );
+}

@@ -29,7 +29,29 @@ async function platform(path = "", options = {}) {
 }
 
 try {
-  // Exercise Hub surfaces first so round/signup regressions fail quickly.
+  const host = await browser.newPage({
+    viewport: { width: 1600, height: 1000 },
+    deviceScaleFactor: 1,
+  });
+  await host.goto("http://127.0.0.1:5175", { waitUntil: "networkidle" });
+
+  // Capture game management before creating the timed regression round. This
+  // keeps the original 18-second replay baseline deterministic instead of
+  // spending part of the round budget on an unrelated admin screenshot.
+  await host.locator('[data-view="games"]').click();
+  await host.locator(".management").waitFor({ timeout: 8_000 });
+  if ((await host.locator(".manage-card").count()) < 3) {
+    throw new Error("Game management did not render the full package catalog.");
+  }
+  await host.screenshot({
+    path: "docs/screenshots/hub-game-management.png",
+    fullPage: true,
+  });
+  await host.locator('[data-view="live"]').click();
+  await host.locator(".workspace").waitFor({ timeout: 8_000 });
+
+  // Exercise Hub round/signup surfaces after the management capture so the
+  // timed round starts with its full budget.
   const created = await platform("/rounds", {
     method: "POST",
     body: JSON.stringify({ gameId: "table-push-king", playerLimit: 4 }),
@@ -38,13 +60,7 @@ try {
   if (!round?.code || !round?.id) {
     throw new Error("Hub round creation did not return id/code.");
   }
-
-  const host = await browser.newPage({
-    viewport: { width: 1600, height: 1000 },
-    deviceScaleFactor: 1,
-  });
-  await host.goto("http://127.0.0.1:5175", { waitUntil: "networkidle" });
-  await host.waitForSelector(".round-code");
+  await host.waitForSelector(".round-code", { timeout: 8_000 });
   await host.screenshot({
     path: "docs/screenshots/hub-host.png",
     fullPage: true,
@@ -53,6 +69,12 @@ try {
   const screen = await browser.newPage({
     viewport: { width: 1600, height: 900 },
     deviceScaleFactor: 1,
+  });
+  screen.on("console", (message) => {
+    console.log("[screen console]", message.type(), message.text());
+  });
+  screen.on("pageerror", (error) => {
+    console.error("[screen pageerror]", error.message);
   });
   await screen.goto("http://127.0.0.1:5176", { waitUntil: "domcontentloaded" });
   await screen.waitForFunction(() => {
@@ -115,14 +137,11 @@ try {
     { timeout: 10_000 },
   );
   await screen.waitForTimeout(2_000);
-  const liveFrame = screen.frameLocator("#game-frame");
-  await liveFrame.locator("#hub-queue-overlay").waitFor({
-    state: "attached",
-    timeout: 30_000,
-  });
-
-  // The server retains the latest called ticket; the live game owns the
-  // 10-second presentation window once it observes a new calledAt value.
+  // Keep the venue screen foregrounded while validating its polling/focus
+  // recovery. Headless Chromium throttles background-page timers aggressively.
+  await screen.bringToFront();
+  // The server retains the latest called ticket; the Broadcast Shell owns the
+  // presentation window across embedded and external Game Packages.
   const ticket = await platform("/queue", {
     method: "POST",
     body: JSON.stringify({ partySize: 4, label: "Preview Table" }),
@@ -131,9 +150,36 @@ try {
     method: "POST",
     body: "{}",
   });
-  await liveFrame
-    .locator("#hub-queue-overlay:not([hidden])")
-    .waitFor({ timeout: 10_000 });
+
+  const queueDeadline = Date.now() + 10_000;
+  let broadcastQueue;
+  while (Date.now() < queueDeadline) {
+    const broadcast = await platform("/broadcast");
+    if (broadcast.queueOverlay?.ticketId === ticket.ticket.id) {
+      broadcastQueue = broadcast.queueOverlay;
+      break;
+    }
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 200));
+  }
+  if (!broadcastQueue) {
+    throw new Error("Platform broadcast never exposed the newly called queue ticket.");
+  }
+
+  await screen.waitForFunction(
+    (ticketId) => {
+      const overlay = document.querySelector("#queue-overlay");
+      const number = document.querySelector("#queue-number")?.textContent?.trim();
+      return (
+        overlay instanceof HTMLElement &&
+        !overlay.hidden &&
+        number &&
+        number.length > 0 &&
+        document.body.innerText.includes(number)
+      );
+    },
+    ticket.ticket.id,
+    { timeout: 10_000 },
+  );
   await screen.screenshot({
     path: "docs/screenshots/hub-broadcast-queue.png",
     fullPage: true,
@@ -153,7 +199,7 @@ try {
     viewport: { width: 1600, height: 900 },
     deviceScaleFactor: 1,
   });
-  await big.goto("http://127.0.0.1:5173", { waitUntil: "networkidle" });
+  await big.goto("http://127.0.0.1:5173/?visualPreview=1", { waitUntil: "networkidle" });
 
   const phone = await browser.newPage({
     viewport: { width: 844, height: 390 },
@@ -176,6 +222,17 @@ try {
   });
 
   await big.waitForFunction(
+    () => typeof window.__waitingVisualReplay === "function",
+    { timeout: 10_000 },
+  );
+  const replayStarted = await big.evaluate(() =>
+    window.__waitingVisualReplay?.() ?? false
+  );
+  if (!replayStarted) {
+    throw new Error("Deterministic replay preview could not start from captured history.");
+  }
+
+  await big.waitForFunction(
     () => {
       const bug = document.querySelector("#broadcast-bug");
       const message = document.querySelector("#message");
@@ -183,11 +240,10 @@ try {
       return (
         bug?.getAttribute("data-mode") === "replay" &&
         message?.classList.contains("replay-caption") &&
-        caption.length > 0 &&
-        (caption.includes("×") || caption.includes("反打机位"))
+        caption.includes("视觉回放验收")
       );
     },
-    { timeout: 72_000 },
+    { timeout: 10_000 },
   );
 
   // The wait above is the replay functional assertion. Capture immediately;

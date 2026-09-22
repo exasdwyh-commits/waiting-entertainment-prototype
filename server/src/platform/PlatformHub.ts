@@ -57,6 +57,7 @@ export class PlatformHub {
     return {
       license: structuredClone(this.license),
       games,
+      allGames: this.registry.listAll(),
       runtimes: this.runtime.list(games),
       rounds: this.rounds.list(),
       queue: this.queue.list(),
@@ -70,6 +71,7 @@ export class PlatformHub {
     return {
       license: structuredClone(this.license),
       games,
+      allGames: this.registry.listAll(),
       runtimes: this.runtime.list(games),
       rounds: this.rounds.list(),
       queue: this.queue.list(),

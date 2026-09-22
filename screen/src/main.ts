@@ -19,6 +19,8 @@ root.innerHTML =
     '<section id="result" class="scene scene--result" hidden><span class="eyebrow">ROUND COMPLETE</span><h1>本轮结束</h1>' +
       '<p>精彩回放 / 排名接口将在导播 SDK 阶段接入</p><div class="result-line"></div></section>' +
     '<div class="corner-brand"><span>WE</span><strong id="mode-label">IDLE_MEDIA</strong></div>' +
+    '<section id="runtime-alert" class="runtime-alert" hidden><span class="runtime-alert__eyebrow">GAME RUNTIME INTERRUPTED</span>' +
+      '<strong id="runtime-alert-title">游戏运行中断</strong><p id="runtime-alert-copy">请联系主持人检查游戏进程。</p></section>' +
     '<aside id="queue-overlay" class="queue-overlay" hidden><span class="bell">●</span><div><small>请准备入座</small>' +
       '<strong id="queue-number">A000</strong><span id="queue-party">2 人桌 · 请前往前台</span></div></aside>' +
     '<div id="offline" class="offline" hidden>Hub 离线 · 正在重连</div>' +
@@ -42,11 +44,16 @@ const queueOverlay = document.querySelector<HTMLElement>("#queue-overlay")!;
 const queueNumber = document.querySelector<HTMLElement>("#queue-number")!;
 const queueParty = document.querySelector<HTMLElement>("#queue-party")!;
 const offline = document.querySelector<HTMLElement>("#offline")!;
+const runtimeAlert = document.querySelector<HTMLElement>("#runtime-alert")!;
+const runtimeAlertTitle = document.querySelector<HTMLElement>("#runtime-alert-title")!;
+const runtimeAlertCopy = document.querySelector<HTMLElement>("#runtime-alert-copy")!;
 
 let lastQrCode = "";
 let lastFrameUrl = "";
 let lastQueueCallKey = "";
 let queueOverlayTimer: number | undefined;
+let refreshIssued = 0;
+let refreshApplied = 0;
 
 function presentQueueCall(overlay: NonNullable<PlatformSnapshot["broadcast"]["queueOverlay"]>) {
   const key = overlay.ticketId + ":" + overlay.calledAt;
@@ -74,6 +81,7 @@ function hubDisplayUrl(game: GameManifestV1): string {
   const base = entryUrl(game, "display");
   const url = new URL(base);
   url.searchParams.set("hub", "1");
+  url.searchParams.set("shellQueue", "1");
   return url.toString();
 }
 
@@ -111,16 +119,39 @@ function escapeText(value: unknown): string {
 }
 
 async function refresh() {
+  const refreshId = ++refreshIssued;
   try {
     const response = await fetch(API, { cache: "no-store" });
     if (!response.ok) throw new Error("platform-offline");
     const snapshot = (await response.json()) as PlatformSnapshot;
+    // Polls can overlap. Never let an older response overwrite a newer venue
+    // state (for example hiding a queue call that a later snapshot already
+    // presented).
+    if (refreshId < refreshApplied) return;
+    refreshApplied = refreshId;
     offline.hidden = true;
 
     const state = snapshot.broadcast;
     const round = state.round;
     const game = round ? snapshot.games.find((item) => item.id === round.gameId) : undefined;
+    const runtime = game
+      ? snapshot.runtimes.find((item) => item.gameId === game.id)
+      : undefined;
+    const runtimeDegraded =
+      state.mode === "LIVE_GAME" &&
+      game?.runtime.kind === "process" &&
+      runtime?.state !== "running";
+
     setScene(state.mode);
+    runtimeAlert.hidden = !runtimeDegraded;
+    gameFrame.classList.toggle("game-frame--degraded", runtimeDegraded);
+    if (runtimeDegraded) {
+      runtimeAlertTitle.textContent = (game?.name ?? "当前游戏") + " 运行中断";
+      const detail = runtime?.message?.trim();
+      runtimeAlertCopy.textContent = detail
+        ? "请主持人检查运行时：" + detail
+        : "请主持人检查游戏进程，可尝试健康检查或结束本轮。";
+    }
 
     if (round && game) {
       if (state.mode === "RECRUITING") {
@@ -146,18 +177,10 @@ async function refresh() {
       }
     }
 
-    const gameOwnsLiveQueueOverlay =
-      state.mode === "LIVE_GAME" && game?.runtime.kind === "embedded";
-
-    if (gameOwnsLiveQueueOverlay) {
-      // Embedded games can render the call inside their own DOM. External
-      // process games stay behind the shell-level overlay.
-      queueOverlay.hidden = true;
-      if (queueOverlayTimer !== undefined) {
-        window.clearTimeout(queueOverlayTimer);
-        queueOverlayTimer = undefined;
-      }
-    } else if (state.queueOverlay) {
+    // Queue calling is a platform concern. The Broadcast Shell owns this
+    // overlay for embedded and process games alike, so every Game Package gets
+    // identical venue behavior without implementing restaurant queue UI.
+    if (state.queueOverlay) {
       presentQueueCall(state.queueOverlay);
     } else {
       queueOverlay.hidden = true;
@@ -167,9 +190,13 @@ async function refresh() {
       }
     }
   } catch {
-    offline.hidden = false;
+    if (refreshId >= refreshApplied) offline.hidden = false;
   }
 }
 
 void refresh();
 window.setInterval(() => void refresh(), 450);
+window.addEventListener("focus", () => void refresh());
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) void refresh();
+});

@@ -26,6 +26,25 @@ export type BroadcastMode =
   | "RESULT"
   | "HIGHLIGHT";
 
+export interface GameSettingOptionV1 {
+  value: string;
+  label: string;
+}
+
+export interface GameSettingV1 {
+  key: string;
+  label: string;
+  type: "text" | "number" | "enum" | "boolean";
+  env?: string;
+  wired?: boolean;
+  default: string | number | boolean;
+  min?: number;
+  max?: number;
+  step?: number;
+  description?: string;
+  options?: GameSettingOptionV1[];
+}
+
 export interface GameManifestV1 {
   schemaVersion: 1;
   id: string;
@@ -43,6 +62,7 @@ export interface GameManifestV1 {
     healthProtocol?: string;
     command?: string[];
     workingDirectoryEnv?: string;
+    bundledPath?: string;
     port?: number;
     startPath?: string;
   };
@@ -66,6 +86,7 @@ export interface GameManifestV1 {
     tier: GameTier;
     entitlements: string[];
   };
+  settings?: GameSettingV1[];
 }
 
 export type RuntimeState =
@@ -88,6 +109,8 @@ export interface GameRuntimeStatus {
   startedAt?: number;
   checkedAt: number;
   message?: string;
+  configSource?: "embedded" | "environment" | "bundled";
+  workingDirectory?: string;
 }
 
 export interface StoreLicense {
@@ -143,6 +166,7 @@ export interface BroadcastState {
 export interface PlatformSnapshot {
   license: StoreLicense;
   games: GameManifestV1[];
+  allGames: GameManifestV1[];
   runtimes: GameRuntimeStatus[];
   rounds: EntertainmentRound[];
   queue: QueueTicket[];
