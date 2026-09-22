@@ -31,13 +31,23 @@ export interface GameSettingOptionV1 {
   label: string;
 }
 
+export type GameSettingValue = string | number | boolean;
+
+export type GameSettingSource = "saved" | "environment" | "default";
+
+export interface GameSettingRuntimeState {
+  key: string;
+  value: GameSettingValue;
+  source: GameSettingSource;
+}
+
 export interface GameSettingV1 {
   key: string;
   label: string;
   type: "text" | "number" | "enum" | "boolean";
   env?: string;
   wired?: boolean;
-  default: string | number | boolean;
+  default: GameSettingValue;
   min?: number;
   max?: number;
   step?: number;
@@ -167,6 +177,7 @@ export interface PlatformSnapshot {
   license: StoreLicense;
   games: GameManifestV1[];
   allGames: GameManifestV1[];
+  gameSettings: Record<string, GameSettingRuntimeState[]>;
   runtimes: GameRuntimeStatus[];
   rounds: EntertainmentRound[];
   queue: QueueTicket[];
