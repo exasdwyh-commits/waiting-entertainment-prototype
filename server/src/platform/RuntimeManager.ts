@@ -327,7 +327,13 @@ export class RuntimeManager {
         `http://127.0.0.1:${port}${manifest.runtime.healthPath}`,
         { signal: AbortSignal.timeout(800) },
       );
-      return response.ok;
+      if (!response.ok) return false;
+      if (!manifest.runtime.healthProtocol) return true;
+
+      const body = await response.json().catch(() => null) as
+        | { protocol?: string }
+        | null;
+      return body?.protocol === manifest.runtime.healthProtocol;
     } catch {
       return false;
     }
