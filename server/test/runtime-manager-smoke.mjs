@@ -16,6 +16,7 @@ const manifest = {
   runtime: {
     kind: "process",
     healthPath: "/info",
+    healthProtocol: "runtime-fixture/1",
     command: ["node", "fixture-server.mjs"],
     workingDirectoryEnv: "RUNTIME_FIXTURE_DIR",
     port: 19090,
