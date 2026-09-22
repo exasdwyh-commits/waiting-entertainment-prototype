@@ -112,9 +112,9 @@ export const BUILTIN_GAME_MANIFESTS: readonly GameManifestV1[] = [
     schemaVersion: 1,
     id: "sea-battle",
     name: "海战竞技",
-    version: "0.2.0",
+    version: "0.3.0",
     category: "naval-survival",
-    summary: "1-8 人海上成长乱斗：物资升级、侧舷自动炮、悬赏旗舰、连沉奖励、海怪事件与积分排名。",
+    summary: "1-8 人海上成长乱斗：成长升级、侧舷自动炮、悬赏旗舰、海怪事件，并支持可替换 3D 战船/海怪/岛屿资产。",
     players: { min: 1, max: 8 },
     runtime: {
       kind: "process",
