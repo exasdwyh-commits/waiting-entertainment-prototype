@@ -29,6 +29,7 @@ type Slot = {
   state: PlayerState;
   alive: boolean;
   respawnAt: number;
+  invulnerableUntil: number;
   pushReadyAt: number;
   pushStateUntil: number;
   tossTargetId?: string;
@@ -137,6 +138,31 @@ export class GameSession {
     };
   }
 
+  debugForceFall(socketId: string) {
+    const slot = this.slots.find(
+      (candidate) => candidate.socketId === socketId && candidate.alive,
+    );
+    if (!slot) return false;
+
+    if (slot.tossTargetId) {
+      const carried = this.slots.find(
+        (candidate) =>
+          candidate.id === slot.tossTargetId &&
+          candidate.carriedBy === slot.id,
+      );
+      if (carried) this.dropTossTarget(slot, carried, Date.now());
+      else this.clearToss(slot);
+    }
+
+    const p = slot.body.translation();
+    slot.edgeHanging = false;
+    slot.state = "ragdoll";
+    slot.body.setGravityScale(1, true);
+    slot.body.setTranslation({ x: p.x, y: -3.1, z: p.z }, true);
+    slot.body.setLinvel({ x: 0, y: -1, z: 0 }, true);
+    return true;
+  }
+
   leave(socketId: string) {
     const slot = this.slots.find((candidate) => candidate.socketId === socketId);
     if (!slot) return;
@@ -227,6 +253,7 @@ export class GameSession {
         state: "idle",
         alive: true,
         respawnAt: 0,
+        invulnerableUntil: 0,
         pushReadyAt: 0,
         pushStateUntil: 0,
         tossStartedAt: 0,
@@ -298,6 +325,7 @@ export class GameSession {
       slot.state = "idle";
       slot.alive = true;
       slot.respawnAt = 0;
+      slot.invulnerableUntil = 0;
       slot.edgeHanging = false;
       slot.edgeHangUntil = 0;
       slot.climbStartedAt = 0;
@@ -405,7 +433,8 @@ export class GameSession {
       this.releaseActiveTosses(now);
       this.phase = "finished";
 
-      const candidates = timedOut ? [...this.slots] : [...alive];
+      const candidates =
+        timedOut || alive.length === 0 ? [...this.slots] : [...alive];
       candidates.sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score;
         if (a.alive !== b.alive) return Number(b.alive) - Number(a.alive);
@@ -435,18 +464,61 @@ export class GameSession {
     }
   }
 
-  private respawnSlot(slot: Slot, now: number) {
+  private chooseRespawnPoint(slot: Slot) {
     const index = Number(slot.id.split("-")[1]) || 0;
-    const angle = (index / PLAYER_COUNT) * Math.PI * 2;
-    const radius = TABLE_PUSH_GEOMETRY.spawnRadius;
+    const baseAngle = (index / PLAYER_COUNT) * Math.PI * 2;
+    const candidateCount = Math.max(
+      8,
+      Math.round(GAME_TUNING.match.respawnCandidateCount),
+    );
+
+    let bestPoint = {
+      x: Math.cos(baseAngle) * TABLE_PUSH_GEOMETRY.spawnRadius,
+      z: Math.sin(baseAngle) * TABLE_PUSH_GEOMETRY.spawnRadius,
+    };
+    let bestClearance = -1;
+
+    for (let offset = 0; offset < candidateCount; offset += 1) {
+      const angle =
+        baseAngle + (offset / candidateCount) * Math.PI * 2;
+      const radius =
+        TABLE_PUSH_GEOMETRY.spawnRadius +
+        (offset % 2 === 0 ? -0.15 : 0.7);
+      const point = {
+        x: Math.cos(angle) * radius,
+        z: Math.sin(angle) * radius,
+      };
+
+      let minDistance = Number.POSITIVE_INFINITY;
+      for (const other of this.slots) {
+        if (other === slot || !other.alive) continue;
+        const p = other.body.translation();
+        minDistance = Math.min(
+          minDistance,
+          Math.hypot(p.x - point.x, p.z - point.z),
+        );
+      }
+
+      if (minDistance > bestClearance) {
+        bestClearance = minDistance;
+        bestPoint = point;
+      }
+    }
+
+    return bestPoint;
+  }
+
+  private respawnSlot(slot: Slot, now: number) {
+    const spawn = this.chooseRespawnPoint(slot);
+    const inward = normalize(-spawn.x, -spawn.z);
 
     slot.body.setEnabled(true);
     slot.body.setGravityScale(1, true);
     slot.body.setTranslation(
       {
-        x: Math.cos(angle) * radius,
+        x: spawn.x,
         y: 1.05,
-        z: Math.sin(angle) * radius,
+        z: spawn.z,
       },
       true,
     );
@@ -454,9 +526,11 @@ export class GameSession {
     slot.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     slot.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
 
-    slot.facingYaw = Math.atan2(-Math.cos(angle), -Math.sin(angle));
+    slot.facingYaw = Math.atan2(inward.x, inward.z);
     slot.alive = true;
     slot.respawnAt = 0;
+    slot.invulnerableUntil =
+      now + GAME_TUNING.match.respawnProtectionMs;
     slot.state = "recovering";
     slot.balance = 0.72;
     slot.stamina = Math.max(slot.stamina, 0.58);
@@ -470,7 +544,7 @@ export class GameSession {
     slot.climbTo = undefined;
     slot.knockedUntil = 0;
     slot.recoverUntil = now + 380;
-    slot.pushReadyAt = now + 420;
+    slot.pushReadyAt = slot.invulnerableUntil;
     slot.pushStateUntil = 0;
     slot.tossTargetId = undefined;
     slot.carriedBy = undefined;
@@ -691,6 +765,7 @@ export class GameSession {
     if (
       slot.tossTargetId ||
       slot.edgeHanging ||
+      now < slot.invulnerableUntil ||
       slot.grabNeedsRelease ||
       slot.stamina <= GAME_TUNING.stamina.exhaustedThreshold
     ) {
@@ -713,6 +788,7 @@ export class GameSession {
       if (
         candidate === slot ||
         !candidate.alive ||
+        now < candidate.invulnerableUntil ||
         candidate.carriedBy ||
         candidate.edgeHanging ||
         candidate.state === "climbing"
@@ -1001,7 +1077,8 @@ export class GameSession {
       (candidate) =>
         candidate.id === slot.botTargetId &&
         candidate !== slot &&
-        candidate.alive,
+        candidate.alive &&
+        now >= candidate.invulnerableUntil,
     );
 
     if (!target || now >= slot.botRetargetAt) {
@@ -1009,7 +1086,13 @@ export class GameSession {
       target = undefined;
 
       for (const candidate of this.slots) {
-        if (candidate === slot || !candidate.alive) continue;
+        if (
+          candidate === slot ||
+          !candidate.alive ||
+          now < candidate.invulnerableUntil
+        ) {
+          continue;
+        }
         const c = candidate.body.translation();
         const distance = Math.hypot(c.x - p.x, c.z - p.z);
         const existingFocus = this.slots.filter(
@@ -1176,6 +1259,7 @@ export class GameSession {
         candidate.id === slot.botTargetId &&
         candidate !== slot &&
         candidate.alive &&
+        now >= candidate.invulnerableUntil &&
         !candidate.carriedBy,
     );
     if (!target) return false;
@@ -1202,7 +1286,8 @@ export class GameSession {
       (candidate) =>
         candidate.id === slot.botTargetId &&
         candidate !== slot &&
-        candidate.alive,
+        candidate.alive &&
+        now >= candidate.invulnerableUntil,
     );
     if (!target) return false;
 
@@ -1231,6 +1316,7 @@ export class GameSession {
     if (
       !slot.alive ||
       slot.edgeHanging ||
+      now < slot.invulnerableUntil ||
       now < slot.pushReadyAt
     ) {
       return;
@@ -1300,7 +1386,14 @@ export class GameSession {
 
     const origin = slot.body.translation();
     for (const target of this.slots) {
-      if (target === slot || !target.alive || target.carriedBy) continue;
+      if (
+        target === slot ||
+        !target.alive ||
+        now < target.invulnerableUntil ||
+        target.carriedBy
+      ) {
+        continue;
+      }
       const p = target.body.translation();
       const rx = p.x - origin.x;
       const rz = p.z - origin.z;
@@ -1396,7 +1489,14 @@ export class GameSession {
     const origin = slot.body.translation();
 
     for (const target of this.slots) {
-      if (target === slot || !target.alive || target.carriedBy) continue;
+      if (
+        target === slot ||
+        !target.alive ||
+        now < target.invulnerableUntil ||
+        target.carriedBy
+      ) {
+        continue;
+      }
       const p = target.body.translation();
       const rx = p.x - origin.x;
       const rz = p.z - origin.z;
@@ -1632,6 +1732,10 @@ export class GameSession {
           velocity: [v.x, v.y, v.z],
           score: slot.score,
           pushCooldownLeftMs: Math.max(0, slot.pushReadyAt - now),
+          spawnProtectionLeftMs: Math.max(
+            0,
+            slot.invulnerableUntil - now,
+          ),
           grabTargetId: slot.tossTargetId,
           state: slot.state,
           eliminated: !slot.alive,
