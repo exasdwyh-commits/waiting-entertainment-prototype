@@ -35,6 +35,40 @@ function waitForEvent(socket, event, predicate = () => true, timeoutMs = 8000) {
   });
 }
 
+const STABLE_STATES = new Set([
+  "idle",
+  "moving",
+  "pushing",
+  "grabbing",
+  "throwing",
+  "celebrate",
+]);
+
+function upY(rotation) {
+  const [x, , z] = rotation;
+  return 1 - 2 * (x * x + z * z);
+}
+
+function assertStablePlayersUpright(snapshot) {
+  const stable = snapshot.players.filter(
+    (player) =>
+      !player.eliminated &&
+      STABLE_STATES.has(player.state),
+  );
+
+  assert.ok(
+    stable.length > 0,
+    "Expected at least one stable fighter for upright validation.",
+  );
+
+  for (const player of stable) {
+    assert.ok(
+      upY(player.rotation) > 0.92,
+      `${player.id} is in stable state ${player.state} but is not upright; upY=${upY(player.rotation).toFixed(3)}`,
+    );
+  }
+}
+
 function assertSnapshotHealthy(snapshot) {
   assert.equal(snapshot.players.length, PLAYER_COUNT);
   assert.equal(new Set(snapshot.players.map((player) => player.id)).size, PLAYER_COUNT);
@@ -126,6 +160,7 @@ try {
     8000,
   );
   assertSnapshotHealthy(allHuman);
+  assertStablePlayersUpright(allHuman);
 
   measuredStartedAt = performance.now();
   snapshotCount = 0;
@@ -182,7 +217,9 @@ try {
         (player) =>
           player.id === forcedPlayer.ack.playerId &&
           !player.eliminated &&
-          player.spawnProtectionLeftMs > 0,
+          player.spawnProtectionLeftMs > 0 &&
+          STABLE_STATES.has(player.state) &&
+          upY(player.rotation) > 0.92,
       ),
     7_000,
   );
@@ -221,6 +258,7 @@ try {
 
   assert.ok(latest);
   assertSnapshotHealthy(latest);
+  assertStablePlayersUpright(latest);
   assert.equal(latest.players.filter((player) => !player.bot).length, PLAYER_COUNT);
   assert.ok(
     snapshotCount >= 55,
@@ -244,7 +282,7 @@ try {
   assertSnapshotHealthy(takeover);
 
   console.log(
-    `10-client stress passed: capacity -> 20Hz input load -> forced fall -> protected respawn -> concurrent brawl -> AI takeover; snapshots=${snapshotCount}.`,
+    `10-client stress passed: capacity -> 20Hz input load -> forced fall -> upright protected respawn -> concurrent brawl posture -> AI takeover; snapshots=${snapshotCount}.`,
   );
 } finally {
   if (inputTimer) clearInterval(inputTimer);

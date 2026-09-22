@@ -415,6 +415,7 @@ export class GameSession {
         slot.input.push = false;
       }
 
+      this.stabilizeStanding(slot, now);
       this.applyUprightAssist(slot, now);
     }
 
@@ -985,8 +986,63 @@ export class GameSession {
     );
 
     if (recovering && now >= slot.recoverUntil) {
+      this.snapUpright(slot);
+      slot.balance = Math.max(
+        slot.balance,
+        GAME_TUNING.balance.recoverySnapBalance,
+      );
       slot.state = "idle";
     }
+  }
+
+  private snapUpright(slot: Slot) {
+    const halfYaw = slot.facingYaw * 0.5;
+    slot.body.setRotation(
+      {
+        x: 0,
+        y: Math.sin(halfYaw),
+        z: 0,
+        w: Math.cos(halfYaw),
+      },
+      true,
+    );
+
+    const angular = slot.body.angvel();
+    slot.body.setAngvel(
+      {
+        x: 0,
+        y: angular.y * 0.35,
+        z: 0,
+      },
+      true,
+    );
+  }
+
+  private stabilizeStanding(slot: Slot, now: number) {
+    if (
+      !slot.alive ||
+      slot.carriedBy ||
+      slot.edgeHanging ||
+      now < slot.knockedUntil ||
+      slot.balance < GAME_TUNING.balance.stableUprightMinBalance
+    ) {
+      return;
+    }
+
+    const stableState =
+      slot.state === "idle" ||
+      slot.state === "moving" ||
+      slot.state === "pushing" ||
+      slot.state === "grabbing" ||
+      slot.state === "throwing" ||
+      slot.state === "celebrate";
+
+    if (!stableState) return;
+
+    // Hybrid active-ragdoll rule:
+    // stable gameplay states are upright; designated hit/ragdoll/recovery
+    // states are the only time X/Z body rotation is allowed to persist.
+    this.snapUpright(slot);
   }
 
   private advanceClimb(slot: Slot, now: number) {
