@@ -53,12 +53,18 @@ function errorStatus(message: string): number {
     message === "runtime-not-configured" ||
     message === "runtime-start-failed" ||
     message === "runtime-health-timeout" ||
+    message === "runtime-health-protocol-mismatch" ||
+    message === "runtime-port-conflict" ||
     message === "runtime-start-action-failed" ||
     message === "runtime-port-missing"
   ) {
     return 503;
   }
-  if (message === "round-full" || message === "active-round-exists") return 409;
+  if (
+    message === "round-full" ||
+    message === "active-round-exists" ||
+    message === "runtime-active-round"
+  ) return 409;
   if (
     message.startsWith("invalid-round-transition") ||
     message.startsWith("invalid-queue-transition") ||
@@ -220,6 +226,35 @@ export async function handlePlatformRequest(
       const games = hub.registry.listAuthorized();
       await hub.runtime.refreshAll(games);
       json(res, 200, { runtimes: hub.runtime.list(games) });
+      return true;
+    }
+
+    const runtimeActionMatch = url.pathname.match(
+      /^\/api\/platform\/runtimes\/([^/]+)\/(start|stop)$/,
+    );
+    if (req.method === "POST" && runtimeActionMatch) {
+      const gameId = runtimeActionMatch[1];
+      const action = runtimeActionMatch[2];
+      const manifest = hub.registry.requireAuthorized(gameId);
+      const active = hub.rounds.activeForGame(gameId);
+
+      if (
+        action === "stop" &&
+        active &&
+        ["locked", "running"].includes(active.status)
+      ) {
+        throw new Error("runtime-active-round");
+      }
+
+      if (action === "start") {
+        await hub.runtime.ensureRunning(manifest);
+      } else {
+        await hub.runtime.stop(gameId);
+      }
+
+      json(res, 200, {
+        runtime: await hub.runtime.refresh(manifest, true),
+      });
       return true;
     }
 
