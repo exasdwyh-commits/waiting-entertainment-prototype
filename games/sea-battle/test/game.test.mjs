@@ -85,6 +85,7 @@ test("automatic cannons fire broadside but do not shoot through the bow", () => 
     boat.heading = 0;
     if (id > 1) { boat.alive = false; boat.respawnAt = Infinity; }
   });
+  sideState.projectiles = [];
   const shooter = sideState.boats[0];
   const target = sideState.boats[1];
   shooter.x = 0; shooter.z = 0; shooter.heading = 0; shooter.nextFireAt = 0;
@@ -100,6 +101,7 @@ test("automatic cannons fire broadside but do not shoot through the bow", () => 
     boat.heading = 0;
     if (id > 1) { boat.alive = false; boat.respawnAt = Infinity; }
   });
+  frontState.projectiles = [];
   const bow = frontState.boats[0];
   const ahead = frontState.boats[1];
   bow.x = 0; bow.z = 0; bow.heading = 0; bow.nextFireAt = 0;
