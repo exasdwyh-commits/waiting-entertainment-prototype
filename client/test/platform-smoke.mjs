@@ -126,4 +126,12 @@ const finished = await api(`/api/platform/rounds/${created.round.id}/finish`, {
 });
 assert.equal(finished.round.status, "finished");
 
-console.log("Platform smoke test passed: CORS, single active round, round admission, independent queue and broadcast composition are healthy.");
+const unconfiguredPilot = await fetch(base + "/api/platform/rounds", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ gameId: "pilot-racer" }),
+});
+assert.equal(unconfiguredPilot.status, 503);
+assert.equal((await unconfiguredPilot.json()).error, "runtime-not-configured");
+
+console.log("Platform smoke test passed: CORS, single active round, round admission, runtime configuration guard, independent queue and broadcast composition are healthy.");
