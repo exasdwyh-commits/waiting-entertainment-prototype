@@ -1,10 +1,10 @@
-# Running the prototype
+# Running Waiting Entertainment Hub
 
 ## Requirements
 
 - Node.js 22+
 - npm 10+
-- Big-screen computer and phones on the same LAN
+- Host computer, big screen and guest phones on the same LAN
 
 ## Start
 
@@ -13,44 +13,73 @@ npm install
 npm run dev
 ```
 
-This starts four workspaces/services through the monorepo:
+The local host exposes these surfaces:
 
-- Big screen: `http://<HOST-LAN-IP>:5173`
-- Phone controller: `http://<HOST-LAN-IP>:5174`
-- Authoritative server: `http://<HOST-LAN-IP>:3001`
-- Shared TypeScript protocol is built before development services start
+| Surface | Address | Purpose |
+| --- | --- | --- |
+| Game display | `http://<HOST-LAN-IP>:5173` | Current embedded game's own broadcast renderer |
+| Phone controller | `http://<HOST-LAN-IP>:5174` | Table Push King player view and controls |
+| Host Console | `http://<HOST-LAN-IP>:5175` | Host-led rounds, game library, queue/calling |
+| Broadcast Shell | `http://<HOST-LAN-IP>:5176` | Venue big-screen composition |
+| Guest Join | `http://<HOST-LAN-IP>:5177/join/<ROUND_CODE>` | Ephemeral per-round signup |
+| Authoritative server | `http://<HOST-LAN-IP>:3001` | GameSession + Hub API |
 
-Example:
+Use the LAN IP, not `localhost`, on any page that must be reachable from phones.
 
-```text
-Big screen:       http://192.168.1.20:5173
-Phone controller: http://192.168.1.20:5174
-Server health:    http://192.168.1.20:3001/health
-```
+## Recommended venue flow
 
-Use the LAN IP on the big-screen browser. If the screen is opened on `localhost`, the generated QR code will also contain `localhost` and will not work from another phone.
+The normal hosted flow now starts from the platform surfaces rather than the legacy game QR.
 
-## Normal network mode
+1. Open the Host Console on `:5175`.
+2. Open the venue Broadcast Shell full-screen on `:5176`.
+3. The host selects an enabled embedded game and clicks **开放本轮报名**.
+4. The Broadcast Shell switches to **RECRUITING** and shows a fresh round QR/code.
+5. Guests scan the QR and enter only a nickname. Queue tickets are not required.
+6. Guest phones enter the controller in a waiting state; they do not take over a game slot yet.
+7. The host locks the roster and clicks **主持人开局**.
+8. The Hub changes the round to `running`, resets the embedded Table Push King GameSession, and starts its 3-second authoritative countdown.
+9. Waiting phones connect and take over Bot slots.
+10. When the host ends the Hub round, round-scoped phone controllers disconnect and AI immediately resumes control.
 
-Open:
+A new round gets a new code. Old round codes do not serve as permanent store join codes.
+
+## Queue / calling behavior
+
+Restaurant queue state is independent from entertainment rounds.
+
+The Host Console can:
+
+- add a waiting party;
+- call a number;
+- mark it passed;
+- call it again;
+- seat or cancel it.
+
+A queue call appears as a high-priority overlay on the Broadcast Shell for about 10 seconds. The underlying game continues and is not paused.
+
+A player may be a waiting guest, a seated diner, or someone invited by the host. The game flow never requires a queue ticket.
+
+## Game library and licensing
+
+The Host Console renders only games granted by the current store entitlements.
+
+Current foundation:
+
+- `table-push-king`: embedded runtime; host launch is wired.
+- `kart-racing`: Game Package v1 manifest exists, but the Host Console intentionally disables process launch until RuntimeManager is connected.
+
+Commercial tiers are represented by entitlements rather than separate application forks, so Base / Pro / Custom packages can share one host application.
+
+## Legacy direct game mode
+
+For development or fallback, the original game surfaces remain available:
 
 ```text
 http://<HOST-LAN-IP>:5173
+http://<HOST-LAN-IP>:5174
 ```
 
-The big screen connects to the authoritative server. Phones scan the QR code and automatically take over available Bot slots.
-
-Current loop:
-
-1. 3-second countdown
-2. 60-second match
-3. Push / knockdown / recovery / ledge catch / elimination
-4. Live score and ranking
-5. Final elimination highlight replayed twice at 0.45x
-6. Winner display
-7. Automatic next round
-
-Players may leave at any time. Their slot returns to Bot control.
+Direct controller access remains compatible during migration. The Broadcast Shell embeds the game display with `?hub=1`, which hides the game's old permanent QR so the venue shows only the current Hub round QR.
 
 ## Local physics sandbox
 
@@ -63,56 +92,35 @@ http://localhost:5173/?mode=local
 Controls:
 
 - WASD / arrows: move
-- Space: push
+- Space: attack
 - R: restart
 
-This mode runs Rapier in the browser and exists only for rapid physics tuning. It is not the target multiplayer architecture.
+This browser-local mode is for physics tuning only.
 
 ## Automated validation
 
-GitHub Actions currently verifies:
+GitHub Actions verifies:
 
-- npm dependency installation
-- shared package build
-- big-screen client build
-- phone controller build
-- authoritative server build
-- compiled Node + Rapier server starts and passes `/health`
-- Socket observer receives the 8-player authoritative snapshot
-- a controller can join and replace a Bot
-- controller input is accepted
-- disconnect returns the slot to AI
+- all workspaces build;
+- authoritative server health;
+- existing Socket.IO join/input/disconnect smoke flow;
+- platform CORS;
+- one-active-round invariant;
+- ephemeral round creation and signup;
+- host lock/start/finish transitions;
+- independent queue/calling transitions;
+- Broadcast Shell state composition;
+- ten-client concurrent combat stress;
+- existing big-screen / phone visual preview workflow.
 
-Real-device game-feel validation is still required.
-
-
-## Mobile performance adaptation
-
-The phone renderer automatically adapts render resolution when sustained frame rate drops.
-
-- Target quality starts at up to 1.5 device pixel ratio.
-- Sustained low FPS lowers render DPR in small steps.
-- Sustained high FPS restores quality gradually.
-- Input, server physics and match rules are never reduced.
-- Only phone rendering resolution changes.
-
-This exists specifically to keep the personal 3D view usable across a wide range of guest phones.
+Real-device LAN, touch, heat and venue operations still require field validation.
 
 ## Phone diagnostics
 
-For field testing, open the phone controller with:
+For field testing:
 
 ```text
 http://<HOST-LAN-IP>:5174/?debug=1
 ```
 
-A small diagnostics overlay shows:
-
-- FPS
-- current render DPR
-- quality tier
-- LAN round-trip time
-- authoritative snapshot rate
-- active Socket.IO transport
-
-Normal guests do not see this panel.
+The diagnostics overlay shows FPS, render DPR, quality tier, LAN RTT, snapshot rate and active Socket.IO transport.
