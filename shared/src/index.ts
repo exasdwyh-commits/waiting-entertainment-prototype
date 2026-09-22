@@ -15,7 +15,13 @@ export type PlayerState =
   | "grabbing"
   | "carried"
   | "throwing"
+  | "jumping"
+  | "kicking"
+  | "headbutting"
+  | "dropkicking"
   | "hit"
+  | "ko"
+  | "waking"
   | "ragdoll"
   | "recovering"
   | "edge_hang"
@@ -27,6 +33,12 @@ export type GameEventType =
   | "push_hit"
   | "punch_hit"
   | "heavy_hit"
+  | "kick_hit"
+  | "headbutt_hit"
+  | "dropkick_hit"
+  | "ko"
+  | "wake"
+  | "struggle_break"
   | "grab"
   | "toss"
   | "big_fall"
@@ -43,6 +55,8 @@ export interface PlayerInput {
   attack: boolean;
   grab: boolean;
   sprint: boolean;
+  jump: boolean;
+  kick: boolean;
 }
 
 export interface PlayerSnapshot {
@@ -53,6 +67,8 @@ export interface PlayerSnapshot {
   facingYaw: number;
   balance: number;
   stamina: number;
+  koResistance: number;
+  struggleProgress: number;
   sprinting: boolean;
   velocity: [number, number, number];
   score: number;
