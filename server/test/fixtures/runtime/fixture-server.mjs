@@ -7,7 +7,7 @@ let starts = 0;
 const server = createServer((req, res) => {
   if (req.url === "/info") {
     res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ ok: true, roomCode, starts }));
+    res.end(JSON.stringify({ ok: true, protocol: "runtime-fixture/1", roomCode, starts }));
     return;
   }
   if (req.url === "/api/start" && req.method === "POST") {
