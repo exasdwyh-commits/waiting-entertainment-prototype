@@ -391,6 +391,6 @@ test("fatal hit preserves the bounty target that was marked before hit score cha
   assert.equal(attacker.bountyKills, 1);
   assert.equal(attacker.score, 25, "7 + hit 2 + sink 10 + bounty 6");
   assert.ok(state.events.some((event) =>
-    event.type === "bounty_sink" && event.targetId === leader.id
+    event.type === "bounty_sink" && event.boatId === leader.id
   ));
 });
