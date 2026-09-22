@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { io } from "socket.io-client";
 
 const base = process.env.WAITING_SERVER_URL ?? "http://127.0.0.1:3001";
 
@@ -59,6 +60,47 @@ const started = await api(`/api/platform/rounds/${created.round.id}/start`, {
 });
 assert.equal(started.round.status, "running");
 
+async function socketJoin(payload) {
+  return await new Promise((resolve, reject) => {
+    const socket = io(base, {
+      transports: ["websocket"],
+      forceNew: true,
+      reconnection: false,
+    });
+    const timer = setTimeout(() => {
+      socket.close();
+      reject(new Error("socket join timeout"));
+    }, 5_000);
+
+    socket.on("connect", () => {
+      socket.emit("join", payload, (response) => {
+        clearTimeout(timer);
+        socket.close();
+        resolve(response);
+      });
+    });
+    socket.on("connect_error", (error) => {
+      clearTimeout(timer);
+      socket.close();
+      reject(error);
+    });
+  });
+}
+
+const unauthorizedJoin = await socketJoin({
+  sessionId: "ci-intruder",
+  name: "Intruder",
+});
+assert.equal(unauthorizedJoin.ok, false);
+assert.equal(unauthorizedJoin.reason, "round-admission-required");
+
+const authorizedJoin = await socketJoin({
+  sessionId: "ci-authorized",
+  name: "CI 玩家",
+  roundCode: created.round.code,
+});
+assert.equal(authorizedJoin.ok, true);
+
 const queue = await api("/api/platform/queue", {
   method: "POST",
   body: JSON.stringify({ partySize: 4, label: "测试等位" }),
@@ -80,4 +122,4 @@ const finished = await api(`/api/platform/rounds/${created.round.id}/finish`, {
 });
 assert.equal(finished.round.status, "finished");
 
-console.log("Platform smoke test passed: CORS, single active round, independent queue and broadcast composition are healthy.");
+console.log("Platform smoke test passed: CORS, single active round, round admission, independent queue and broadcast composition are healthy.");
