@@ -1,4 +1,4 @@
-import type { EntertainmentRound, GameManifestV1, GameRuntimeStatus, PlatformSnapshot, QueueTicket } from "@waiting/shared";
+import type { EntertainmentRound, GameManifestV1, GameRuntimeStatus, GameSettingV1, GameSettingsResponse, PlatformSnapshot, QueueTicket } from "@waiting/shared";
 import "./style.css";
 
 const API = location.protocol + "//" + location.hostname + ":3001/api/platform";
@@ -7,6 +7,11 @@ let snapshot: PlatformSnapshot | null = null;
 let busy = false;
 let activeView: "live" | "games" = location.hash === "#games" ? "games" : "live";
 const runtimeLogText = new Map<string, string>();
+const settingsState = new Map<string, GameSettingsResponse>();
+const settingsRequested = new Set<string>();
+// 草稿：已编辑但未保存的值按 game/key 暂存，跨重渲染保留输入，
+// 保存/恢复成功后清除（此时服务端状态成为唯一事实源）。
+const settingsDrafts = new Map<string, Record<string, string | number | boolean>>();
 
 function esc(value: unknown): string {
   return String(value ?? "")
@@ -174,6 +179,59 @@ function entryUrl(game: GameManifestV1, kind: "display" | "player"): string {
   return location.protocol + "//" + location.hostname + raw;
 }
 
+function friendlySettingsError(message: string): string {
+  if (message.startsWith("settings-invalid-value:")) {
+    return "参数值不合法：" + message.split(":")[1];
+  }
+  if (message.startsWith("settings-unknown-key:")) {
+    return "未知参数：" + message.split(":")[1];
+  }
+  if (message.startsWith("settings-file-invalid")) {
+    return "本地参数文件损坏，请点恢复默认";
+  }
+  return message;
+}
+
+function settingsField(
+  gameId: string,
+  setting: GameSettingV1,
+  payload: GameSettingsResponse | undefined,
+): string {
+  const overridden = payload
+    ? Object.prototype.hasOwnProperty.call(payload.overrides, setting.key)
+    : false;
+  const draft = settingsDrafts.get(gameId)?.[setting.key];
+  const value = draft !== undefined
+    ? draft
+    : (payload?.values[setting.key] ?? setting.default);
+  let control = "";
+  if (setting.type === "number") {
+    control = '<input type="number" data-setting="' + esc(setting.key) + '"' +
+      (setting.min !== undefined ? ' min="' + setting.min + '"' : "") +
+      (setting.max !== undefined ? ' max="' + setting.max + '"' : "") +
+      (setting.step !== undefined ? ' step="' + setting.step + '"' : "") +
+      ' value="' + esc(value) + '" />';
+  } else if (setting.type === "enum") {
+    control = '<select data-setting="' + esc(setting.key) + '">' +
+      (setting.options ?? []).map((option) =>
+        '<option value="' + esc(option.value) + '"' +
+          (String(value) === option.value ? " selected" : "") + '>' +
+          esc(option.label) + '</option>'
+      ).join("") + '</select>';
+  } else if (setting.type === "boolean") {
+    control = '<input type="checkbox" data-setting="' + esc(setting.key) + '"' +
+      (value ? " checked" : "") + ' />';
+  } else {
+    control = '<input type="text" maxlength="80" data-setting="' +
+      esc(setting.key) + '" value="' + esc(value) + '" />';
+  }
+  return '<label class="manage-setting manage-setting--field">' +
+    '<span>' + esc(setting.label) + '</span>' + control +
+    '<code>' + esc(setting.env ?? "package") + '</code>' +
+    (overridden ? '<em class="setting-flag">已修改</em>' : '') +
+    '</label>';
+}
+
 function managementCard(
   game: GameManifestV1,
   runtime: GameRuntimeStatus | undefined,
@@ -240,17 +298,37 @@ function managementCard(
       ? '<div class="manage-path"><span>运行目录</span><code>' + esc(runtime.workingDirectory) + '</code></div>'
       : '') +
     (game.settings?.length
-      ? '<div class="manage-settings"><span class="manage-settings__title">默认参数 · 下次启动生效</span>' +
-          game.settings.map((setting) =>
-            '<div class="manage-setting"><span>' + esc(setting.label) + '</span><strong>' +
-              esc(
-                setting.type === "enum"
-                  ? (setting.options?.find((option) => option.value === String(setting.default))?.label ?? setting.default)
-                  : setting.default,
-              ) +
-              '</strong><code>' + esc(setting.env ?? "package") + '</code></div>'
-          ).join("") +
-        '</div>'
+      ? (authorized
+          ? '<div class="manage-settings" data-settings-game="' + esc(game.id) + '">' +
+              '<span class="manage-settings__title">参数设置 · 修改后保存</span>' +
+              game.settings.map((setting) =>
+                settingsField(game.id, setting, settingsState.get(game.id))
+              ).join("") +
+              // 数据未加载前不允许保存：否则表单里的默认值会被当成用户意图，
+              // 静默覆盖掉已有的本地修改。
+              (settingsState.has(game.id)
+                ? '<div class="manage-setting-actions">' +
+                    '<button class="primary" data-settings-save="' + esc(game.id) + '">保存</button>' +
+                    '<button class="secondary" data-settings-reset="' + esc(game.id) + '">恢复默认</button>' +
+                    (runtime?.state === "running"
+                      ? '<span class="manage-settings__hint">进程运行中 · 修改下次启动生效</span>'
+                      : '') +
+                  '</div>'
+                : '<div class="manage-setting-actions">' +
+                    '<span class="manage-settings__hint">参数加载中…</span>' +
+                  '</div>') +
+            '</div>'
+          : '<div class="manage-settings"><span class="manage-settings__title">默认参数 · 下次启动生效</span>' +
+              game.settings.map((setting) =>
+                '<div class="manage-setting"><span>' + esc(setting.label) + '</span><strong>' +
+                  esc(
+                    setting.type === "enum"
+                      ? (setting.options?.find((option) => option.value === String(setting.default))?.label ?? setting.default)
+                      : setting.default,
+                  ) +
+                  '</strong><code>' + esc(setting.env ?? "package") + '</code></div>'
+              ).join("") +
+            '</div>')
       : '') +
     runtimeActions +
     '<div class="manage-links">' +
@@ -349,6 +427,7 @@ function render() {
     '<div id="toast" class="toast" aria-live="polite"></div></main>';
 
   bindEvents();
+  if (activeView === "games") void loadSettings();
 }
 
 function toast(message: string, error = false) {
@@ -423,6 +502,90 @@ async function controlRuntime(gameId: string, action: "start" | "stop") {
   }
 }
 
+async function loadSettings() {
+  if (!snapshot) return;
+  const games = (snapshot.allGames ?? snapshot.games).filter((game) => game.settings?.length);
+  const pending = games.filter((game) => !settingsRequested.has(game.id));
+  if (!pending.length) return;
+  pending.forEach((game) => settingsRequested.add(game.id));
+  let loaded = false;
+  for (const game of pending) {
+    try {
+      const body = await api(
+        "/games/" + encodeURIComponent(game.id) + "/settings",
+      ) as GameSettingsResponse;
+      settingsState.set(game.id, body);
+      loaded = true;
+    } catch {
+      settingsRequested.delete(game.id);
+    }
+  }
+  if (loaded) render();
+}
+
+function settingsBusy(): boolean {
+  // 输入焦点在参数区内时不自动重渲染，避免输入框被重建丢焦点；
+  // 未保存的输入由 settingsDrafts 保留，保存其他卡片的强制渲染也不会丢值。
+  const active = document.activeElement;
+  return Boolean(active instanceof Element && active.closest(".manage-settings"));
+}
+
+async function saveSettings(gameId: string) {
+  if (busy) return;
+  const container = document.querySelector<HTMLElement>(
+    '.manage-settings[data-settings-game="' + CSS.escape(gameId) + '"]',
+  );
+  if (!container) return;
+  const values: Record<string, string | number | boolean> = {};
+  container.querySelectorAll<HTMLInputElement>("[data-setting]").forEach((input) => {
+    const key = input.dataset.setting;
+    if (!key) return;
+    if (input.type === "checkbox") values[key] = input.checked;
+    else if (input.type === "number") values[key] = Number(input.value);
+    else values[key] = input.value;
+  });
+  busy = true;
+  try {
+    const body = await api(
+      "/games/" + encodeURIComponent(gameId) + "/settings",
+      { method: "PUT", body: JSON.stringify(values) },
+    ) as GameSettingsResponse;
+    settingsState.set(gameId, body);
+    settingsDrafts.delete(gameId);
+    toast(body.restartRequired ? "参数已保存 · 下次启动生效" : "参数已保存");
+    await refresh(true);
+  } catch (error) {
+    toast(
+      friendlySettingsError(error instanceof Error ? error.message : "保存参数失败"),
+      true,
+    );
+  } finally {
+    busy = false;
+  }
+}
+
+async function resetSettings(gameId: string) {
+  if (busy) return;
+  busy = true;
+  try {
+    const body = await api(
+      "/games/" + encodeURIComponent(gameId) + "/settings/reset",
+      { method: "POST", body: "{}" },
+    ) as GameSettingsResponse;
+    settingsState.set(gameId, body);
+    settingsDrafts.delete(gameId);
+    toast(body.restartRequired ? "已恢复默认 · 下次启动生效" : "已恢复默认参数");
+    await refresh(true);
+  } catch (error) {
+    toast(
+      friendlySettingsError(error instanceof Error ? error.message : "恢复默认失败"),
+      true,
+    );
+  } finally {
+    busy = false;
+  }
+}
+
 async function mutate(path: string, body?: unknown) {
   if (busy) return;
   busy = true;
@@ -442,6 +605,11 @@ function bindEvents() {
       const view = button.dataset.view === "games" ? "games" : "live";
       if (view === activeView) return;
       activeView = view;
+      if (view === "games") {
+        settingsRequested.clear();
+      } else {
+        settingsDrafts.clear();
+      }
       history.replaceState(null, "", view === "games" ? "#games" : location.pathname);
       render();
     });
@@ -473,6 +641,32 @@ function bindEvents() {
       if (gameId) void showRuntimeLogs(gameId);
     });
   });
+  document.querySelectorAll<HTMLButtonElement>("[data-settings-save]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const gameId = button.dataset.settingsSave;
+      if (gameId) void saveSettings(gameId);
+    });
+  });
+  document.querySelectorAll<HTMLButtonElement>("[data-settings-reset]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const gameId = button.dataset.settingsReset;
+      if (gameId) void resetSettings(gameId);
+    });
+  });
+  document.querySelectorAll<HTMLInputElement>(".manage-settings [data-setting]").forEach((control) => {
+    control.addEventListener("input", () => {
+      const key = control.dataset.setting;
+      const gameId = control.closest<HTMLElement>(".manage-settings")?.dataset.settingsGame;
+      if (!key || !gameId) return;
+      const draft = settingsDrafts.get(gameId) ?? {};
+      draft[key] = control.type === "checkbox"
+        ? control.checked
+        : control.type === "number"
+          ? Number(control.value)
+          : control.value;
+      settingsDrafts.set(gameId, draft);
+    });
+  });
   document.querySelectorAll<HTMLButtonElement>("[data-round-action]").forEach((button) => {
     button.addEventListener("click", () => void mutate("/rounds/" + button.dataset.roundId + "/" + button.dataset.roundAction));
   });
@@ -495,7 +689,11 @@ async function refresh(force = false) {
     const next = (await api()) as PlatformSnapshot;
     const changed = JSON.stringify(next) !== JSON.stringify(snapshot);
     snapshot = next;
-    if (force || changed) render();
+    // 参数区有焦点时暂停自动重渲染，避免打字到一半输入框被重建；
+    // 未保存的草稿由 settingsDrafts 保留，显式操作（force）始终重渲染。
+    if (force || (changed && !(activeView === "games" && settingsBusy()))) {
+      render();
+    }
   } catch {
     if (!snapshot) {
       root.innerHTML = '<main class="boot boot--error"><strong>无法连接本地主机 :3001</strong><span>请确认 server 已启动。</span></main>';

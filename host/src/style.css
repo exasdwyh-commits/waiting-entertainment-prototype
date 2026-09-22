@@ -224,3 +224,11 @@ button:disabled { cursor: not-allowed; opacity: .38; }
 .manage-settings__title{color:#6f7c8d;font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
 .manage-setting{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:8px;padding-top:6px;border-top:1px solid #ffffff08}
 .manage-setting span{color:#a9b4c2;font-size:10px}.manage-setting strong{color:#edf2f8;font-size:10px}.manage-setting code{color:#617083;font:8px ui-monospace,SFMono-Regular,monospace}
+.manage-setting--field{grid-template-columns:1fr minmax(92px,124px) auto auto}
+.manage-setting--field input[type="number"],.manage-setting--field input[type="text"],.manage-setting--field select{width:100%;padding:6px 7px;font-size:10px;color:#edf2f8;background:#0c1219;border:1px solid #ffffff17;border-radius:8px;outline:none;appearance:none}
+.manage-setting--field input:focus,.manage-setting--field select:focus{border-color:#8ce8bd}
+.manage-setting--field input[type="checkbox"]{width:15px;height:15px;accent-color:#8ce8bd;justify-self:center}
+.manage-setting--field em.setting-flag{color:#f0b35a;font-size:8px;font-weight:800;font-style:normal;letter-spacing:.05em;white-space:nowrap}
+.manage-setting-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding-top:9px;margin-top:3px;border-top:1px solid #ffffff08}
+.manage-setting-actions button{padding:7px 12px;font-size:10px}
+.manage-settings__hint{color:#6f7c8d;font-size:9px}

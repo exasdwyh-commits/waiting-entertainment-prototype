@@ -41,6 +41,7 @@ jobs:
 
           node server/test/runtime-manager-smoke.mjs
           node server/test/game-registry-smoke.mjs
+          node server/test/game-settings-store.mjs
           node client/test/platform-ui-contract.mjs
 
           start_server /tmp/waiting-server-smoke.log node server/dist/index.js

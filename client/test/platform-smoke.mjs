@@ -152,4 +152,51 @@ const unconfiguredPilot = await fetch(base + "/api/platform/rounds", {
 assert.equal(unconfiguredPilot.status, 503);
 assert.equal((await unconfiguredPilot.json()).error, "runtime-not-configured");
 
-console.log("Platform smoke test passed: CORS, runtime diagnostics, single active round, round admission, configuration guard, independent queue and broadcast composition are healthy.");
+// Game settings API（P1-2）：读默认、写覆盖、拒绝非法、拒绝未知键、恢复默认。
+// 先恢复默认，保证测试在已有本地覆盖的状态下也可重复运行。
+await api("/api/platform/games/pilot-racer/settings/reset", {
+  method: "POST",
+  body: "{}",
+});
+const settingsDefaults = await api("/api/platform/games/pilot-racer/settings");
+assert.equal(settingsDefaults.gameId, "pilot-racer");
+assert.equal(settingsDefaults.values.laps, 3);
+assert.equal(settingsDefaults.values.trackId, "bay");
+assert.deepEqual(settingsDefaults.overrides, {});
+
+const settingsSaved = await api("/api/platform/games/pilot-racer/settings", {
+  method: "PUT",
+  body: JSON.stringify({ laps: 5 }),
+});
+assert.equal(settingsSaved.values.laps, 5);
+assert.equal(settingsSaved.overrides.laps, 5);
+// pilot-racer 在 CI 中未配置运行目录，不会因保存参数误报重启。
+assert.equal(settingsSaved.restartRequired, false);
+
+const settingsInvalid = await fetch(base + "/api/platform/games/pilot-racer/settings", {
+  method: "PUT",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ laps: 99 }),
+});
+assert.equal(settingsInvalid.status, 400);
+assert.match((await settingsInvalid.json()).error, /^settings-invalid-value/);
+
+const settingsUnknown = await fetch(base + "/api/platform/games/pilot-racer/settings", {
+  method: "PUT",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ notASetting: 1 }),
+});
+assert.equal(settingsUnknown.status, 400);
+assert.match((await settingsUnknown.json()).error, /^settings-unknown-key/);
+
+const settingsMissingGame = await fetch(base + "/api/platform/games/no-such-game/settings");
+assert.equal(settingsMissingGame.status, 404);
+
+const settingsReset = await api("/api/platform/games/pilot-racer/settings/reset", {
+  method: "POST",
+  body: "{}",
+});
+assert.equal(settingsReset.values.laps, 3);
+assert.deepEqual(settingsReset.overrides, {});
+
+console.log("Platform smoke test passed: CORS, runtime diagnostics, single active round, round admission, configuration guard, independent queue and broadcast composition, and game settings API are healthy.");

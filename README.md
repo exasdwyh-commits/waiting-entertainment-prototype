@@ -120,6 +120,7 @@ npm run build
 ```bash
 node server/test/runtime-manager-smoke.mjs
 node server/test/game-registry-smoke.mjs
+node server/test/game-settings-store.mjs
 node client/test/platform-ui-contract.mjs
 ```
 
@@ -135,8 +136,8 @@ npm run build -w @waiting/sea-battle
 
 以下不是架构缺失，而是明确留给最后本地收尾：
 
-1. 修复 Visual Preview workflow 自动回写截图导致的并发 push 竞态。
-2. 游戏管理页的 settings 当前主要是 manifest 默认参数展示；还需要做“可编辑 → 持久化 → 下次启动注入环境变量”的完整闭环。
+1. 修复 Visual Preview workflow 自动回写截图导致的并发 push 竞态。（已完成：截图 workflow 改为 artifact-only，不再写回 main）
+2. ~~游戏管理页的 settings 配置闭环~~（已完成：Game Settings Store 支持可编辑 → 校验 → 本地持久化 → 下次启动注入 env，运行中只提示 restart required）
 3. Sea Battle 的船体 / 海域 / 海怪仍需更正式的 Blender / Hyper3D 资产与真机视觉调优；不要再靠大量程序几何硬堆。
 4. Pilot Racer 继续在独立仓库完成 Bay GP V3 美术与 8 真机验收。
 5. 所有游戏需要一次真实餐厅网络压力测试和长时间 soak。
