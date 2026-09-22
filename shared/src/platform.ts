@@ -26,6 +26,25 @@ export type BroadcastMode =
   | "RESULT"
   | "HIGHLIGHT";
 
+export interface GameSettingOptionV1 {
+  value: string;
+  label: string;
+}
+
+export interface GameSettingV1 {
+  key: string;
+  label: string;
+  type: "text" | "number" | "enum" | "boolean";
+  env?: string;
+  wired?: boolean;
+  default: string | number | boolean;
+  min?: number;
+  max?: number;
+  step?: number;
+  description?: string;
+  options?: GameSettingOptionV1[];
+}
+
 export interface GameManifestV1 {
   schemaVersion: 1;
   id: string;
@@ -67,6 +86,7 @@ export interface GameManifestV1 {
     tier: GameTier;
     entitlements: string[];
   };
+  settings?: GameSettingV1[];
 }
 
 export type RuntimeState =
