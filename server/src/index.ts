@@ -7,9 +7,20 @@ import { handlePlatformRequest } from "./platform/httpApi.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 const platform = new PlatformHub();
+let session: GameSession;
 
 const httpServer = createServer(async (req, res) => {
-  if (await handlePlatformRequest(req, res, platform)) return;
+  if (
+    await handlePlatformRequest(req, res, platform, {
+      onRoundStarted: (round) => {
+        if (round.gameId === "table-push-king") {
+          session.startHostedRound();
+        }
+      },
+    })
+  ) {
+    return;
+  }
 
   if (req.url === "/health") {
     res.writeHead(200, { "content-type": "application/json" });
@@ -33,7 +44,7 @@ const io = new Server(httpServer, {
   transports: ["websocket", "polling"],
 });
 
-const session = new GameSession(io);
+session = new GameSession(io);
 await session.start();
 
 io.on("connection", (socket) => {
