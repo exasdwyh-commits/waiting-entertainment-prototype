@@ -17,10 +17,14 @@ assert.match(host, /data-runtime-check/);
 assert.match(host, /data-runtime-logs/);
 assert.match(host, /configSource/);
 assert.match(host, /game\.settings/);
-assert.match(host, /默认参数/);
+assert.match(host, /data-settings-form/);
+assert.match(host, /\/settings/);
+assert.match(host, /参数已保存/);
 assert.match(host, /round-card--degraded/);
 assert.match(hostCss, /\.manage-grid/);
 assert.match(hostCss, /\.round-runtime-alert/);
+assert.match(hostCss, /\.manage-setting-field/);
+assert.match(hostCss, /\.setting-source--saved/);
 
 assert.match(screen, /id="runtime-alert"/);
 assert.match(screen, /state\.mode === "LIVE_GAME"/);
