@@ -1,0 +1,74 @@
+name: Sea Battle Visual Preview
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "games/sea-battle/**"
+      - "scripts/capture-sea-preview.mjs"
+      - ".github/workflows/sea-battle-preview.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "games/sea-battle/**"
+      - "scripts/capture-sea-preview.mjs"
+      - ".github/workflows/sea-battle-preview.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install project dependencies
+        run: npm install
+      - name: Install screenshot runtime
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Start Sea Battle
+        env:
+          HOST: 127.0.0.1
+          PORT: 9020
+          RACE_SECONDS: 90
+        run: |
+          npm run start -w @waiting/sea-battle > /tmp/sea-preview.log 2>&1 &
+          echo $! > /tmp/sea-preview.pid
+      - name: Wait for Sea Battle
+        run: |
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:9020/info >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/sea-preview.log
+          exit 1
+      - name: Capture real Sea Battle frames
+        run: node scripts/capture-sea-preview.mjs
+      - name: Upload Sea Battle preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: sea-battle-visual-preview
+          path: |
+            docs/screenshots/sea-battle-live.png
+            docs/screenshots/sea-battle-monster.png
+          if-no-files-found: error
+      - name: Commit refreshed Sea Battle screenshots
+        if: github.event_name != 'pull_request'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots/sea-battle-live.png docs/screenshots/sea-battle-monster.png
+          if git diff --cached --quiet; then
+            echo "Screenshots unchanged"
+          else
+            git commit -m "docs: refresh Sea Battle visual screenshots"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi
