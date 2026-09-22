@@ -1,13 +1,24 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { QueueTicketStatus, RoundStatus } from "@waiting/shared";
+import type { EntertainmentRound, QueueTicketStatus, RoundStatus } from "@waiting/shared";
 import { PlatformHub } from "./PlatformHub.js";
 
 const MAX_BODY_BYTES = 16 * 1024;
+
+export interface PlatformHttpHooks {
+  onRoundStarted?: (round: EntertainmentRound) => void | Promise<void>;
+}
+
+const CORS_HEADERS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-headers": "content-type",
+} as const;
 
 function json(res: ServerResponse, status: number, value: unknown): void {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
+    ...CORS_HEADERS,
   });
   res.end(JSON.stringify(value));
 }
@@ -38,7 +49,7 @@ function errorStatus(message: string): number {
     return 404;
   }
   if (message === "game-not-entitled") return 403;
-  if (message === "round-full") return 409;
+  if (message === "round-full" || message === "active-round-exists") return 409;
   if (
     message.startsWith("invalid-round-transition") ||
     message.startsWith("invalid-queue-transition") ||
@@ -60,10 +71,17 @@ export async function handlePlatformRequest(
   req: IncomingMessage,
   res: ServerResponse,
   hub: PlatformHub,
+  hooks: PlatformHttpHooks = {},
 ): Promise<boolean> {
   const url = new URL(req.url ?? "/", "http://localhost");
   if (!url.pathname.startsWith("/api/platform")) {
     return false;
+  }
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, CORS_HEADERS);
+    res.end();
+    return true;
   }
 
   try {
@@ -118,9 +136,11 @@ export async function handlePlatformRequest(
         finish: "finished",
         cancel: "cancelled",
       };
-      json(res, 200, {
-        round: hub.transitionRound(roundMatch[1], transitions[roundMatch[2]]),
-      });
+      const round = hub.transitionRound(roundMatch[1], transitions[roundMatch[2]]);
+      if (roundMatch[2] === "start") {
+        await hooks.onRoundStarted?.(round);
+      }
+      json(res, 200, { round });
       return true;
     }
 

@@ -33,6 +33,13 @@ export class RoundManager {
   create(manifest: GameManifestV1, playerLimit?: number): EntertainmentRound {
     this.expireStaleRounds();
 
+    const active = [...this.rounds.values()].find((round) =>
+      ["recruiting", "locked", "running"].includes(round.status),
+    );
+    if (active) {
+      throw new Error("active-round-exists");
+    }
+
     const limit = Math.min(
       manifest.players.max,
       Math.max(manifest.players.min, playerLimit ?? manifest.players.max),
@@ -118,6 +125,27 @@ export class RoundManager {
     this.expireStaleRounds();
     const round = this.rounds.get(roundId);
     return round ? cloneRound(round) : undefined;
+  }
+
+  activeForGame(gameId: string): EntertainmentRound | undefined {
+    this.expireStaleRounds();
+    const round = [...this.rounds.values()]
+      .filter(
+        (candidate) =>
+          candidate.gameId === gameId &&
+          ["recruiting", "locked", "running"].includes(candidate.status),
+      )
+      .sort((a, b) => b.createdAt - a.createdAt)[0];
+    return round ? cloneRound(round) : undefined;
+  }
+
+  isRegisteredParticipant(gameId: string, code: string, name: string): boolean {
+    const active = this.activeForGame(gameId);
+    if (!active) return true;
+    if (active.code !== code.trim().toUpperCase()) return false;
+    const normalizedName = name.trim();
+    if (!normalizedName) return false;
+    return active.players.some((player) => player.name === normalizedName);
   }
 
   private expireStaleRounds(): void {

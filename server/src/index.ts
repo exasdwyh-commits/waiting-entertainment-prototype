@@ -7,9 +7,20 @@ import { handlePlatformRequest } from "./platform/httpApi.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 const platform = new PlatformHub();
+let session: GameSession;
 
 const httpServer = createServer(async (req, res) => {
-  if (await handlePlatformRequest(req, res, platform)) return;
+  if (
+    await handlePlatformRequest(req, res, platform, {
+      onRoundStarted: (round) => {
+        if (round.gameId === "table-push-king") {
+          session.startHostedRound();
+        }
+      },
+    })
+  ) {
+    return;
+  }
 
   if (req.url === "/health") {
     res.writeHead(200, { "content-type": "application/json" });
@@ -33,14 +44,31 @@ const io = new Server(httpServer, {
   transports: ["websocket", "polling"],
 });
 
-const session = new GameSession(io);
+session = new GameSession(io);
 await session.start();
 
 io.on("connection", (socket) => {
   socket.on(
     "join",
-    (payload: { sessionId?: string; name?: string }, ack?: (value: unknown) => void) => {
-      const player = session.join(socket.id, payload?.sessionId, payload?.name);
+    (
+      payload: { sessionId?: string; name?: string; roundCode?: string },
+      ack?: (value: unknown) => void,
+    ) => {
+      const requestedName = payload?.name ?? "";
+      const hostedRound = platform.rounds.activeForGame("table-push-king");
+      if (
+        hostedRound &&
+        !platform.rounds.isRegisteredParticipant(
+          "table-push-king",
+          payload?.roundCode ?? "",
+          requestedName,
+        )
+      ) {
+        ack?.({ ok: false, reason: "round-admission-required" });
+        return;
+      }
+
+      const player = session.join(socket.id, payload?.sessionId, requestedName);
       ack?.(player ? { ok: true, ...player } : { ok: false, reason: "session-full" });
     },
   );

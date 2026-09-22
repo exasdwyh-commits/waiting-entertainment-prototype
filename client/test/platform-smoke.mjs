@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { io } from "socket.io-client";
 
 const base = process.env.WAITING_SERVER_URL ?? "http://127.0.0.1:3001";
 
@@ -17,6 +18,11 @@ async function api(path, options = {}) {
   return body;
 }
 
+const cors = await fetch(base + "/api/platform", { method: "OPTIONS" });
+assert.equal(cors.status, 204);
+assert.equal(cors.headers.get("access-control-allow-origin"), "*");
+assert.match(cors.headers.get("access-control-allow-methods") ?? "", /POST/);
+
 const games = await api("/api/platform/games");
 assert.equal(games.license.plan, "BASE");
 assert.ok(games.games.some((game) => game.id === "table-push-king"));
@@ -28,6 +34,14 @@ const created = await api("/api/platform/rounds", {
 assert.equal(created.round.status, "recruiting");
 assert.equal(created.round.playerLimit, 2);
 assert.match(created.round.code, /^[A-Z0-9]{6}$/);
+
+const duplicateRound = await fetch(base + "/api/platform/rounds", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ gameId: "table-push-king" }),
+});
+assert.equal(duplicateRound.status, 409);
+assert.equal((await duplicateRound.json()).error, "active-round-exists");
 
 const joined = await api(`/api/platform/join/${created.round.code}`, {
   method: "POST",
@@ -45,6 +59,47 @@ const started = await api(`/api/platform/rounds/${created.round.id}/start`, {
   method: "POST",
 });
 assert.equal(started.round.status, "running");
+
+async function socketJoin(payload) {
+  return await new Promise((resolve, reject) => {
+    const socket = io(base, {
+      transports: ["websocket"],
+      forceNew: true,
+      reconnection: false,
+    });
+    const timer = setTimeout(() => {
+      socket.close();
+      reject(new Error("socket join timeout"));
+    }, 5_000);
+
+    socket.on("connect", () => {
+      socket.emit("join", payload, (response) => {
+        clearTimeout(timer);
+        socket.close();
+        resolve(response);
+      });
+    });
+    socket.on("connect_error", (error) => {
+      clearTimeout(timer);
+      socket.close();
+      reject(error);
+    });
+  });
+}
+
+const unauthorizedJoin = await socketJoin({
+  sessionId: "ci-intruder",
+  name: "Intruder",
+});
+assert.equal(unauthorizedJoin.ok, false);
+assert.equal(unauthorizedJoin.reason, "round-admission-required");
+
+const authorizedJoin = await socketJoin({
+  sessionId: "ci-authorized",
+  name: "CI 玩家",
+  roundCode: created.round.code,
+});
+assert.equal(authorizedJoin.ok, true);
 
 const queue = await api("/api/platform/queue", {
   method: "POST",
@@ -67,4 +122,4 @@ const finished = await api(`/api/platform/rounds/${created.round.id}/finish`, {
 });
 assert.equal(finished.round.status, "finished");
 
-console.log("Platform smoke test passed: rounds and queue remain independent and compose at broadcast.");
+console.log("Platform smoke test passed: CORS, single active round, round admission, independent queue and broadcast composition are healthy.");

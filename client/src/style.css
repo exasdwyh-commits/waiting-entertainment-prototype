@@ -231,3 +231,67 @@ h1 { margin: 4px 0 3px; font-size: clamp(28px, 4vw, 54px); }
   font-weight: 900;
   text-shadow: none;
 }
+
+
+.hub-queue-overlay {
+  position: absolute;
+  z-index: 60;
+  left: 50%;
+  top: 7vh;
+  transform: translateX(-50%);
+  min-width: min(720px, 72vw);
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 18px 28px;
+  border: 1px solid rgba(141,247,203,.35);
+  border-radius: 22px;
+  background: rgba(6,14,15,.94);
+  box-shadow: 0 24px 80px rgba(0,0,0,.48), 0 0 35px rgba(141,247,203,.1);
+  animation: hub-call-in .28s ease-out;
+  pointer-events: none;
+}
+
+.hub-queue-overlay[hidden] { display: none; }
+
+.hub-queue-dot {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #8df7cb;
+  background: rgba(141,247,203,.1);
+  font-size: 12px;
+  box-shadow: inset 0 0 0 1px rgba(141,247,203,.18), 0 0 25px rgba(141,247,203,.13);
+}
+
+.hub-queue-overlay > div {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  column-gap: 18px;
+}
+
+.hub-queue-overlay small {
+  grid-column: 1 / -1;
+  color: #8da59f;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.hub-queue-overlay strong {
+  color: #fff;
+  font-size: clamp(32px, 3.4vw, 64px);
+  line-height: 1;
+}
+
+.hub-queue-overlay div > span {
+  color: #b6c5c2;
+  font-size: clamp(15px, 1.2vw, 22px);
+}
+
+@keyframes hub-call-in {
+  from { opacity: 0; transform: translate(-50%, -16px) scale(.98); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}

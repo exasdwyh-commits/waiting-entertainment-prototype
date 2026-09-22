@@ -90,6 +90,10 @@ export class GameSession {
     this.timer = setInterval(() => this.tick(), TICK_MS);
   }
 
+  startHostedRound() {
+    this.resetRound();
+  }
+
   stop() {
     if (this.timer) clearInterval(this.timer);
   }

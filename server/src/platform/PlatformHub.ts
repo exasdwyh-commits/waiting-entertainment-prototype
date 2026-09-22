@@ -100,7 +100,7 @@ export class PlatformHub {
 
     const called = this.queue.latestCalled();
     let queueOverlay: QueueOverlay | undefined;
-    if (called?.calledAt && Date.now() - called.calledAt <= 10_000) {
+    if (called?.calledAt) {
       queueOverlay = {
         ticketId: called.id,
         number: called.number,

@@ -3,11 +3,19 @@
   "private": true,
   "version": "0.1.0",
   "description": "Waiting Entertainment multiplayer browser game prototype",
-  "workspaces": ["client", "player", "server", "shared"],
+  "workspaces": [
+    "client",
+    "player",
+    "server",
+    "shared",
+    "host",
+    "screen",
+    "guest"
+  ],
   "scripts": {
     "predev": "npm run build -w shared",
-    "dev": "concurrently -n screen,controller,server \"npm run dev -w client\" \"npm run dev -w player\" \"npm run dev -w server\"",
-    "build": "npm run build -w shared && npm run build -w client && npm run build -w player && npm run build -w server",
+    "dev": "concurrently -n game,controller,host,broadcast,guest,server \"npm run dev -w client\" \"npm run dev -w player\" \"npm run dev -w host\" \"npm run dev -w screen\" \"npm run dev -w guest\" \"npm run dev -w server\"",
+    "build": "npm run build -w shared && npm run build -w client && npm run build -w player && npm run build -w host && npm run build -w screen && npm run build -w guest && npm run build -w server",
     "typecheck": "npm run build",
     "test": "npm run typecheck"
   },
