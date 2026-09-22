@@ -667,19 +667,64 @@ function animate(now) {
       danger.visible = false;
     }
 
+    const safeRadius = Number(state.safeRadius ?? 58);
+    const stormActive = state.phase === "racing" && state.stage === "maelstrom";
+    safeZoneRing.visible = stormActive;
+    if (stormActive) {
+      safeZoneRing.scale.setScalar(safeRadius);
+      const pulse = 0.88 + Math.sin(now * 0.006) * 0.08;
+      safeZoneRing.material.opacity = 0.56 + pulse * 0.2;
+      waterMat.color.copy(waterNormalColor).lerp(waterStormColor, 0.58);
+    } else {
+      waterMat.color.lerp(waterNormalColor, Math.min(1, dt * 2.5));
+    }
+
+    broadsideTargetRing.visible = false;
+    if (!isDisplay && myId !== null && state.boats[myId]?.alive) {
+      const lock = findBroadsideLock(state.boats[myId]);
+      if (lock) {
+        broadsideTargetRing.visible = true;
+        broadsideTargetRing.position.set(lock.target.x, 0.08, lock.target.z);
+        const targetRadius = lock.kind === "monster" ? 1.9 : (lock.target.radius ?? 1.15);
+        const scale = targetRadius * (1.35 + Math.sin(now * 0.01) * 0.08);
+        broadsideTargetRing.scale.setScalar(scale);
+      }
+    }
+
     if (isDisplay) {
       const leader = state.boats[state.order[0]] ?? state.boats[0];
-      const focusX = state.monster?.alive
-        ? leader.x * 0.72 + state.monster.x * 0.28
-        : leader.x * 0.55;
-      const focusZ = state.monster?.alive
-        ? leader.z * 0.72 + state.monster.z * 0.28
-        : leader.z * 0.55;
-      cameraTarget.set(focusX + 30, 56, focusZ + 39);
-      lookTarget.set(focusX, 0, focusZ);
-      camera.position.lerp(cameraTarget, 1 - Math.exp(-dt * 1.3));
+      const recent = state.events.find((event) =>
+        state.time - event.time < 2.4 &&
+        ["sink", "monster_spawn", "monster_warning", "monster_kill", "stage"].includes(event.type)
+      );
+      const eventFocusId = Number.isInteger(recent?.killerId)
+        ? recent.killerId
+        : Number.isInteger(recent?.boatId)
+          ? recent.boatId
+          : null;
+      const eventBoat = eventFocusId !== null ? state.boats[eventFocusId] : null;
+      const focusBoat = eventBoat?.alive ? eventBoat : leader;
+
+      let focusX = focusBoat.x;
+      let focusZ = focusBoat.z;
+      let cameraHeight = state.stage === "maelstrom" ? 46 : 42;
+      let fov = state.stage === "maelstrom" ? 55 : 52;
+
+      if (state.monster?.alive && (
+        recent?.type?.startsWith("monster") ||
+        Math.hypot(focusBoat.x - state.monster.x, focusBoat.z - state.monster.z) < 25
+      )) {
+        focusX = focusBoat.x * 0.58 + state.monster.x * 0.42;
+        focusZ = focusBoat.z * 0.58 + state.monster.z * 0.42;
+        cameraHeight = 48;
+        fov = 56;
+      }
+
+      cameraTarget.set(focusX + 26, cameraHeight, focusZ + 31);
+      lookTarget.set(focusX, 0.9, focusZ);
+      camera.position.lerp(cameraTarget, 1 - Math.exp(-dt * 2.0));
       camera.lookAt(lookTarget);
-      camera.fov = 58;
+      camera.fov = fov;
     } else if (myId !== null && state.boats[myId]) {
       const me = state.boats[myId];
       const backX = -Math.sin(me.heading) * 9;
