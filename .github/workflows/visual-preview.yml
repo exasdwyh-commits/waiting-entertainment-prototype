@@ -8,6 +8,9 @@ on:
     paths:
       - "client/**"
       - "player/**"
+      - "host/**"
+      - "screen/**"
+      - "guest/**"
       - "server/**"
       - "shared/**"
       - "scripts/capture-preview.mjs"
@@ -16,6 +19,9 @@ on:
     paths:
       - "client/**"
       - "player/**"
+      - "host/**"
+      - "screen/**"
+      - "guest/**"
       - "server/**"
       - "shared/**"
       - "scripts/capture-preview.mjs"
@@ -56,7 +62,10 @@ jobs:
           for i in {1..60}; do
             if curl -fsS http://127.0.0.1:3001/health >/dev/null \
               && curl -fsS http://127.0.0.1:5173 >/dev/null \
-              && curl -fsS http://127.0.0.1:5174 >/dev/null; then
+              && curl -fsS http://127.0.0.1:5174 >/dev/null \
+              && curl -fsS http://127.0.0.1:5175 >/dev/null \
+              && curl -fsS http://127.0.0.1:5176 >/dev/null \
+              && curl -fsS http://127.0.0.1:5177 >/dev/null; then
               exit 0
             fi
             sleep 1
@@ -79,7 +88,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/screenshots/big-screen.png docs/screenshots/phone-player.png docs/screenshots/broadcast-replay.png
+          git add docs/screenshots/big-screen.png docs/screenshots/phone-player.png docs/screenshots/broadcast-replay.png docs/screenshots/hub-host.png docs/screenshots/hub-broadcast-recruiting.png docs/screenshots/hub-guest-join.png docs/screenshots/hub-broadcast-queue.png
           if git diff --cached --quiet; then
             echo "Screenshots unchanged"
           else
