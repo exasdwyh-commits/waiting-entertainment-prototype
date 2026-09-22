@@ -40,7 +40,77 @@ export const GAME_TUNING = {
     punchCost: 0.055,
     heavyCost: 0.17,
     throwCost: 0.13,
+    jumpCost: 0.1,
+    kickCost: 0.08,
+    headbuttCost: 0.11,
+    dropkickCost: 0.2,
+    struggleCost: 0.035,
     exhaustedThreshold: 0.08,
+  },
+
+  jump: {
+    cooldownMs: 520,
+    verticalImpulse: 3.9,
+    forwardImpulse: 0.72,
+    airborneWindowMs: 620,
+  },
+
+  kick: {
+    cooldownMs: 520,
+    animationHoldMs: 250,
+    hitRange: 1.28,
+    minimumFacingDot: -0.02,
+    strength: 1.72,
+    verticalHitImpulse: 0.2,
+    balanceLoss: 0.22,
+    staggerMs: 260,
+  },
+
+  headbutt: {
+    cooldownMs: 720,
+    animationHoldMs: 300,
+    strength: 1.82,
+    verticalHitImpulse: 0.26,
+    balanceLoss: 0.25,
+    koDamage: 0.3,
+    selfBalanceLoss: 0.1,
+    staggerMs: 320,
+  },
+
+  dropkick: {
+    cooldownMs: 1_050,
+    animationHoldMs: 420,
+    forwardImpulse: 3.25,
+    verticalImpulse: 0.62,
+    hitRange: 1.65,
+    minimumFacingDot: -0.08,
+    strength: 3.55,
+    verticalHitImpulse: 0.72,
+    balanceLoss: 0.58,
+    koDamage: 0.5,
+    selfKnockdownMs: 520,
+    targetKnockdownMs: 850,
+  },
+
+  struggle: {
+    perPress: 0.23,
+    decayPerSecond: 0.16,
+    minPressIntervalMs: 90,
+    breakThreshold: 1,
+    holderStaminaDamage: 0.055,
+  },
+
+  ko: {
+    maxResistance: 1,
+    passiveRecoveryPerSecond: 0.055,
+    wakeRecovery: 0.58,
+    punchDamage: 0.08,
+    heavyDamage: 0.28,
+    kickDamage: 0.14,
+    minDurationMs: 900,
+    maxDurationMs: 2_300,
+    wakeDurationMs: 520,
+    wakeProtectionMs: 620,
   },
 
   punch: {
@@ -195,7 +265,48 @@ export function validateGameTuning() {
   requireUnitRange("stamina.punchCost", GAME_TUNING.stamina.punchCost);
   requireUnitRange("stamina.heavyCost", GAME_TUNING.stamina.heavyCost);
   requireUnitRange("stamina.throwCost", GAME_TUNING.stamina.throwCost);
+  requireUnitRange("stamina.jumpCost", GAME_TUNING.stamina.jumpCost);
+  requireUnitRange("stamina.kickCost", GAME_TUNING.stamina.kickCost);
+  requireUnitRange("stamina.headbuttCost", GAME_TUNING.stamina.headbuttCost);
+  requireUnitRange("stamina.dropkickCost", GAME_TUNING.stamina.dropkickCost);
+  requireUnitRange("stamina.struggleCost", GAME_TUNING.stamina.struggleCost);
   requireUnitRange("stamina.exhaustedThreshold", GAME_TUNING.stamina.exhaustedThreshold);
+
+  requireFinitePositive("jump.cooldownMs", GAME_TUNING.jump.cooldownMs);
+  requireFinitePositive("jump.verticalImpulse", GAME_TUNING.jump.verticalImpulse);
+  requireFinitePositive("jump.airborneWindowMs", GAME_TUNING.jump.airborneWindowMs);
+
+  requireFinitePositive("kick.cooldownMs", GAME_TUNING.kick.cooldownMs);
+  requireFinitePositive("kick.hitRange", GAME_TUNING.kick.hitRange);
+  requireFinitePositive("kick.strength", GAME_TUNING.kick.strength);
+  requireUnitRange("kick.balanceLoss", GAME_TUNING.kick.balanceLoss);
+
+  requireFinitePositive("headbutt.cooldownMs", GAME_TUNING.headbutt.cooldownMs);
+  requireFinitePositive("headbutt.strength", GAME_TUNING.headbutt.strength);
+  requireUnitRange("headbutt.balanceLoss", GAME_TUNING.headbutt.balanceLoss);
+  requireUnitRange("headbutt.koDamage", GAME_TUNING.headbutt.koDamage);
+
+  requireFinitePositive("dropkick.cooldownMs", GAME_TUNING.dropkick.cooldownMs);
+  requireFinitePositive("dropkick.forwardImpulse", GAME_TUNING.dropkick.forwardImpulse);
+  requireFinitePositive("dropkick.hitRange", GAME_TUNING.dropkick.hitRange);
+  requireFinitePositive("dropkick.strength", GAME_TUNING.dropkick.strength);
+  requireUnitRange("dropkick.balanceLoss", GAME_TUNING.dropkick.balanceLoss);
+  requireUnitRange("dropkick.koDamage", GAME_TUNING.dropkick.koDamage);
+
+  requireUnitRange("struggle.perPress", GAME_TUNING.struggle.perPress);
+  requireFinitePositive("struggle.minPressIntervalMs", GAME_TUNING.struggle.minPressIntervalMs);
+  requireFinitePositive("struggle.breakThreshold", GAME_TUNING.struggle.breakThreshold);
+  requireUnitRange("struggle.holderStaminaDamage", GAME_TUNING.struggle.holderStaminaDamage);
+
+  requireFinitePositive("ko.maxResistance", GAME_TUNING.ko.maxResistance);
+  requireUnitRange("ko.wakeRecovery", GAME_TUNING.ko.wakeRecovery);
+  requireUnitRange("ko.punchDamage", GAME_TUNING.ko.punchDamage);
+  requireUnitRange("ko.heavyDamage", GAME_TUNING.ko.heavyDamage);
+  requireUnitRange("ko.kickDamage", GAME_TUNING.ko.kickDamage);
+  requireFinitePositive("ko.minDurationMs", GAME_TUNING.ko.minDurationMs);
+  requireFinitePositive("ko.maxDurationMs", GAME_TUNING.ko.maxDurationMs);
+  requireFinitePositive("ko.wakeDurationMs", GAME_TUNING.ko.wakeDurationMs);
+  requireFinitePositive("ko.wakeProtectionMs", GAME_TUNING.ko.wakeProtectionMs);
 
   requireFinitePositive("punch.cooldownMs", GAME_TUNING.punch.cooldownMs);
   requireFinitePositive("punch.animationHoldMs", GAME_TUNING.punch.animationHoldMs);
