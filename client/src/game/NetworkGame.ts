@@ -1078,6 +1078,11 @@ function usesFacingYaw(state: PlayerState) {
     state === "pushing" ||
     state === "grabbing" ||
     state === "throwing" ||
+    state === "jumping" ||
+    state === "kicking" ||
+    state === "headbutting" ||
+    state === "dropkicking" ||
+    state === "waking" ||
     state === "climbing" ||
     state === "celebrate"
   );
