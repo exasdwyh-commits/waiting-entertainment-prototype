@@ -45,5 +45,5 @@ jobs:
           wait "$SERVER_PID" 2>/dev/null || true
           sleep 0.5
 
-          start_server /tmp/waiting-server-stress.log env WAITING_ROUND_MS=60000 node server/dist/index.js
+          start_server /tmp/waiting-server-stress.log env WAITING_ROUND_MS=60000 WAITING_STRESS_MODE=1 node server/dist/index.js
           node client/test/socket-stress.mjs
