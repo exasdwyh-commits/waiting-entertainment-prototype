@@ -590,7 +590,7 @@ function collectCrates(state, boat) {
 function stepCrates(state) {
   for (const crate of state.crates) {
     if (crate.active || state.time < crate.respawnAt) continue;
-    const p = randomPoint(state, 6, WORLD_RADIUS - 8);
+    const p = randomPoint(state, 6, Math.max(18, safeRadius(state) - 6));
     crate.x = p.x;
     crate.z = p.z;
     crate.active = true;
