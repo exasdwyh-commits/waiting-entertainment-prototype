@@ -1,0 +1,16 @@
+{
+  "name": "@waiting/sea-battle",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch server.mjs",
+    "start": "node server.mjs",
+    "build": "node --check server.mjs && node --check public/app.mjs && node --check game.mjs && node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.1",
+    "three": "^0.180.0"
+  }
+}

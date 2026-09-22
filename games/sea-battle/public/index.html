@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>海战竞技 · Sea Battle</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main id="game">
+    <div id="scene"></div>
+
+    <header>
+      <div class="brand">
+        <b>SEA BATTLE</b>
+        <span>海战竞技 · 进化乱斗</span>
+      </div>
+      <div class="clock">
+        <small id="phase">等待开战</small>
+        <strong id="timer">03:00</strong>
+      </div>
+    </header>
+
+    <aside id="leaderboard" class="glass">
+      <div class="panel-title"><span>海域排名</span><em>LIVE</em></div>
+      <ol id="ranks"></ol>
+    </aside>
+
+    <aside id="events" class="glass">
+      <div class="panel-title"><span>战场事件</span><em>FEED</em></div>
+      <ol id="event-list"></ol>
+    </aside>
+
+    <section id="display-tools" class="glass">
+      <div class="join-title">扫码登船</div>
+      <img src="/qr.svg" alt="海战加入二维码" />
+      <small>左手转向 · 右手加速 · 侧舷自动开炮</small>
+      <button id="start" class="primary">开始海战</button>
+    </section>
+
+    <section id="join-card" class="glass">
+      <small>CAPTAIN / 船长登记</small>
+      <h1>抢物资，升级战舰。</h1>
+      <p>火炮会自动向左右侧舷开火。你只需要控制方向和加速。</p>
+      <form id="join-form">
+        <input id="name" maxlength="12" autocomplete="nickname" placeholder="船长昵称" />
+        <button class="primary" type="submit">登船</button>
+      </form>
+      <span id="join-error"></span>
+    </section>
+
+    <section id="player-hud">
+      <div class="player-card glass">
+        <small id="player-name">船长</small>
+        <strong id="level">LV.1</strong>
+        <span id="score">0 PTS</span>
+      </div>
+      <div class="bars glass">
+        <label>船体 <span id="hp-value">100/100</span></label>
+        <i><b id="hp-fill"></b></i>
+        <label>加速能量 <span id="energy-value">80/80</span></label>
+        <i><b id="energy-fill"></b></i>
+        <label>升级 <span id="xp-value">0/3</span></label>
+        <i><b id="xp-fill"></b></i>
+      </div>
+      <div id="respawn" class="glass" hidden>战舰重建中…</div>
+    </section>
+
+    <section id="controls">
+      <div id="steer-pad">
+        <span>转向</span>
+        <i id="steer-thumb"></i>
+      </div>
+      <button id="throttle" type="button">
+        <b>加速</b>
+        <span>BOOST</span>
+      </button>
+    </section>
+
+    <section id="upgrade-card" class="glass" hidden>
+      <small>LEVEL UP / 三选一</small>
+      <h2>升级你的战舰</h2>
+      <div id="upgrade-options"></div>
+    </section>
+
+    <div id="monster-warning" hidden>⚠ 深海巨兽来袭</div>
+    <div id="battle-call"></div>
+    <footer>
+      <span id="connection">连接海域中…</span>
+      <span>3 分钟 · 死亡可复活 · 击沉 / 物资 / 海怪均计分</span>
+    </footer>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/app.mjs"></script>
+</body>
+</html>

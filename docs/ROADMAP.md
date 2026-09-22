@@ -243,9 +243,26 @@ Next:
 - Package discovery from installed manifests instead of only built-in manifests
 - Field validation with real phones, restaurant TV and host workflow.
 
-Candidate games:
+Game package status:
 
-- Table Push King
-- Sea Battle
-- Kart Racing
-- Party Arena
+- Table Push King — embedded / playable
+- Kart Racing — external process / playable
+- Sea Battle — external process V1 / playable core in `games/sea-battle`
+- Party Arena — candidate
+
+### Sea Battle V1 focus
+
+The second reusable-game validation now has a concrete loop rather than a placeholder:
+
+- 1-8 players with AI fill
+- 180-second score round
+- left steering + right acceleration
+- sea-supply pickup loop
+- level-up three-choice upgrades: speed / cannons / energy / damage / reload / HP / flagship size
+- server-authoritative automatic broadside fire
+- sinking + short respawn instead of early elimination
+- deep-sea monster spawn, telegraphed strike and kill bonus
+- big-screen ranking/event feed + personal phone chase camera
+- standalone `sea-battle/1` runtime contract for Hub launch
+
+Next Sea Battle passes should prioritize real game feel, broadside readability, more authored ocean art, TV-style sea-battle director shots, and real-phone tuning before adding more upgrade types.

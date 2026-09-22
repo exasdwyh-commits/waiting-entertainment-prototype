@@ -72,6 +72,44 @@ export const BUILTIN_GAME_MANIFESTS: readonly GameManifestV1[] = [
       entitlements: ["game:pilot-racer"],
     },
   },
+  {
+    schemaVersion: 1,
+    id: "sea-battle",
+    name: "海战竞技",
+    version: "0.1.0",
+    category: "naval-survival",
+    summary: "1-8 人海上成长乱斗：物资升级、侧舷自动炮、复活、海怪事件与积分排名。",
+    players: { min: 1, max: 8 },
+    runtime: {
+      kind: "process",
+      healthPath: "/info",
+      healthProtocol: "sea-battle/1",
+      command: ["node", "server.mjs"],
+      workingDirectoryEnv: "SEA_BATTLE_DIR",
+      port: 9020,
+      startPath: "/api/start",
+    },
+    entrypoints: {
+      display: "http://{host}:9020/display",
+      player: "http://{host}:9020/",
+    },
+    capabilities: {
+      aiFill: true,
+      hotJoin: true,
+      reconnect: true,
+      highlights: true,
+      replay: false,
+    },
+    round: {
+      joinPolicy: "ephemeral-code",
+      codeTtlSeconds: 300,
+      lateJoin: false,
+    },
+    commercial: {
+      tier: "pro",
+      entitlements: ["game:sea-battle"],
+    },
+  },
 ];
 
 export class GameRegistry {

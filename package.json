@@ -10,14 +10,17 @@
     "shared",
     "host",
     "screen",
-    "guest"
+    "guest",
+    "games/sea-battle"
   ],
   "scripts": {
     "predev": "npm run build -w shared",
     "dev": "concurrently -n game,controller,host,broadcast,guest,server \"npm run dev -w client\" \"npm run dev -w player\" \"npm run dev -w host\" \"npm run dev -w screen\" \"npm run dev -w guest\" \"npm run dev -w server\"",
-    "build": "npm run build -w shared && npm run build -w client && npm run build -w player && npm run build -w host && npm run build -w screen && npm run build -w guest && npm run build -w server",
+    "build": "npm run build -w shared && npm run build -w client && npm run build -w player && npm run build -w host && npm run build -w screen && npm run build -w guest && npm run build -w server && npm run build -w @waiting/sea-battle",
     "typecheck": "npm run build",
-    "test": "npm run typecheck"
+    "test": "npm run typecheck",
+    "dev:sea": "npm run dev -w @waiting/sea-battle",
+    "start:sea": "npm run start -w @waiting/sea-battle"
   },
   "devDependencies": {
     "concurrently": "^9.2.0",
