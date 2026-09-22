@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const app = readFileSync(new URL("../public/app.mjs", import.meta.url), "utf8");
 const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
+const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 const manifest = JSON.parse(readFileSync(new URL("../game-package.json", import.meta.url), "utf8"));
 
 test("Sea Battle package follows Hub process contract", () => {
@@ -28,4 +29,14 @@ test("managed round shutdown returns phones to the Hub round page", () => {
   assert.match(app, /:3001\/api\/platform/);
   assert.match(app, /:5177\/join\//);
   assert.match(app, /finished", "cancelled", "expired"/);
+});
+
+test("V2 player feedback exposes stage, storm and broadside lock cues", () => {
+  assert.match(html, /id="stage-chip"/);
+  assert.match(html, /id="broadside-status"/);
+  assert.match(html, /id="storm-warning"/);
+  assert.match(app, /function findBroadsideLock/);
+  assert.match(app, /safeZoneRing/);
+  assert.match(app, /recent\?\.type\?\.startsWith\("monster"\)/);
+  assert.match(css, /body\[data-stage="maelstrom"\]/);
 });
