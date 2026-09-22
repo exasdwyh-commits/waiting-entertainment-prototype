@@ -70,6 +70,12 @@ try {
     viewport: { width: 1600, height: 900 },
     deviceScaleFactor: 1,
   });
+  screen.on("console", (message) => {
+    console.log("[screen console]", message.type(), message.text());
+  });
+  screen.on("pageerror", (error) => {
+    console.error("[screen pageerror]", error.message);
+  });
   await screen.goto("http://127.0.0.1:5176", { waitUntil: "domcontentloaded" });
   await screen.waitForFunction(() => {
     const code = document.querySelector("#round-code")?.textContent?.trim();
@@ -144,9 +150,36 @@ try {
     method: "POST",
     body: "{}",
   });
-  await screen
-    .locator("#queue-overlay:not([hidden])")
-    .waitFor({ timeout: 10_000 });
+
+  const queueDeadline = Date.now() + 10_000;
+  let broadcastQueue;
+  while (Date.now() < queueDeadline) {
+    const broadcast = await platform("/broadcast");
+    if (broadcast.queueOverlay?.ticketId === ticket.ticket.id) {
+      broadcastQueue = broadcast.queueOverlay;
+      break;
+    }
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 200));
+  }
+  if (!broadcastQueue) {
+    throw new Error("Platform broadcast never exposed the newly called queue ticket.");
+  }
+
+  await screen.waitForFunction(
+    (ticketId) => {
+      const overlay = document.querySelector("#queue-overlay");
+      const number = document.querySelector("#queue-number")?.textContent?.trim();
+      return (
+        overlay instanceof HTMLElement &&
+        !overlay.hidden &&
+        number &&
+        number.length > 0 &&
+        document.body.innerText.includes(number)
+      );
+    },
+    ticket.ticket.id,
+    { timeout: 10_000 },
+  );
   await screen.screenshot({
     path: "docs/screenshots/hub-broadcast-queue.png",
     fullPage: true,
