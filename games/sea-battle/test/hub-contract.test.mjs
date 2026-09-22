@@ -40,3 +40,11 @@ test("V2 player feedback exposes stage, storm and broadside lock cues", () => {
   assert.match(app, /recent\?\.type\?\.startsWith\("monster"\)/);
   assert.match(css, /body\[data-stage="maelstrom"\]/);
 });
+
+test("venue broadcast keeps ships and the boss visually readable", () => {
+  assert.match(app, /monsterHalo/);
+  assert.match(app, /isDisplay \? 1\.24 : 1/);
+  assert.match(app, /nearest living challenger/);
+  assert.match(app, /window\.__seaBroadcast/);
+  assert.match(app, /boss: Boolean\(state\.monster\?\.alive\)/);
+});
