@@ -129,8 +129,7 @@ function runtimeText(runtime: GameRuntimeStatus | undefined): string {
 function gameCard(
   game: GameManifestV1,
   runtime: GameRuntimeStatus | undefined,
-  active: EntertainmentRound | undefined,
-  settingStates: GameSettingRuntimeState[],
+  active?: EntertainmentRound,
 ): string {
   const unavailable = game.runtime.kind === "process" && !runtime?.configured;
   const disabled = Boolean(active) || unavailable;
@@ -223,7 +222,8 @@ function settingControl(
 function managementCard(
   game: GameManifestV1,
   runtime: GameRuntimeStatus | undefined,
-  active?: EntertainmentRound,
+  active: EntertainmentRound | undefined,
+  settingStates: GameSettingRuntimeState[],
 ): string {
   const authorized = Boolean(snapshot?.games.some((item) => item.id === game.id));
   const isProcess = game.runtime.kind === "process";
