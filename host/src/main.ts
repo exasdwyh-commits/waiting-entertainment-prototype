@@ -197,7 +197,7 @@ function bindEvents() {
   });
   document.querySelector<HTMLFormElement>("#queue-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(event.currentTarget as HTMLFormElement);
     void mutate("/queue", {
       partySize: Number(form.get("partySize")),
       label: String(form.get("label") ?? ""),
