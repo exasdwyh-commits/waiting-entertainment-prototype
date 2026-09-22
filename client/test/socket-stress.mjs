@@ -85,6 +85,24 @@ function assertSnapshotHealthy(snapshot) {
   );
 
   const ids = new Set(snapshot.players.map((player) => player.id));
+  assert.ok(Array.isArray(snapshot.weapons));
+  assert.equal(new Set(snapshot.weapons.map((weapon) => weapon.id)).size, snapshot.weapons.length);
+  const weaponHolders = snapshot.weapons
+    .map((weapon) => weapon.heldBy)
+    .filter(Boolean);
+  assert.equal(
+    new Set(weaponHolders).size,
+    weaponHolders.length,
+    "A weapon must not be held by multiple fighters.",
+  );
+  for (const weapon of snapshot.weapons) {
+    assert.ok(["pan", "spatula", "plate"].includes(weapon.kind));
+    assert.ok(weapon.position.every(Number.isFinite));
+    assert.ok(weapon.velocity.every(Number.isFinite));
+    assert.equal(typeof weapon.active, "boolean");
+    if (weapon.heldBy) assert.ok(ids.has(weapon.heldBy));
+  }
+
   for (const player of snapshot.players) {
     assert.ok(player.position.every(Number.isFinite), `${player.id} position must stay finite`);
     assert.ok(player.rotation.every(Number.isFinite), `${player.id} rotation must stay finite`);
@@ -102,6 +120,9 @@ function assertSnapshotHealthy(snapshot) {
     if (player.grabTargetId) {
       assert.ok(ids.has(player.grabTargetId));
       assert.notEqual(player.grabTargetId, player.id);
+    }
+    if (player.heldWeapon) {
+      assert.ok(["pan", "spatula", "plate"].includes(player.heldWeapon));
     }
   }
 }
@@ -167,6 +188,80 @@ try {
   );
   assertSnapshotHealthy(allHuman);
   assertStablePlayersUpright(allHuman);
+
+  // Exercise a real authoritative weapon lifecycle under the stress server.
+  const weaponPlayer = players[1];
+  const weaponSpawnAck = await new Promise((resolve) => {
+    weaponPlayer.socket.emit("stress:spawn-weapon", { kind: "plate" }, resolve);
+  });
+  assert.equal(weaponSpawnAck?.ok, true);
+
+  weaponPlayer.seq += 1;
+  weaponPlayer.socket.emit("input", {
+    seq: weaponPlayer.seq,
+    moveX: 0,
+    moveY: 0,
+    push: false,
+    attack: false,
+    grab: true,
+    sprint: false,
+    jump: false,
+    kick: false,
+  });
+
+  const pickedWeapon = await waitForEvent(
+    observer,
+    "match:snapshot",
+    (snapshot) =>
+      snapshot.players.some(
+        (player) =>
+          player.id === weaponPlayer.ack.playerId &&
+          player.heldWeapon === "plate",
+      ) &&
+      snapshot.weapons.some(
+        (weapon) =>
+          weapon.kind === "plate" &&
+          weapon.heldBy === weaponPlayer.ack.playerId,
+      ),
+    4_000,
+  );
+  assertSnapshotHealthy(pickedWeapon);
+
+  weaponPlayer.seq += 1;
+  weaponPlayer.socket.emit("input", {
+    seq: weaponPlayer.seq,
+    moveX: 0,
+    moveY: 0,
+    push: false,
+    attack: false,
+    grab: false,
+    sprint: false,
+    jump: false,
+    kick: false,
+  });
+
+  const throwEvent = waitForEvent(
+    observer,
+    "game:event",
+    (event) =>
+      event?.type === "weapon_throw" &&
+      event.actorId === weaponPlayer.ack.playerId &&
+      event.weapon === "plate",
+    4_000,
+  );
+  weaponPlayer.seq += 1;
+  weaponPlayer.socket.emit("input", {
+    seq: weaponPlayer.seq,
+    moveX: 0,
+    moveY: 0,
+    push: false,
+    attack: true,
+    grab: false,
+    sprint: false,
+    jump: false,
+    kick: false,
+  });
+  await throwEvent;
 
   measuredStartedAt = performance.now();
   snapshotCount = 0;
