@@ -131,6 +131,9 @@ try {
     { timeout: 10_000 },
   );
   await screen.waitForTimeout(2_000);
+  // Keep the venue screen foregrounded while validating its polling/focus
+  // recovery. Headless Chromium throttles background-page timers aggressively.
+  await screen.bringToFront();
   // The server retains the latest called ticket; the Broadcast Shell owns the
   // presentation window across embedded and external Game Packages.
   const ticket = await platform("/queue", {
