@@ -39,6 +39,7 @@ jobs:
             done
           }
 
+          node server/test/persistence-smoke.mjs
           node server/test/runtime-manager-smoke.mjs
 
           start_server /tmp/waiting-server-smoke.log node server/dist/index.js
