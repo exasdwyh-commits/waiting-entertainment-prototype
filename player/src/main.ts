@@ -138,6 +138,7 @@ let inputSeq = 0;
 let pushCooldownLeftMs = 0;
 let eliminated = false;
 let actionDisabled = false;
+let carriedMode = false;
 let rttMs = 0;
 let snapshotCounter = 0;
 let snapshotRate = 0;
@@ -360,6 +361,7 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
 
   const spawnProtected = me.spawnProtectionLeftMs > 0;
   const carried = me.state === "carried";
+  carriedMode = carried;
   const incapacitated = me.state === "ko" || me.state === "waking";
   actionDisabled = incapacitated;
   const attackDisabled =
@@ -562,7 +564,7 @@ joystick.addEventListener("pointercancel", releaseStick);
 
 pushButton.addEventListener("pointerdown", () => {
   if (eliminated || actionDisabled) return;
-  if (pushCooldownLeftMs > 45) {
+  if (!carriedMode && pushCooldownLeftMs > 45) {
     if ("vibrate" in navigator) navigator.vibrate(7);
     return;
   }
