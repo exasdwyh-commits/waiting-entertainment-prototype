@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { QueueTicket, QueueTicketStatus } from "@waiting/shared";
+import { LocalStateStore } from "./LocalStateStore.js";
 
 function cloneTicket(ticket: QueueTicket): QueueTicket {
   return structuredClone(ticket);
@@ -8,6 +9,16 @@ function cloneTicket(ticket: QueueTicket): QueueTicket {
 export class QueueService {
   private readonly tickets = new Map<string, QueueTicket>();
   private sequence = 0;
+
+  constructor(private readonly store?: LocalStateStore) {
+    const persisted = store?.queue();
+    if (persisted) {
+      this.sequence = persisted.sequence;
+      for (const ticket of persisted.tickets) {
+        this.tickets.set(ticket.id, structuredClone(ticket));
+      }
+    }
+  }
 
   list(): QueueTicket[] {
     return [...this.tickets.values()]
@@ -27,6 +38,7 @@ export class QueueService {
       createdAt: Date.now(),
     };
     this.tickets.set(ticket.id, ticket);
+    this.persist();
     return cloneTicket(ticket);
   }
 
@@ -55,7 +67,15 @@ export class QueueService {
     if (next === "seated") {
       ticket.seatedAt = Date.now();
     }
+    this.persist();
     return cloneTicket(ticket);
+  }
+
+  private persist(): void {
+    this.store?.saveQueue({
+      sequence: this.sequence,
+      tickets: [...this.tickets.values()].map(cloneTicket),
+    });
   }
 
   latestCalled(): QueueTicket | undefined {
