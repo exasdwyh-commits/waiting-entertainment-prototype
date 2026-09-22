@@ -31,6 +31,24 @@ const pilotRuntime = games.runtimes.find((runtime) => runtime.gameId === "pilot-
 assert.equal(pilotRuntime.state, "not-configured");
 assert.equal(pilotRuntime.configured, false);
 
+const embeddedCheck = await api("/api/platform/runtimes/table-push-king/check", {
+  method: "POST",
+  body: "{}",
+});
+assert.equal(embeddedCheck.runtime.state, "embedded");
+assert.equal(embeddedCheck.runtime.configured, true);
+
+const pilotCheck = await api("/api/platform/runtimes/pilot-racer/check", {
+  method: "POST",
+  body: "{}",
+});
+assert.equal(pilotCheck.runtime.state, "not-configured");
+assert.equal(pilotCheck.runtime.configured, false);
+
+const pilotLogs = await api("/api/platform/runtimes/pilot-racer/logs");
+assert.equal(pilotLogs.runtime.state, "not-configured");
+assert.deepEqual(pilotLogs.logs, []);
+
 const created = await api("/api/platform/rounds", {
   method: "POST",
   body: JSON.stringify({ gameId: "table-push-king", playerLimit: 2 }),
@@ -134,4 +152,4 @@ const unconfiguredPilot = await fetch(base + "/api/platform/rounds", {
 assert.equal(unconfiguredPilot.status, 503);
 assert.equal((await unconfiguredPilot.json()).error, "runtime-not-configured");
 
-console.log("Platform smoke test passed: CORS, single active round, round admission, runtime configuration guard, independent queue and broadcast composition are healthy.");
+console.log("Platform smoke test passed: CORS, runtime diagnostics, single active round, round admission, configuration guard, independent queue and broadcast composition are healthy.");

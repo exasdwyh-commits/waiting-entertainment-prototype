@@ -56,7 +56,7 @@ SEA_BATTLE_DIR=/absolute/path/to/waiting-entertainment-prototype/games/sea-battl
 npm run dev
 ```
 
-The Hub launches `node server.mjs`, checks `/info` for protocol `sea-battle/1`, calls `/api/start` after roster lock/start, and embeds the dedicated display/player entrypoints. The current V1 gameplay loop is 3 minutes: steer + accelerate, collect supplies, choose one of three upgrades, automatic broadside cannons, respawn after sinking, deep-sea monster events, and score ranking.
+The Hub launches `node server.mjs`, checks `/info` for protocol `sea-battle/1`, calls `/api/start` after roster lock/start, and embeds the dedicated display/player entrypoints. The current V2 gameplay loop is 3 minutes: steer + accelerate, collect supplies, choose one of three upgrades, automatic broadside cannons, collision/hit knockback, respawn after sinking, staged battle pacing, a shrinking storm finale, deep-sea monster events, and score ranking.
 
 ## Recommended venue flow
 
@@ -103,6 +103,19 @@ Current foundation:
 - Runtime status is exposed to the Host Console as embedded / not configured / stopped / starting / running / failed instead of treating a hidden URL as licensing or readiness.
 
 Commercial tiers are represented by entitlements rather than separate application forks, so Base / Pro / Custom packages can share one host application.
+
+### Runtime operator diagnostics
+
+The Host Console now actively refreshes process-game health instead of showing only the last lifecycle state.
+
+For every external Game Package the card provides:
+
+- **检查运行时** — forces a health probe against the package's declared `healthPath` / `healthProtocol`;
+- **查看日志** — shows the last Hub-captured stdout/stderr lines from the managed process;
+- live state detection for a game that was started manually outside the Hub;
+- ownership-safe behavior: a manually started healthy process is shown as running but remains `managed=false`, so the Hub will not kill it on shutdown.
+
+The normal Host snapshot throttles health probes to avoid polling every external port on every 800ms UI refresh. A manual **检查运行时** always forces a fresh probe.
 
 ## Legacy direct game mode
 

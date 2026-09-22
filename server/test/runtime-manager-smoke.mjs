@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { RuntimeManager } from "../dist/platform/RuntimeManager.js";
 
@@ -93,7 +94,36 @@ try {
 }
 assert.equal(offline, true);
 
+// An externally started process should still be discovered as healthy, but the
+// Hub must not claim ownership of a process it did not spawn.
+const external = spawn("node", ["fixture-server.mjs"], {
+  cwd: fixtureDir,
+  env: { ...process.env, PORT: "19090", ROOM_CODE: "EXTERNAL" },
+  stdio: "ignore",
+});
+try {
+  let discovered;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    discovered = await manager.refresh(manifest, true);
+    if (discovered.state === "running") break;
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 60));
+  }
+  assert.equal(discovered?.state, "running");
+  assert.equal(discovered?.managed, false);
+  assert.equal(discovered?.pid, undefined);
+
+  external.kill("SIGTERM");
+  await new Promise((resolvePromise) => external.once("exit", resolvePromise));
+  const refreshedStopped = await manager.refresh(manifest, true);
+  assert.equal(refreshedStopped.state, "stopped");
+  assert.equal(refreshedStopped.managed, false);
+} finally {
+  if (external.exitCode === null && external.signalCode === null) {
+    external.kill("SIGKILL");
+  }
+}
+
 delete process.env.RUNTIME_FIXTURE_DIR;
 assert.equal(manager.status(manifest).state, "not-configured");
 
-console.log("RuntimeManager smoke passed: warm lobby, health, start action, room code, and shutdown.");
+console.log("RuntimeManager smoke passed: warm lobby, health refresh, unmanaged discovery, start action, room code, and shutdown.");

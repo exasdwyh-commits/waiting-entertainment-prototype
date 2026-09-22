@@ -24,6 +24,7 @@ type ProcessConfig = {
 
 const HEALTH_TIMEOUT_MS = 10_000;
 const HEALTH_POLL_MS = 180;
+const HEALTH_REFRESH_MS = 2_000;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -73,6 +74,63 @@ export class RuntimeManager {
 
   list(manifests: readonly GameManifestV1[]): GameRuntimeStatus[] {
     return manifests.map((manifest) => this.status(manifest));
+  }
+
+  async refresh(
+    manifest: GameManifestV1,
+    force = false,
+  ): Promise<GameRuntimeStatus> {
+    if (manifest.runtime.kind === "embedded") return this.status(manifest);
+
+    const config = this.processConfig(manifest);
+    if (!config) return this.status(manifest);
+
+    const entry = this.entry(manifest.id);
+    const now = Date.now();
+    if (
+      !force &&
+      entry.checkedAt > 0 &&
+      now - entry.checkedAt < HEALTH_REFRESH_MS
+    ) {
+      return this.status(manifest);
+    }
+
+    const healthy = await this.isHealthy(manifest);
+    entry.checkedAt = now;
+
+    if (healthy) {
+      entry.state = "running";
+      entry.message = undefined;
+      if (!entry.child) entry.managed = false;
+      return this.status(manifest);
+    }
+
+    if (entry.child) {
+      if (entry.state !== "starting") {
+        entry.state = "unhealthy";
+        entry.message = "health check failed";
+      }
+      return this.status(manifest);
+    }
+
+    // Preserve a concrete startup failure until a future successful health
+    // probe. Otherwise an operator would see it immediately collapse back to
+    // "stopped" and lose the only useful clue.
+    if (entry.state !== "failed") {
+      entry.state = "stopped";
+      entry.managed = false;
+      entry.message = undefined;
+    }
+    return this.status(manifest);
+  }
+
+  async refreshAll(
+    manifests: readonly GameManifestV1[],
+    force = false,
+  ): Promise<GameRuntimeStatus[]> {
+    return await Promise.all(
+      manifests.map((manifest) => this.refresh(manifest, force)),
+    );
   }
 
   assertConfigured(manifest: GameManifestV1): void {
