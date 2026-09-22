@@ -60,6 +60,37 @@ export class AudioFx {
       return;
     }
 
+    if (type === "dropkick_hit") {
+      this.tone(230, 52, 0.2, 0, 0.075);
+      this.tone(460, 88, 0.13, 0.015, 0.035);
+      this.noiseBurst(0.22, 0, 0.042, 1_350);
+      return;
+    }
+
+    if (type === "headbutt_hit") {
+      this.tone(205, 64, 0.15, 0, 0.062);
+      this.noiseBurst(0.13, 0, 0.028, 1_500);
+      return;
+    }
+
+    if (type === "kick_hit") {
+      this.tone(285, 92, 0.1, 0, 0.045);
+      this.noiseBurst(0.09, 0, 0.018, 1_850);
+      return;
+    }
+
+    if (type === "ko") {
+      this.tone(170, 42, 0.28, 0, 0.075);
+      this.tone(540, 180, 0.12, 0.045, 0.025);
+      return;
+    }
+
+    if (type === "struggle_break") {
+      this.tone(260, 620, 0.12, 0, 0.04);
+      this.noiseBurst(0.08, 0, 0.014, 2_000);
+      return;
+    }
+
     if (type === "punch_hit" || type === "push_hit") {
       this.tone(250, 110, 0.085, 0, 0.035);
       this.noiseBurst(0.075, 0, 0.012, 2_200);
