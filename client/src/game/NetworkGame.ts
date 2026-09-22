@@ -255,8 +255,13 @@ export class NetworkGame {
       const impulse =
         event.type === "final_elimination" ? 0.52 :
         event.type === "big_fall" ? 0.32 :
-        event.type === "toss" ? 0.3 + event.importance * 0.18 :
-        event.type === "heavy_hit" ? 0.22 + event.importance * 0.18 :
+        event.type === "toss" || event.type === "dropkick_hit"
+          ? 0.3 + event.importance * 0.18 :
+        event.type === "heavy_hit" || event.type === "headbutt_hit"
+          ? 0.22 + event.importance * 0.18 :
+        event.type === "kick_hit" || event.type === "struggle_break"
+          ? 0.12 + event.importance * 0.12 :
+        event.type === "ko" ? 0.34 :
         event.type === "punch_hit" || event.type === "push_hit"
           ? 0.08 + event.importance * 0.1 :
         event.type === "grab" ? 0.035 :
@@ -265,8 +270,13 @@ export class NetworkGame {
       const fovKick =
         event.type === "final_elimination" ? 6 :
         event.type === "big_fall" ? 4 :
-        event.type === "toss" ? 3.5 + event.importance * 2.4 :
-        event.type === "heavy_hit" ? 3 + event.importance * 2.6 :
+        event.type === "toss" || event.type === "dropkick_hit"
+          ? 3.5 + event.importance * 2.4 :
+        event.type === "heavy_hit" || event.type === "headbutt_hit"
+          ? 3 + event.importance * 2.6 :
+        event.type === "kick_hit" || event.type === "struggle_break"
+          ? 1.7 + event.importance * 1.6 :
+        event.type === "ko" ? 4.2 :
         event.type === "punch_hit" || event.type === "push_hit"
           ? 0.8 + event.importance * 1.4 :
         event.type === "grab" ? 0.35 :
@@ -276,8 +286,13 @@ export class NetworkGame {
       const hitStopMs =
         event.type === "final_elimination" ? 88 :
         event.type === "big_fall" ? 62 :
-        event.type === "toss" ? 52 + event.importance * 36 :
-        event.type === "heavy_hit" ? 42 + event.importance * 34 :
+        event.type === "toss" || event.type === "dropkick_hit"
+          ? 52 + event.importance * 36 :
+        event.type === "heavy_hit" || event.type === "headbutt_hit"
+          ? 42 + event.importance * 34 :
+        event.type === "kick_hit" || event.type === "struggle_break"
+          ? 24 + event.importance * 22 :
+        event.type === "ko" ? 74 :
         event.type === "punch_hit" || event.type === "push_hit"
           ? 14 + event.importance * 18 :
         event.type === "edge_save" ? 28 :
@@ -309,16 +324,29 @@ export class NetworkGame {
         event.type === "punch_hit" ||
         event.type === "push_hit" ||
         event.type === "heavy_hit" ||
+        event.type === "kick_hit" ||
+        event.type === "headbutt_hit" ||
+        event.type === "dropkick_hit" ||
+        event.type === "ko" ||
+        event.type === "struggle_break" ||
         event.type === "toss"
       ) {
         targetView?.visual?.addImpact(
-          event.type === "heavy_hit" || event.type === "toss"
+          event.type === "heavy_hit" ||
+          event.type === "headbutt_hit" ||
+          event.type === "dropkick_hit" ||
+          event.type === "ko" ||
+          event.type === "toss"
             ? Math.max(0.85, event.importance)
             : event.importance,
           true,
         );
         actorView?.visual?.addImpact(
-          event.type === "heavy_hit" ? 0.72 : 0.38,
+          event.type === "heavy_hit" ||
+          event.type === "headbutt_hit" ||
+          event.type === "dropkick_hit"
+            ? 0.72
+            : 0.38,
           false,
         );
       }
@@ -349,6 +377,8 @@ export class NetworkGame {
       if (
         (
           event.type === "toss" ||
+          event.type === "dropkick_hit" ||
+          event.type === "ko" ||
           event.type === "edge_save" ||
           event.type === "big_fall" ||
           event.type === "final_elimination"
@@ -389,11 +419,15 @@ export class NetworkGame {
         score:
           event.type === "big_fall"
             ? 70 + event.importance * 20
-            : event.type === "toss"
-              ? 62 + event.importance * 22
-              : event.type === "edge_save"
-                ? 56 + event.importance * 18
-                : 0,
+            : event.type === "dropkick_hit"
+              ? 68 + event.importance * 24
+              : event.type === "ko"
+                ? 64 + event.importance * 22
+                : event.type === "toss"
+                  ? 62 + event.importance * 22
+                  : event.type === "edge_save"
+                    ? 56 + event.importance * 18
+                    : 0,
       }))
       .filter((entry) => entry.score > 0)
       .sort((a, b) => b.score - a.score || b.event.atMs - a.event.atMs)
