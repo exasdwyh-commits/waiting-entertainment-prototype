@@ -134,9 +134,10 @@ try {
     method: "POST",
     body: "{}",
   });
-  await screen.waitForSelector("#queue-overlay:not([hidden])", {
-    timeout: 15_000,
-  });
+  await screen
+    .frameLocator("#game-frame")
+    .locator("#hub-queue-overlay:not([hidden])")
+    .waitFor({ timeout: 15_000 });
   await screen.screenshot({
     path: "docs/screenshots/hub-broadcast-queue.png",
     fullPage: true,
