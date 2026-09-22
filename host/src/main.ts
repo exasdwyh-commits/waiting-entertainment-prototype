@@ -239,6 +239,19 @@ function managementCard(
     (runtime?.workingDirectory
       ? '<div class="manage-path"><span>运行目录</span><code>' + esc(runtime.workingDirectory) + '</code></div>'
       : '') +
+    (game.settings?.length
+      ? '<div class="manage-settings"><span class="manage-settings__title">默认参数 · 下次启动生效</span>' +
+          game.settings.map((setting) =>
+            '<div class="manage-setting"><span>' + esc(setting.label) + '</span><strong>' +
+              esc(
+                setting.type === "enum"
+                  ? (setting.options?.find((option) => option.value === String(setting.default))?.label ?? setting.default)
+                  : setting.default,
+              ) +
+              '</strong><code>' + esc(setting.env ?? "package") + '</code></div>'
+          ).join("") +
+        '</div>'
+      : '') +
     runtimeActions +
     '<div class="manage-links">' +
       (canOpen
