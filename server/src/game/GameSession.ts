@@ -175,6 +175,40 @@ export class GameSession {
     };
   }
 
+  debugSpawnWeapon(socketId: string, kind: WeaponKind) {
+    const slot = this.slots.find(
+      (candidate) => candidate.socketId === socketId && candidate.alive,
+    );
+    if (!slot) return false;
+
+    const weapon = this.weapons.find((candidate) => candidate.kind === kind);
+    if (!weapon) return false;
+
+    if (weapon.heldBy) {
+      const holder = this.slots.find((candidate) => candidate.id === weapon.heldBy);
+      if (holder?.heldWeaponId === weapon.id) holder.heldWeaponId = undefined;
+    }
+
+    const p = slot.body.translation();
+    const dir = {
+      x: Math.sin(slot.facingYaw),
+      z: Math.cos(slot.facingYaw),
+    };
+    weapon.active = true;
+    weapon.heldBy = undefined;
+    weapon.thrownBy = undefined;
+    weapon.thrownAt = 0;
+    weapon.thrownUntil = 0;
+    weapon.respawnAt = 0;
+    weapon.position = {
+      x: p.x + dir.x * 0.78,
+      y: kind === "plate" ? 0.18 : 0.3,
+      z: p.z + dir.z * 0.78,
+    };
+    weapon.velocity = { x: 0, y: 0, z: 0 };
+    return true;
+  }
+
   debugForceFall(socketId: string) {
     const slot = this.slots.find(
       (candidate) => candidate.socketId === socketId && candidate.alive,
