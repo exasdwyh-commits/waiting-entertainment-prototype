@@ -1,4 +1,4 @@
-import type { EntertainmentRound, GameManifestV1, GameRuntimeStatus, PlatformSnapshot, QueueTicket } from "@waiting/shared";
+import type { EntertainmentRound, GameManifestV1, GameRuntimeStatus, GameSettingRuntimeState, PlatformSnapshot, QueueTicket } from "@waiting/shared";
 import "./style.css";
 
 const API = location.protocol + "//" + location.hostname + ":3001/api/platform";
@@ -129,7 +129,8 @@ function runtimeText(runtime: GameRuntimeStatus | undefined): string {
 function gameCard(
   game: GameManifestV1,
   runtime: GameRuntimeStatus | undefined,
-  active?: EntertainmentRound,
+  active: EntertainmentRound | undefined,
+  settingStates: GameSettingRuntimeState[],
 ): string {
   const unavailable = game.runtime.kind === "process" && !runtime?.configured;
   const disabled = Boolean(active) || unavailable;
@@ -172,6 +173,51 @@ function entryUrl(game: GameManifestV1, kind: "display" | "player"): string {
   const raw = game.entrypoints[kind].replaceAll("{host}", location.hostname);
   if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
   return location.protocol + "//" + location.hostname + raw;
+}
+
+function settingControl(
+  gameId: string,
+  setting: NonNullable<GameManifestV1["settings"]>[number],
+  runtimeState: GameSettingRuntimeState | undefined,
+  disabled: boolean,
+): string {
+  const value = runtimeState?.value ?? setting.default;
+  const sourceLabel =
+    runtimeState?.source === "saved" ? "门店保存" :
+    runtimeState?.source === "environment" ? "环境变量" :
+    "默认值";
+  const attributes =
+    ' data-setting-key="' + esc(setting.key) + '"' +
+    ' data-setting-type="' + esc(setting.type) + '"' +
+    (disabled ? " disabled" : "");
+
+  let control = "";
+  if (setting.type === "enum") {
+    control = '<select' + attributes + '>' +
+      (setting.options ?? []).map((option) =>
+        '<option value="' + esc(option.value) + '"' +
+        (String(value) === option.value ? " selected" : "") + '>' +
+        esc(option.label) + '</option>'
+      ).join("") + '</select>';
+  } else if (setting.type === "boolean") {
+    control = '<input type="checkbox"' + attributes +
+      (Boolean(value) ? " checked" : "") + ' />';
+  } else {
+    control = '<input type="' + (setting.type === "number" ? "number" : "text") + '"' +
+      attributes +
+      ' value="' + esc(value) + '"' +
+      (setting.min !== undefined ? ' min="' + esc(setting.min) + '"' : "") +
+      (setting.max !== undefined ? ' max="' + esc(setting.max) + '"' : "") +
+      (setting.step !== undefined ? ' step="' + esc(setting.step) + '"' : "") +
+      ' />';
+  }
+
+  return '<label class="manage-setting-field">' +
+    '<span><b>' + esc(setting.label) + '</b><small>' + esc(setting.description ?? setting.env ?? setting.key) + '</small></span>' +
+    '<div class="manage-setting-control">' + control +
+      '<em class="setting-source setting-source--' + esc(runtimeState?.source ?? "default") + '">' +
+        esc(sourceLabel) + '</em></div>' +
+  '</label>';
 }
 
 function managementCard(
@@ -240,17 +286,20 @@ function managementCard(
       ? '<div class="manage-path"><span>运行目录</span><code>' + esc(runtime.workingDirectory) + '</code></div>'
       : '') +
     (game.settings?.length
-      ? '<div class="manage-settings"><span class="manage-settings__title">默认参数 · 下次启动生效</span>' +
+      ? '<form class="manage-settings" data-settings-form="' + esc(game.id) + '">' +
+          '<div class="manage-settings__head"><div><span class="manage-settings__title">游戏参数</span>' +
+          '<small>保存后持久化；进程运行中修改将在下次启动生效。</small></div>' +
+          (authorized ? '<button class="secondary settings-save" type="submit">保存参数</button>' : '') +
+          '</div>' +
           game.settings.map((setting) =>
-            '<div class="manage-setting"><span>' + esc(setting.label) + '</span><strong>' +
-              esc(
-                setting.type === "enum"
-                  ? (setting.options?.find((option) => option.value === String(setting.default))?.label ?? setting.default)
-                  : setting.default,
-              ) +
-              '</strong><code>' + esc(setting.env ?? "package") + '</code></div>'
+            settingControl(
+              game.id,
+              setting,
+              settingStates.find((state) => state.key === setting.key),
+              !authorized,
+            )
           ).join("") +
-        '</div>'
+        '</form>'
       : '') +
     runtimeActions +
     '<div class="manage-links">' +
@@ -333,6 +382,7 @@ function render() {
           game,
           snapshot?.runtimes.find((runtime) => runtime.gameId === game.id),
           active,
+          snapshot?.gameSettings?.[game.id] ?? [],
         ),
       ).join("") +
     '</div></section>';
@@ -423,6 +473,56 @@ async function controlRuntime(gameId: string, action: "start" | "stop") {
   }
 }
 
+async function saveGameSettings(form: HTMLFormElement) {
+  const gameId = form.dataset.settingsForm;
+  if (!gameId || busy) return;
+  const values: Record<string, string | number | boolean> = {};
+
+  form.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-setting-key]").forEach((control) => {
+    const key = control.dataset.settingKey;
+    const type = control.dataset.settingType;
+    if (!key) return;
+    if (control instanceof HTMLInputElement && type === "boolean") {
+      values[key] = control.checked;
+    } else if (type === "number") {
+      values[key] = Number(control.value);
+    } else {
+      values[key] = control.value;
+    }
+  });
+
+  busy = true;
+  try {
+    const body = await api(
+      "/runtimes/" + encodeURIComponent(gameId) + "/settings",
+      { method: "POST", body: JSON.stringify({ values }) },
+    ) as {
+      settings: GameSettingRuntimeState[];
+      runtime: GameRuntimeStatus;
+      appliesAfterRestart: boolean;
+    };
+
+    if (snapshot) {
+      const runtimes = snapshot.runtimes.filter((runtime) => runtime.gameId !== gameId);
+      runtimes.push(body.runtime);
+      snapshot = {
+        ...snapshot,
+        runtimes,
+        gameSettings: {
+          ...snapshot.gameSettings,
+          [gameId]: body.settings,
+        },
+      };
+      render();
+    }
+    toast(body.appliesAfterRestart ? "参数已保存 · 下次启动生效" : "参数已保存");
+  } catch (error) {
+    toast(error instanceof Error ? error.message : "参数保存失败", true);
+  } finally {
+    busy = false;
+  }
+}
+
 async function mutate(path: string, body?: unknown) {
   if (busy) return;
   busy = true;
@@ -444,6 +544,12 @@ function bindEvents() {
       activeView = view;
       history.replaceState(null, "", view === "games" ? "#games" : location.pathname);
       render();
+    });
+  });
+  document.querySelectorAll<HTMLFormElement>("[data-settings-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      void saveGameSettings(form);
     });
   });
   document.querySelectorAll<HTMLButtonElement>("[data-runtime-start]").forEach((button) => {
@@ -494,8 +600,12 @@ async function refresh(force = false) {
   try {
     const next = (await api()) as PlatformSnapshot;
     const changed = JSON.stringify(next) !== JSON.stringify(snapshot);
+    const editingSettings =
+      activeView === "games" &&
+      document.activeElement instanceof HTMLElement &&
+      Boolean(document.activeElement.closest("[data-settings-form]"));
     snapshot = next;
-    if (force || changed) render();
+    if (force || (changed && !editingSettings)) render();
   } catch {
     if (!snapshot) {
       root.innerHTML = '<main class="boot boot--error"><strong>无法连接本地主机 :3001</strong><span>请确认 server 已启动。</span></main>';
