@@ -86,6 +86,7 @@ export const BUILTIN_GAME_MANIFESTS: readonly GameManifestV1[] = [
       healthProtocol: "sea-battle/1",
       command: ["node", "server.mjs"],
       workingDirectoryEnv: "SEA_BATTLE_DIR",
+      bundledPath: "games/sea-battle",
       port: 9020,
       startPath: "/api/start",
     },
@@ -182,8 +183,19 @@ export function validateGameManifests(
 
     if (manifest.runtime.kind === "process") {
       if (!manifest.runtime.command?.length) manifestError(id, "process-command");
-      if (!manifest.runtime.workingDirectoryEnv?.trim()) {
-        manifestError(id, "process-working-directory-env");
+      if (
+        !manifest.runtime.workingDirectoryEnv?.trim() &&
+        !manifest.runtime.bundledPath?.trim()
+      ) {
+        manifestError(id, "process-working-directory");
+      }
+      if (
+        manifest.runtime.bundledPath !== undefined &&
+        (!manifest.runtime.bundledPath.trim() ||
+          manifest.runtime.bundledPath.includes("..") ||
+          manifest.runtime.bundledPath.startsWith("/"))
+      ) {
+        manifestError(id, "process-bundled-path");
       }
       if (!manifest.runtime.healthProtocol?.trim()) {
         manifestError(id, "process-health-protocol");
@@ -202,6 +214,7 @@ export function validateGameManifests(
       if (
         manifest.runtime.command?.length ||
         manifest.runtime.workingDirectoryEnv ||
+        manifest.runtime.bundledPath ||
         manifest.runtime.port ||
         manifest.runtime.healthProtocol ||
         manifest.runtime.startPath
