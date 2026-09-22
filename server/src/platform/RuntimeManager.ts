@@ -80,6 +80,14 @@ export class RuntimeManager {
     if (!this.processConfig(manifest)) throw new Error("runtime-not-configured");
   }
 
+  async prepareRound(
+    manifest: GameManifestV1,
+    round: EntertainmentRound,
+  ): Promise<GameRuntimeStatus> {
+    if (manifest.runtime.kind === "embedded") return this.status(manifest);
+    return await this.ensureRunning(manifest, round.code);
+  }
+
   async beginRound(
     manifest: GameManifestV1,
     round: EntertainmentRound,
