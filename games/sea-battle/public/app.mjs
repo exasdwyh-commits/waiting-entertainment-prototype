@@ -8,6 +8,7 @@ const hubName = (query.get("name") || "").trim().slice(0, 12);
 const hubRound = (query.get("round") || "").trim().toUpperCase();
 document.body.classList.toggle("display", isDisplay);
 document.body.classList.toggle("hub-mode", hubMode);
+document.body.classList.toggle("hub-admission", Boolean(hubName));
 
 const UPGRADE_COPY = {
   speed: ["疾风船体", "基础速度与加速上限提高"],
