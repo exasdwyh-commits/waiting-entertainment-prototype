@@ -57,6 +57,7 @@ export interface PlayerSnapshot {
   velocity: [number, number, number];
   score: number;
   pushCooldownLeftMs: number;
+  spawnProtectionLeftMs: number;
   grabTargetId?: PlayerId;
   state: PlayerState;
   eliminated: boolean;
