@@ -71,6 +71,8 @@ export function newBoat(id) {
     steer: 0,
     throttle: false,
     speed: 0,
+    knockX: 0,
+    knockZ: 0,
     baseSpeed: 7.5,
     boostSpeed: 15,
     turnRate: 1.95,
@@ -96,6 +98,8 @@ export function newBoat(id) {
     invulnerableUntil: 0,
     lastHitBy: null,
     lastHitAt: -Infinity,
+    lastFireAt: -Infinity,
+    lastCollisionAt: -Infinity,
   };
 }
 
@@ -325,6 +329,11 @@ function fireBroadside(state, boat) {
   if (!best) return false;
 
   boat.nextFireAt = state.time + boat.fireInterval;
+  boat.lastFireAt = state.time;
+  // Broadside recoil is small but visible: firing a heavy battery should feel
+  // like mass moved, not like a UI-only damage tick.
+  boat.knockX -= right.x * rightSign * (0.35 + boat.cannonCount * 0.08);
+  boat.knockZ -= right.z * rightSign * (0.35 + boat.cannonCount * 0.08);
   const count = boat.cannonCount;
   const rightSign = best.side;
   const baseAngle = boat.heading + rightSign * Math.PI / 2;
@@ -440,6 +449,10 @@ function stepMonster(state, dt) {
         boat.hp -= 24;
         boat.lastHitBy = null;
         boat.lastHitAt = state.time;
+        const pushX = boat.x - attack.x, pushZ = boat.z - attack.z;
+        const pushLen = Math.hypot(pushX, pushZ) || 1;
+        boat.knockX += pushX / pushLen * 5.2;
+        boat.knockZ += pushZ / pushLen * 5.2;
         emit(state, "monster_hit", boat.id, `${boat.name} 被巨兽掀翻`, 3);
         if (boat.hp <= 0) sinkBoat(state, boat, null);
       }
@@ -466,6 +479,10 @@ function stepProjectiles(state, dt) {
       boat.hp -= projectile.damage;
       boat.lastHitBy = projectile.ownerId;
       boat.lastHitAt = state.time;
+      const impulse = 2.8 + projectile.damage * 0.055;
+      const projectileSpeed = Math.hypot(projectile.vx, projectile.vz) || 1;
+      boat.knockX += projectile.vx / projectileSpeed * impulse;
+      boat.knockZ += projectile.vz / projectileSpeed * impulse;
       const attacker = state.boats[projectile.ownerId];
       if (attacker) attacker.score += 2;
       emit(state, "hit", boat.id, `${attacker?.name ?? "炮弹"} 命中 ${boat.name}`, 2, {
@@ -545,8 +562,11 @@ function stepBoat(state, boat, dt) {
     boat.energy = Math.min(boat.maxEnergy, boat.energy + dt * boat.energyRegen);
   }
 
-  boat.x += Math.sin(boat.heading) * boat.speed * dt;
-  boat.z += Math.cos(boat.heading) * boat.speed * dt;
+  boat.x += Math.sin(boat.heading) * boat.speed * dt + boat.knockX * dt;
+  boat.z += Math.cos(boat.heading) * boat.speed * dt + boat.knockZ * dt;
+  const knockDecay = Math.exp(-dt * 3.2);
+  boat.knockX *= knockDecay;
+  boat.knockZ *= knockDecay;
 
   const radius = Math.hypot(boat.x, boat.z);
   if (radius > WORLD_RADIUS - boat.radius) {
@@ -560,6 +580,56 @@ function stepBoat(state, boat, dt) {
 
   collectCrates(state, boat);
   fireBroadside(state, boat);
+}
+
+export function resolveBoatCollisions(state) {
+  for (let i = 0; i < state.boats.length; i++) {
+    const a = state.boats[i];
+    if (!a.alive) continue;
+    for (let j = i + 1; j < state.boats.length; j++) {
+      const b = state.boats[j];
+      if (!b.alive) continue;
+      let dx = b.x - a.x, dz = b.z - a.z;
+      let distance = Math.hypot(dx, dz);
+      const minDistance = (a.radius + b.radius) * 0.92;
+      if (distance >= minDistance) continue;
+      if (distance < 0.001) {
+        const angle = (a.id * 1.7 + b.id * 2.3) % (Math.PI * 2);
+        dx = Math.cos(angle);
+        dz = Math.sin(angle);
+        distance = 1;
+      }
+      const nx = dx / distance, nz = dz / distance;
+      const penetration = minDistance - distance;
+      const correction = penetration * 0.52;
+      a.x -= nx * correction;
+      a.z -= nz * correction;
+      b.x += nx * correction;
+      b.z += nz * correction;
+
+      const relativeForward =
+        (Math.sin(a.heading) * a.speed - Math.sin(b.heading) * b.speed) * nx +
+        (Math.cos(a.heading) * a.speed - Math.cos(b.heading) * b.speed) * nz;
+      const shove = clamp(relativeForward * 0.42 + 1.5, 1.2, 5.5);
+      a.knockX -= nx * shove;
+      a.knockZ -= nz * shove;
+      b.knockX += nx * shove;
+      b.knockZ += nz * shove;
+      a.speed *= 0.94;
+      b.speed *= 0.94;
+
+      if (
+        state.time - a.lastCollisionAt > 0.9 &&
+        state.time - b.lastCollisionAt > 0.9
+      ) {
+        a.lastCollisionAt = state.time;
+        b.lastCollisionAt = state.time;
+        emit(state, "collision", a.id, `${a.name} 与 ${b.name} 船体碰撞`, 1, {
+          targetId: b.id,
+        });
+      }
+    }
+  }
 }
 
 export function ranking(state) {
@@ -602,6 +672,7 @@ export function stepGame(state, dt) {
   state.remaining = Math.max(0, state.remaining - dt);
 
   for (const boat of state.boats) stepBoat(state, boat, dt);
+  resolveBoatCollisions(state);
   stepProjectiles(state, dt);
   stepMonster(state, dt);
   stepCrates(state);
@@ -682,6 +753,9 @@ export function snapshot(state) {
       alive: boat.alive,
       respawnAt: boat.respawnAt,
       invulnerableUntil: boat.invulnerableUntil,
+      lastHitAt: boat.lastHitAt,
+      lastFireAt: boat.lastFireAt,
+      lastCollisionAt: boat.lastCollisionAt,
     })),
   };
 }
