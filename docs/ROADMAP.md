@@ -201,19 +201,32 @@ Next:
 - Production-quality character art replacement after gameplay lock
 - Game-feel tuning from real players
 
-## Phase 8 - Waiting Engine
+## Phase 8 - Waiting Entertainment Hub
 
-**Status: Future**
+**Status: In progress — foundation branch started**
 
-Extract reusable systems so additional games share:
+Extract reusable platform systems while keeping each game's simulation independent:
 
-- Input
-- Sessions
-- Network
-- AI fill
-- Match lifecycle
-- Replay/events
-- Deployment runtime
+- Game Manifest / Game Registry
+- Store entitlements for Base / Pro / Custom content
+- Host-created ephemeral rounds and per-round join codes
+- Queue/calling domain independent from game participation
+- Broadcast Shell state + queue overlay
+- Runtime Manager for embedded and external-process games
+- Shared session/network conventions where they are genuinely reusable
+- Deployment runtime and local health checks
+
+Foundation implemented on the current Hub branch:
+
+- Shared platform contracts
+- Entitlement-aware registry
+- In-memory RoundManager
+- Independent QueueService
+- Broadcast state composition
+- Local `/api/platform/*` host APIs
+- Game Package Manifest v1 specification
+
+Next: Host Console UI, Broadcast Shell UI, persistence, RuntimeManager process launch/health checks, and pilot-racer adapter.
 
 Candidate games:
 
