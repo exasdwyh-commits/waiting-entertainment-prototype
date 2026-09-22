@@ -48,7 +48,7 @@ sun.shadow.camera.top = 72;
 sun.shadow.camera.bottom = -72;
 scene.add(sun);
 
-const waterGeo = new THREE.CircleGeometry(70, 96);
+const waterGeo = new THREE.CircleGeometry(108, 128);
 const waterMat = new THREE.MeshPhysicalMaterial({
   color: "#087f91",
   roughness: 0.18,
@@ -176,12 +176,26 @@ function makeBoat(color) {
     }
   }
 
-  const wake = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.2, 5.2),
-    new THREE.MeshBasicMaterial({ color: "#d7ffff", transparent: true, opacity: 0.28, depthWrite: false }),
+  const wakeGeometry = new THREE.BufferGeometry();
+  wakeGeometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute([
+      -1.15, 0, -1.6,
+       1.15, 0, -1.6,
+       0.0,  0, -7.0,
+    ], 3),
   );
-  wake.rotation.x = -Math.PI / 2;
-  wake.position.set(0, 0.01, -3.5);
+  const wake = new THREE.Mesh(
+    wakeGeometry,
+    new THREE.MeshBasicMaterial({
+      color: "#d7ffff",
+      transparent: true,
+      opacity: 0.20,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  wake.position.y = 0.025;
   group.add(wake);
   group.userData.wake = wake;
   group.userData.hullMat = hullMat;
@@ -233,29 +247,46 @@ const crateMeshes = Array.from({ length: 22 }, (_, id) => {
   return group;
 });
 
-const projectileGeo = new THREE.SphereGeometry(0.28, 8, 6);
+const projectileGeo = new THREE.SphereGeometry(0.38, 10, 8);
 const projectileMat = new THREE.MeshStandardMaterial({
-  color: "#182127",
-  metalness: 0.55,
-  roughness: 0.28,
+  color: "#342014",
+  emissive: "#ff9f1c",
+  emissiveIntensity: 1.35,
+  metalness: 0.42,
+  roughness: 0.24,
 });
 const projectileMeshes = new Map();
 
 const monster = new THREE.Group();
 const monsterBody = new THREE.Mesh(
-  new THREE.SphereGeometry(3.2, 18, 12),
-  new THREE.MeshStandardMaterial({ color: "#4d2475", roughness: 0.55, emissive: "#25103b", emissiveIntensity: 0.5 }),
+  new THREE.SphereGeometry(4.4, 20, 14),
+  new THREE.MeshStandardMaterial({
+    color: "#6b2c91",
+    roughness: 0.46,
+    emissive: "#3b145d",
+    emissiveIntensity: 0.9,
+  }),
 );
-monsterBody.position.y = 1.2;
-monsterBody.scale.y = 0.75;
+monsterBody.position.y = 1.55;
+monsterBody.scale.y = 0.72;
 monster.add(monsterBody);
+
+for (const x of [-1.35, 1.35]) {
+  const eye = new THREE.Mesh(
+    new THREE.SphereGeometry(0.34, 10, 8),
+    new THREE.MeshBasicMaterial({ color: "#ff5d9b" }),
+  );
+  eye.position.set(x, 2.35, 3.3);
+  monster.add(eye);
+}
+
 for (let i = 0; i < 7; i++) {
   const tentacle = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.2, 0.48, 5.4, 8),
+    new THREE.CylinderGeometry(0.28, 0.62, 7.2, 9),
     monsterBody.material,
   );
   const a = i / 7 * Math.PI * 2;
-  tentacle.position.set(Math.cos(a) * 2.3, 0.3, Math.sin(a) * 2.3);
+  tentacle.position.set(Math.cos(a) * 3.1, 0.25, Math.sin(a) * 3.1);
   tentacle.rotation.z = 0.55 + (i % 2) * 0.3;
   tentacle.rotation.y = -a;
   tentacle.userData.phase = i;
@@ -517,6 +548,14 @@ function updateUi() {
   }
 
   $("monster-warning").hidden = !(state.monster?.alive);
+  const boss = $("monster-boss");
+  boss.hidden = !(state.monster?.alive);
+  if (state.monster?.alive) {
+    const hp = Math.max(0, state.monster.hp);
+    const maxHp = Math.max(1, state.monster.maxHp);
+    $("monster-hp-fill").style.width = `${Math.max(0, Math.min(100, hp / maxHp * 100))}%`;
+    $("monster-hp-value").textContent = `${Math.ceil(hp)} / ${Math.ceil(maxHp)}`;
+  }
   $("storm-warning").hidden = !(state.phase === "racing" && stage === "maelstrom");
 
   const call = $("battle-call");
@@ -694,35 +733,57 @@ function animate(now) {
     if (isDisplay) {
       const leader = state.boats[state.order[0]] ?? state.boats[0];
       const recent = state.events.find((event) =>
-        state.time - event.time < 2.4 &&
-        ["sink", "monster_spawn", "monster_warning", "monster_kill", "stage"].includes(event.type)
+        state.time - event.time < 2.6 &&
+        [
+          "sink", "broadside", "hit", "collision",
+          "monster_spawn", "monster_warning", "monster_kill", "stage",
+        ].includes(event.type)
       );
       const eventFocusId = Number.isInteger(recent?.killerId)
         ? recent.killerId
-        : Number.isInteger(recent?.boatId)
-          ? recent.boatId
-          : null;
+        : Number.isInteger(recent?.attackerId)
+          ? recent.attackerId
+          : Number.isInteger(recent?.boatId)
+            ? recent.boatId
+            : null;
+      const eventTargetId = Number.isInteger(recent?.targetId)
+        ? recent.targetId
+        : (
+            recent?.type === "hit" && Number.isInteger(recent?.boatId)
+              ? recent.boatId
+              : null
+          );
       const eventBoat = eventFocusId !== null ? state.boats[eventFocusId] : null;
+      const targetBoat = eventTargetId !== null ? state.boats[eventTargetId] : null;
       const focusBoat = eventBoat?.alive ? eventBoat : leader;
 
       let focusX = focusBoat.x;
       let focusZ = focusBoat.z;
-      let cameraHeight = state.stage === "maelstrom" ? 46 : 42;
-      let fov = state.stage === "maelstrom" ? 55 : 52;
+      let cameraHeight = state.stage === "maelstrom" ? 40 : 36;
+      let fov = state.stage === "maelstrom" ? 53 : 49;
+
+      if (targetBoat?.alive) {
+        focusX = (focusBoat.x + targetBoat.x) * 0.5;
+        focusZ = (focusBoat.z + targetBoat.z) * 0.5;
+        const separation = Math.hypot(focusBoat.x - targetBoat.x, focusBoat.z - targetBoat.z);
+        cameraHeight = Math.max(29, Math.min(42, 27 + separation * 0.55));
+        fov = Math.max(46, Math.min(56, 46 + separation * 0.22));
+      }
 
       if (state.monster?.alive && (
         recent?.type?.startsWith("monster") ||
+        recent?.targetKind === "monster" ||
         Math.hypot(focusBoat.x - state.monster.x, focusBoat.z - state.monster.z) < 25
       )) {
-        focusX = focusBoat.x * 0.58 + state.monster.x * 0.42;
-        focusZ = focusBoat.z * 0.58 + state.monster.z * 0.42;
-        cameraHeight = 48;
-        fov = 56;
+        focusX = focusBoat.x * 0.32 + state.monster.x * 0.68;
+        focusZ = focusBoat.z * 0.32 + state.monster.z * 0.68;
+        cameraHeight = 34;
+        fov = 50;
       }
 
-      cameraTarget.set(focusX + 26, cameraHeight, focusZ + 31);
-      lookTarget.set(focusX, 0.9, focusZ);
-      camera.position.lerp(cameraTarget, 1 - Math.exp(-dt * 2.0));
+      cameraTarget.set(focusX + 18, cameraHeight, focusZ + 22);
+      lookTarget.set(focusX, 1.0, focusZ);
+      camera.position.lerp(cameraTarget, 1 - Math.exp(-dt * 2.5));
       camera.lookAt(lookTarget);
       camera.fov = fov;
     } else if (myId !== null && state.boats[myId]) {
