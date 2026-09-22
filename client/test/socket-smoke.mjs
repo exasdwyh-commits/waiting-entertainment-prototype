@@ -77,6 +77,17 @@ try {
     ),
   );
   assert.ok(
+    initial.players.every(
+      (entry) =>
+        typeof entry.koResistance === "number" &&
+        entry.koResistance >= 0 &&
+        entry.koResistance <= 1 &&
+        typeof entry.struggleProgress === "number" &&
+        entry.struggleProgress >= 0 &&
+        entry.struggleProgress <= 1,
+    ),
+  );
+  assert.ok(
     ["opening", "brawl", "danger", "final"].includes(initial.matchStage),
   );
   assert.ok(initial.timeLeftMs > 170_000);
@@ -108,6 +119,8 @@ try {
     attack: true,
     grab: false,
     sprint: true,
+    jump: true,
+    kick: true,
     seq: 1,
   });
 
@@ -125,6 +138,8 @@ try {
   assert.ok(afterInputPlayer);
   assert.equal(typeof afterInputPlayer.sprinting, "boolean");
   assert.equal(typeof afterInputPlayer.stamina, "number");
+  assert.equal(typeof afterInputPlayer.koResistance, "number");
+  assert.equal(typeof afterInputPlayer.struggleProgress, "number");
 
   player.disconnect();
 
