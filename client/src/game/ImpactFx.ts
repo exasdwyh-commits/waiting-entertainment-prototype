@@ -26,15 +26,20 @@ export class ImpactFx {
   ) {
     const isFall = type === "big_fall" || type === "final_elimination";
     const isToss = type === "toss";
-    const isHeavy = type === "heavy_hit";
-    const isPunch = type === "punch_hit" || type === "push_hit";
+    const isDropkick = type === "dropkick_hit";
+    const isHeadbutt = type === "headbutt_hit";
+    const isKick = type === "kick_hit";
+    const isKo = type === "ko";
+    const isStruggle = type === "struggle_break";
+    const isHeavy = type === "heavy_hit" || isHeadbutt;
+    const isPunch = type === "punch_hit" || type === "push_hit" || isKick;
     const isGrab = type === "grab";
     const isSave = type === "edge_save";
     const isWin = type === "win";
 
-    const geometry = isFall || isWin || isToss || isHeavy
+    const geometry = isFall || isWin || isToss || isHeavy || isDropkick || isKo
       ? new THREE.TorusGeometry(
-          isWin ? 0.58 : isToss ? 0.38 : isHeavy ? 0.32 : 0.42,
+          isWin ? 0.58 : isDropkick ? 0.46 : isKo ? 0.42 : isToss ? 0.38 : isHeavy ? 0.32 : 0.42,
           isToss ? 0.065 : isHeavy ? 0.06 : 0.055,
           8,
           28,
@@ -49,8 +54,12 @@ export class ImpactFx {
     const color =
       type === "final_elimination" || isWin ? 0xffd166 :
       isSave ? 0x7dd3fc :
+      isDropkick ? 0xfef08a :
+      isKo ? 0xfca5a5 :
+      isStruggle ? 0x86efac :
       isToss ? 0xffa94d :
       isHeavy ? 0xfff1a8 :
+      isKick ? 0xc4b5fd :
       isGrab ? 0x60a5fa :
       isPunch ? 0xffffff :
       0xfb7185;
@@ -65,7 +74,7 @@ export class ImpactFx {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(position[0], Math.max(0.08, position[1]), position[2]);
 
-    if (isFall || isWin || isSave || isToss || isHeavy) {
+    if (isFall || isWin || isSave || isToss || isHeavy || isDropkick || isKo) {
       mesh.rotation.x = Math.PI / 2;
       mesh.position.y = isWin ? 0.09 : Math.max(0.06, position[1] * 0.25);
     } else {
@@ -84,6 +93,8 @@ export class ImpactFx {
       durationMs:
         isWin ? 1500 :
         isFall ? 850 :
+        isDropkick ? 720 :
+        isKo ? 760 :
         isToss ? 620 :
         isHeavy ? 520 :
         isGrab ? 260 :
@@ -92,6 +103,8 @@ export class ImpactFx {
       endScale:
         isWin ? 3.2 :
         isFall ? 2.8 :
+        isDropkick ? 3.05 :
+        isKo ? 2.8 :
         isToss ? 2.65 :
         isHeavy ? 2.45 :
         isGrab ? 1.45 :
@@ -99,6 +112,8 @@ export class ImpactFx {
       rise:
         isWin ? 0.45 :
         isFall ? 0.18 :
+        isDropkick ? 0.5 :
+        isKo ? 0.38 :
         isToss ? 0.42 :
         isHeavy ? 0.34 :
         isGrab ? 0.14 :
@@ -108,15 +123,17 @@ export class ImpactFx {
       spin: 0,
     });
 
-    if (isPunch || isHeavy || isToss) {
+    if (isPunch || isHeavy || isToss || isDropkick || isKo || isStruggle) {
       this.spawnHitShards(
         position,
         color,
-        isHeavy || isToss ? Math.max(0.78, strength) : strength,
+        isHeavy || isToss || isDropkick || isKo
+          ? Math.max(0.78, strength)
+          : strength,
       );
     }
 
-    if (isHeavy || isToss || isFall) {
+    if (isHeavy || isToss || isFall || isDropkick || isKo) {
       this.spawnSmokePuffs(
         position,
         isToss || isFall ? Math.max(0.8, strength) : strength,
