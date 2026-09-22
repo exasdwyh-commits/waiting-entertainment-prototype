@@ -82,23 +82,14 @@ try {
 
   await guest.locator('input[name="name"]').fill("Preview Guest");
   await guest.locator("#join-form button").click();
-  await guest.waitForTimeout(1_800);
+  await guest.locator(".joined-wait").waitFor({ timeout: 10_000 });
 
-  if (!guest.url().includes(":5174/")) {
-    const message = await guest.locator("#message").textContent().catch(() => null);
+  if (!guest.url().includes(":5177/")) {
     throw new Error(
-      "Guest signup did not redirect to controller. url=" +
-        guest.url() +
-        " message=" +
-        JSON.stringify(message),
+      "Embedded-game signup should remain on the Hub waiting page before host start. url=" +
+        guest.url(),
     );
   }
-
-  await guest.waitForFunction(
-    () =>
-      document.querySelector("#status")?.textContent?.includes("等待主持人开局"),
-    { timeout: 10_000 },
-  );
 
   await host.waitForFunction(
     () =>
@@ -110,6 +101,7 @@ try {
   await host.locator('[data-round-action="start"]').waitFor({ timeout: 8_000 });
   await host.locator('[data-round-action="start"]').click();
 
+  await guest.waitForURL(/:5174\//, { timeout: 12_000 });
   await guest.waitForFunction(
     () => {
       const text = document.querySelector("#status")?.textContent ?? "";
