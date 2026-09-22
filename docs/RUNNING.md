@@ -38,6 +38,26 @@ On the current development machine this can point at the existing Pilot Racer re
 
 If `PILOT_RACER_DIR` is missing or invalid, Pilot Racer remains visible in the Base game library as **未配置本地游戏目录** and cannot create a hosted round.
 
+### Enable Sea Battle
+
+Sea Battle V1 now lives as an isolated Game Package under `games/sea-battle` and runs on port `9020`. It is intentionally registered as **Pro** content so Base stores do not automatically receive every new game.
+
+Direct development:
+
+```bash
+npm run dev:sea
+```
+
+Hub-managed process mode:
+
+```bash
+WAITING_PLAN=PRO \
+SEA_BATTLE_DIR=/absolute/path/to/waiting-entertainment-prototype/games/sea-battle \
+npm run dev
+```
+
+The Hub launches `node server.mjs`, checks `/info` for protocol `sea-battle/1`, calls `/api/start` after roster lock/start, and embeds the dedicated display/player entrypoints. The current V1 gameplay loop is 3 minutes: steer + accelerate, collect supplies, choose one of three upgrades, automatic broadside cannons, respawn after sinking, deep-sea monster events, and score ranking.
+
 ## Recommended venue flow
 
 The normal hosted flow now starts from the platform surfaces rather than the legacy game QR.
@@ -78,7 +98,8 @@ The Host Console renders only games granted by the current store entitlements.
 Current foundation:
 
 - `table-push-king`: embedded runtime; host launch is wired.
-- `pilot-racer`: external process Game Package v1. When `PILOT_RACER_DIR` is configured, roster lock warms the process, `/info` is health-checked, host start calls `/api/start`, and round finish shuts down the Hub-managed child process.
+- `pilot-racer`: Base external process Game Package v1. When `PILOT_RACER_DIR` is configured, roster lock warms the process, `/info` is health-checked, host start calls `/api/start`, and round finish shuts down the Hub-managed child process.
+- `sea-battle`: Pro external process Game Package v1 on port `9020`; `SEA_BATTLE_DIR` enables Hub launch.
 - Runtime status is exposed to the Host Console as embedded / not configured / stopped / starting / running / failed instead of treating a hidden URL as licensing or readiness.
 
 Commercial tiers are represented by entitlements rather than separate application forks, so Base / Pro / Custom packages can share one host application.
