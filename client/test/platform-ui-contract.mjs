@@ -35,6 +35,7 @@ assert.match(screen, /refreshId < refreshApplied/);
 assert.match(screen, /addEventListener\("focus"/);
 assert.match(screen, /visibilitychange/);
 assert.match(client, /shellOwnsQueue/);
-assert.match(preview, /#queue-overlay:not\(\[hidden\]\)/);
+assert.match(preview, /#queue-overlay/);
+assert.match(preview, /broadcast\.queueOverlay\?\.ticketId/);
 
 console.log("Platform UI contract passed: game management controls and runtime-degradation fallbacks are present.");
