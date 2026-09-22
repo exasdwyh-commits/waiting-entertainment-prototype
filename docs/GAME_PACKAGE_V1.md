@@ -66,11 +66,26 @@ The big screen is composed by the Hub Broadcast Shell. The game display is embed
 ### 5. Runtime types
 
 - `embedded` — runtime is part of the main application process.
-- `process` — Hub launches and health-checks an external local process. Process packages should declare a stable local `port`; `healthProtocol` is recommended so the Hub cannot mistake an unrelated service on that port for the game. `startPath` is optional and lets the host trigger the actual match only after the roster is locked.
+- `process` — Hub launches and health-checks an external local process. Process packages must declare a stable local `port`, `workingDirectoryEnv`, command, and `healthProtocol` so the Hub cannot mistake an unrelated service on that port for the game. `startPath` is optional and lets the host trigger the actual match only after the roster is locked.
 
 ### 6. Commercial tier is metadata, not the lock itself
 
 `base / pro / custom` helps the content manager present the library. Actual access is determined by entitlement grants.
+
+### 7. Manifests are rejected before the Host can expose them
+
+`GameRegistry` performs semantic validation at construction time. A package is rejected when any of these are true:
+
+- duplicate game id;
+- invalid player range;
+- process port outside 1024–65535 or shared by another process package;
+- process runtime missing command, working-directory environment variable, or health protocol;
+- embedded runtime declares process-only fields;
+- health/start paths are not absolute local paths;
+- display/player entrypoints hard-code `localhost` or `127.0.0.1` instead of remaining LAN portable;
+- the package does not include its identity entitlement `game:<id>`.
+
+These checks deliberately fail fast. A malformed package must never reach round creation, runtime launch, or a guest QR.
 
 ## Future v1-compatible extensions
 
