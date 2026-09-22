@@ -75,6 +75,24 @@ for (const radius of [18, 34, 52, 58]) {
   scene.add(ring);
 }
 
+const safeZoneRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.985, 1.0, 128),
+  new THREE.MeshBasicMaterial({
+    color: "#ff5d73",
+    transparent: true,
+    opacity: 0.72,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  }),
+);
+safeZoneRing.rotation.x = -Math.PI / 2;
+safeZoneRing.position.y = 0.045;
+safeZoneRing.visible = false;
+scene.add(safeZoneRing);
+
+const waterNormalColor = new THREE.Color("#087f91");
+const waterStormColor = new THREE.Color("#274d67");
+
 const islandMat = new THREE.MeshStandardMaterial({ color: "#7f6848", roughness: 0.92 });
 for (let i = 0; i < 13; i++) {
   const a = i / 13 * Math.PI * 2 + 0.16;
@@ -255,6 +273,21 @@ danger.position.y = 0.03;
 danger.visible = false;
 scene.add(danger);
 
+const broadsideTargetRing = new THREE.Mesh(
+  new THREE.RingGeometry(1.55, 2.05, 36),
+  new THREE.MeshBasicMaterial({
+    color: "#ffd166",
+    transparent: true,
+    opacity: 0.88,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  }),
+);
+broadsideTargetRing.rotation.x = -Math.PI / 2;
+broadsideTargetRing.position.y = 0.08;
+broadsideTargetRing.visible = false;
+scene.add(broadsideTargetRing);
+
 let state = null;
 let myId = null;
 let token = "";
@@ -411,6 +444,37 @@ addEventListener("keyup", (event) => {
 
 setInterval(sendInput, 120);
 
+function findBroadsideLock(boat) {
+  if (!state || !boat?.alive) return null;
+  const forward = { x: Math.sin(boat.heading), z: Math.cos(boat.heading) };
+  const right = { x: Math.cos(boat.heading), z: -Math.sin(boat.heading) };
+  const candidates = state.boats
+    .filter((other) => other.id !== boat.id && other.alive)
+    .map((target) => ({ kind: "boat", target }));
+
+  if (state.monster?.alive) candidates.push({ kind: "monster", target: state.monster });
+
+  let best = null;
+  for (const candidate of candidates) {
+    const dx = candidate.target.x - boat.x;
+    const dz = candidate.target.z - boat.z;
+    const distance = Math.hypot(dx, dz);
+    if (distance > 31 || distance < 2) continue;
+    const nx = dx / distance, nz = dz / distance;
+    const sideDot = nx * right.x + nz * right.z;
+    const forwardDot = nx * forward.x + nz * forward.z;
+    if (Math.abs(sideDot) < 0.7 || Math.abs(forwardDot) > 0.72) continue;
+    if (!best || distance < best.distance) {
+      best = {
+        ...candidate,
+        distance,
+        side: sideDot < 0 ? "左舷" : "右舷",
+      };
+    }
+  }
+  return best;
+}
+
 function updateUi() {
   if (!state) return;
   const phaseLabel = {
@@ -421,6 +485,15 @@ function updateUi() {
     result: "本局结算",
   }[state.phase] ?? state.phase;
   $("phase").textContent = phaseLabel;
+
+  const stageLabels = {
+    salvage: "物资争夺",
+    battle: "炮火升级",
+    maelstrom: "风暴决战",
+  };
+  const stage = state.stage ?? "salvage";
+  document.body.dataset.stage = stage;
+  $("stage-chip").textContent = stageLabels[stage] ?? stage;
 
   const seconds = Math.max(0, Math.ceil(state.remaining ?? state.seconds ?? 180));
   $("timer").textContent = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
@@ -444,6 +517,7 @@ function updateUi() {
   }
 
   $("monster-warning").hidden = !(state.monster?.alive);
+  $("storm-warning").hidden = !(state.phase === "racing" && stage === "maelstrom");
 
   const call = $("battle-call");
   if (state.phase === "countdown") {
@@ -469,6 +543,19 @@ function updateUi() {
   $("xp-fill").style.width = `${Math.max(0, Math.min(100, me.xp / me.nextLevelXp * 100))}%`;
 
   $("respawn").hidden = me.alive;
+
+  const lock = findBroadsideLock(me);
+  const broadsideStatus = $("broadside-status");
+  if (lock) {
+    broadsideStatus.textContent =
+      `${lock.side}锁定 · ${lock.kind === "monster" ? "海怪" : "敌舰"} ${Math.round(lock.distance)}m`;
+    broadsideStatus.classList.add("locked");
+  } else {
+    broadsideStatus.textContent =
+      stage === "salvage" ? "抢物资升级 · 调整船身准备侧舷" : "调整船身 · 让敌舰进入左右侧舷";
+    broadsideStatus.classList.remove("locked");
+  }
+
   renderUpgrade(me.choices);
 }
 
