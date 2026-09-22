@@ -26,6 +26,10 @@ assert.match(cors.headers.get("access-control-allow-methods") ?? "", /POST/);
 const games = await api("/api/platform/games");
 assert.equal(games.license.plan, "BASE");
 assert.ok(games.games.some((game) => game.id === "table-push-king"));
+assert.ok(games.games.some((game) => game.id === "pilot-racer"));
+const pilotRuntime = games.runtimes.find((runtime) => runtime.gameId === "pilot-racer");
+assert.equal(pilotRuntime.state, "not-configured");
+assert.equal(pilotRuntime.configured, false);
 
 const created = await api("/api/platform/rounds", {
   method: "POST",
