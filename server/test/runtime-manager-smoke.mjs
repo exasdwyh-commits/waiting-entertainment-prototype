@@ -58,10 +58,18 @@ const manager = new RuntimeManager();
 assert.equal(manager.status(manifest).state, "stopped");
 assert.equal(manager.status(manifest).configured, true);
 
+const prepared = await manager.prepareRound(manifest, round);
+assert.equal(prepared.state, "running");
+assert.equal(prepared.managed, true);
+assert.ok(prepared.pid);
+
+const beforeStart = await fetch("http://127.0.0.1:19090/info").then((response) => response.json());
+assert.equal(beforeStart.roomCode, "ABC123");
+assert.equal(beforeStart.starts, 0);
+
 const running = await manager.beginRound(manifest, round);
 assert.equal(running.state, "running");
 assert.equal(running.managed, true);
-assert.ok(running.pid);
 
 const info = await fetch("http://127.0.0.1:19090/info").then((response) => response.json());
 assert.equal(info.roomCode, "ABC123");
@@ -87,4 +95,4 @@ assert.equal(offline, true);
 delete process.env.RUNTIME_FIXTURE_DIR;
 assert.equal(manager.status(manifest).state, "not-configured");
 
-console.log("RuntimeManager smoke passed: launch, health, start action, room code, and shutdown.");
+console.log("RuntimeManager smoke passed: warm lobby, health, start action, room code, and shutdown.");
