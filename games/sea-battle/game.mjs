@@ -99,6 +99,7 @@ export function newBoat(id) {
     lastHitBy: null,
     lastHitAt: -Infinity,
     lastFireAt: -Infinity,
+    lastFireSide: 0,
     lastCollisionAt: -Infinity,
   };
 }
@@ -330,6 +331,7 @@ function fireBroadside(state, boat) {
 
   boat.nextFireAt = state.time + boat.fireInterval;
   boat.lastFireAt = state.time;
+  boat.lastFireSide = rightSign;
   // Broadside recoil is small but visible: firing a heavy battery should feel
   // like mass moved, not like a UI-only damage tick.
   boat.knockX -= right.x * rightSign * (0.35 + boat.cannonCount * 0.08);
@@ -755,6 +757,7 @@ export function snapshot(state) {
       invulnerableUntil: boat.invulnerableUntil,
       lastHitAt: boat.lastHitAt,
       lastFireAt: boat.lastFireAt,
+      lastFireSide: boat.lastFireSide,
       lastCollisionAt: boat.lastCollisionAt,
     })),
   };
