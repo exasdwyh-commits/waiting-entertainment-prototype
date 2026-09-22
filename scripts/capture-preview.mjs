@@ -123,8 +123,13 @@ try {
     { timeout: 10_000 },
   );
   await screen.waitForTimeout(2_000);
+  const liveFrame = screen.frameLocator("#game-frame");
+  await liveFrame.locator("#hub-queue-overlay").waitFor({
+    state: "attached",
+    timeout: 30_000,
+  });
 
-  // The server retains the latest called ticket; the Broadcast Shell owns the
+  // The server retains the latest called ticket; the live game owns the
   // 10-second presentation window once it observes a new calledAt value.
   const ticket = await platform("/queue", {
     method: "POST",
@@ -134,10 +139,9 @@ try {
     method: "POST",
     body: "{}",
   });
-  await screen
-    .frameLocator("#game-frame")
+  await liveFrame
     .locator("#hub-queue-overlay:not([hidden])")
-    .waitFor({ timeout: 15_000 });
+    .waitFor({ timeout: 10_000 });
   await screen.screenshot({
     path: "docs/screenshots/hub-broadcast-queue.png",
     fullPage: true,
