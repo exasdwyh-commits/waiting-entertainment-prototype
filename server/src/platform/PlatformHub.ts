@@ -58,6 +58,12 @@ export class PlatformHub {
       license: structuredClone(this.license),
       games,
       allGames: this.registry.listAll(),
+      gameSettings: Object.fromEntries(
+        this.registry.listAll().map((game) => [
+          game.id,
+          this.runtime.settings(game),
+        ]),
+      ),
       runtimes: this.runtime.list(games),
       rounds: this.rounds.list(),
       queue: this.queue.list(),
@@ -72,6 +78,12 @@ export class PlatformHub {
       license: structuredClone(this.license),
       games,
       allGames: this.registry.listAll(),
+      gameSettings: Object.fromEntries(
+        this.registry.listAll().map((game) => [
+          game.id,
+          this.runtime.settings(game),
+        ]),
+      ),
       runtimes: this.runtime.list(games),
       rounds: this.rounds.list(),
       queue: this.queue.list(),
