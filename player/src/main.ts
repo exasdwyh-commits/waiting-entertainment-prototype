@@ -4,7 +4,10 @@ import { PersonalGameView } from "./PersonalGameView";
 import { AudioFx } from "./AudioFx";
 import "./style.css";
 
-const DEBUG_MODE = new URLSearchParams(location.search).get("debug") === "1";
+const SEARCH_PARAMS = new URLSearchParams(location.search);
+const DEBUG_MODE = SEARCH_PARAMS.get("debug") === "1";
+const ROUND_CODE = SEARCH_PARAMS.get("round")?.trim().toUpperCase() || "";
+const REQUESTED_NAME = SEARCH_PARAMS.get("name")?.trim().slice(0, 24) || "";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
 root.innerHTML = `
@@ -81,6 +84,7 @@ personalView.start();
 
 const endpoint = `${location.protocol}//${location.hostname}:3001`;
 const socket = io(endpoint, {
+  autoConnect: !ROUND_CODE,
   transports: ["websocket", "polling"],
   reconnection: true,
   reconnectionDelay: 350,
@@ -99,7 +103,10 @@ const sessionId = localStorage.getItem(SESSION_KEY) || makeSessionId();
 localStorage.setItem(SESSION_KEY, sessionId);
 
 const savedName = localStorage.getItem(NAME_KEY);
-const defaultName = savedName || `玩家${sessionId.replace(/-/g, "").slice(-4).toUpperCase()}`;
+const defaultName =
+  REQUESTED_NAME ||
+  savedName ||
+  `玩家${sessionId.replace(/-/g, "").slice(-4).toUpperCase()}`;
 localStorage.setItem(NAME_KEY, defaultName);
 
 let ownedPlayerId = "";
@@ -117,6 +124,59 @@ let rttMs = 0;
 let snapshotCounter = 0;
 let snapshotRate = 0;
 let snapshotWindowStartedAt = performance.now();
+let hostedRoundEnded = false;
+
+async function syncHostedRound() {
+  if (!ROUND_CODE || hostedRoundEnded) return;
+
+  try {
+    const response = await fetch(
+      `${location.protocol}//${location.hostname}:3001/api/platform/rounds`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) throw new Error(`round-state-${response.status}`);
+    const payload = (await response.json()) as {
+      rounds?: Array<{ code: string; status: string }>;
+    };
+    const round = payload.rounds?.find((item) => item.code === ROUND_CODE);
+
+    if (!round) {
+      status.textContent = "本轮报名已失效";
+      return;
+    }
+
+    if (round.status === "running") {
+      if (!socket.connected) {
+        status.textContent = "主持人已开局 · 正在进入…";
+        socket.connect();
+      }
+      return;
+    }
+
+    if (["finished", "cancelled", "expired"].includes(round.status)) {
+      hostedRoundEnded = true;
+      if (socket.connected) socket.disconnect();
+      status.textContent =
+        round.status === "finished" ? "本轮已结束" : "本轮已关闭";
+      status.classList.remove("online");
+      clearHeldInput();
+      return;
+    }
+
+    status.textContent =
+      round.status === "locked"
+        ? "阵容已锁定 · 等待主持人开局"
+        : "报名成功 · 等待主持人开局";
+  } catch {
+    status.textContent = "正在同步本轮状态…";
+  }
+}
+
+if (ROUND_CODE) {
+  status.textContent = "报名成功 · 等待主持人开局";
+  void syncHostedRound();
+  window.setInterval(() => void syncHostedRound(), 650);
+}
 
 socket.on("connect", () => {
   status.textContent = "正在接管角色…";
