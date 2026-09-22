@@ -148,13 +148,17 @@ function makeBoat(color) {
   group.add(sail);
 
   const cannonMat = new THREE.MeshStandardMaterial({ color: "#29323b", roughness: 0.35, metalness: 0.7 });
+  group.userData.cannonsLeft = [];
+  group.userData.cannonsRight = [];
   for (const side of [-1, 1]) {
-    for (const z of [-0.9, 0.9]) {
+    for (const z of [-1.35, -0.45, 0.45, 1.35]) {
       const cannon = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 1.0, 8), cannonMat);
       cannon.rotation.z = Math.PI / 2;
       cannon.position.set(side * 1.4, 0.86, z);
       cannon.castShadow = true;
+      cannon.visible = false;
       group.add(cannon);
+      (side < 0 ? group.userData.cannonsLeft : group.userData.cannonsRight).push(cannon);
     }
   }
 
@@ -264,6 +268,7 @@ let throttle = false;
 let previous = performance.now();
 const cameraTarget = new THREE.Vector3();
 const lookTarget = new THREE.Vector3();
+let displayCutKey = "";
 
 try {
   token = localStorage.getItem("sea:token") || "";
@@ -468,6 +473,26 @@ function updateUi() {
   $("energy-fill").style.width = `${Math.max(0, Math.min(100, me.energy / me.maxEnergy * 100))}%`;
   $("xp-fill").style.width = `${Math.max(0, Math.min(100, me.xp / me.nextLevelXp * 100))}%`;
 
+  const port = $("port-ready");
+  const starboard = $("starboard-ready");
+  const fireAge = state.time - (me.lastFireAt ?? -999);
+  const firing = fireAge >= 0 && fireAge < 0.2;
+  for (const element of [port, starboard]) {
+    element.classList.remove("locked", "ready");
+  }
+  if (me.broadsideSide < 0) {
+    port.classList.add(firing ? "ready" : "locked");
+    port.textContent = firing ? "左舷齐射!" : "左舷锁定";
+  } else {
+    port.textContent = "左舷炮";
+  }
+  if (me.broadsideSide > 0) {
+    starboard.classList.add(firing ? "ready" : "locked");
+    starboard.textContent = firing ? "右舷齐射!" : "右舷锁定";
+  } else {
+    starboard.textContent = "右舷炮";
+  }
+
   $("respawn").hidden = me.alive;
   renderUpgrade(me.choices);
 }
@@ -530,6 +555,12 @@ function animate(now) {
       mesh.rotation.y += delta * Math.min(1, dt * 10);
       mesh.scale.setScalar(0.86 + boat.radius * 0.12);
       mesh.userData.wake.material.opacity = 0.12 + Math.min(0.42, boat.speed / 34);
+      mesh.userData.cannonsLeft.forEach((cannon, index) => {
+        cannon.visible = index < boat.cannonCount;
+      });
+      mesh.userData.cannonsRight.forEach((cannon, index) => {
+        cannon.visible = index < boat.cannonCount;
+      });
 
       const fireAge = state.time - (boat.lastFireAt ?? -999);
       const firing = fireAge >= 0 && fireAge < 0.16;
@@ -582,17 +613,51 @@ function animate(now) {
 
     if (isDisplay) {
       const leader = state.boats[state.order[0]] ?? state.boats[0];
-      const focusX = state.monster?.alive
-        ? leader.x * 0.72 + state.monster.x * 0.28
-        : leader.x * 0.55;
-      const focusZ = state.monster?.alive
-        ? leader.z * 0.72 + state.monster.z * 0.28
-        : leader.z * 0.55;
-      cameraTarget.set(focusX + 30, 56, focusZ + 39);
-      lookTarget.set(focusX, 0, focusZ);
-      camera.position.lerp(cameraTarget, 1 - Math.exp(-dt * 1.3));
+      const director = state.director ?? {
+        focusId: leader.id,
+        kind: "overview",
+        reason: "海域巡游",
+      };
+      const focusBoat = Number.isInteger(director.focusId)
+        ? state.boats[director.focusId]
+        : leader;
+      let cutKey = `${director.kind}:${director.focusId ?? "sea"}:${director.reason}`;
+
+      if (director.kind === "monster" && state.monster?.alive) {
+        const mx = state.monster.x, mz = state.monster.z;
+        const bx = focusBoat?.x ?? leader.x, bz = focusBoat?.z ?? leader.z;
+        const centerX = mx * 0.55 + bx * 0.45;
+        const centerZ = mz * 0.55 + bz * 0.45;
+        cameraTarget.set(centerX + 23, 27, centerZ + 25);
+        lookTarget.set(centerX, 0.7, centerZ);
+        camera.fov = 55;
+      } else if ((director.kind === "battle" || director.kind === "result") && focusBoat) {
+        const sideX = Math.cos(focusBoat.heading) * 16;
+        const sideZ = -Math.sin(focusBoat.heading) * 16;
+        const backX = -Math.sin(focusBoat.heading) * 7;
+        const backZ = -Math.cos(focusBoat.heading) * 7;
+        cameraTarget.set(
+          focusBoat.x + sideX + backX,
+          director.kind === "result" ? 14 : 11.5,
+          focusBoat.z + sideZ + backZ,
+        );
+        lookTarget.set(focusBoat.x, 0.8, focusBoat.z);
+        camera.fov = director.kind === "result" ? 48 : 52;
+      } else {
+        const focusX = leader.x * 0.5;
+        const focusZ = leader.z * 0.5;
+        cameraTarget.set(focusX + 30, 52, focusZ + 39);
+        lookTarget.set(focusX, 0, focusZ);
+        camera.fov = 58;
+      }
+
+      if (cutKey !== displayCutKey) {
+        displayCutKey = cutKey;
+        camera.position.copy(cameraTarget);
+      } else {
+        camera.position.lerp(cameraTarget, 1 - Math.exp(-dt * 1.6));
+      }
       camera.lookAt(lookTarget);
-      camera.fov = 58;
     } else if (myId !== null && state.boats[myId]) {
       const me = state.boats[myId];
       const backX = -Math.sin(me.heading) * 9;
