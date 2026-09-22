@@ -305,17 +305,7 @@ export class PersonalGameView {
     for (const player of snapshot.players) {
       const actor = this.actors.get(player.id) ?? this.createActor(player);
       actor.targetPosition.set(...player.position);
-      if (
-        (player.state === "idle" ||
-          player.state === "moving" ||
-          player.state === "pushing" ||
-          player.state === "grabbing" ||
-          player.state === "throwing" ||
-          player.state === "climbing" ||
-          player.state === "celebrate") &&
-        player.balance >= 0.68 &&
-        isMostlyUpright(player.rotation)
-      ) {
+      if (usesFacingYaw(player.state)) {
         actor.targetQuaternion.setFromAxisAngle(
           new THREE.Vector3(0, 1, 0),
           player.facingYaw,
@@ -362,7 +352,14 @@ export class PersonalGameView {
 
     const root = new THREE.Group();
     root.position.set(...player.position);
-    root.quaternion.set(...player.rotation);
+    if (usesFacingYaw(player.state)) {
+      root.quaternion.setFromAxisAngle(
+        new THREE.Vector3(0, 1, 0),
+        player.facingYaw,
+      );
+    } else {
+      root.quaternion.set(...player.rotation);
+    }
 
     const placeholder = new THREE.Mesh(
       new THREE.CapsuleGeometry(0.36, 0.96, 5, 8),
@@ -389,7 +386,12 @@ export class PersonalGameView {
       root,
       ring,
       targetPosition: new THREE.Vector3(...player.position),
-      targetQuaternion: new THREE.Quaternion(...player.rotation),
+      targetQuaternion: usesFacingYaw(player.state)
+        ? new THREE.Quaternion().setFromAxisAngle(
+            new THREE.Vector3(0, 1, 0),
+            player.facingYaw,
+          )
+        : new THREE.Quaternion(...player.rotation),
       state: player.state,
       danger: 0,
       spawnProtected: player.spawnProtectionLeftMs > 0,
@@ -529,8 +531,14 @@ export class PersonalGameView {
 }
 
 
-function isMostlyUpright(rotation: [number, number, number, number]) {
-  const [x, , z] = rotation;
-  const upY = 1 - 2 * (x * x + z * z);
-  return upY > 0.72;
+function usesFacingYaw(state: PlayerState) {
+  return (
+    state === "idle" ||
+    state === "moving" ||
+    state === "pushing" ||
+    state === "grabbing" ||
+    state === "throwing" ||
+    state === "climbing" ||
+    state === "celebrate"
+  );
 }
