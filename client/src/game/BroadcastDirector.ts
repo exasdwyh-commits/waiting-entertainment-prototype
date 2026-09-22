@@ -37,6 +37,10 @@ const EVENT_HOLD_MS: Partial<Record<GameEvent["type"], number>> = {
   dropkick_hit: 1_250,
   ko: 1_100,
   struggle_break: 780,
+  weapon_hit: 1_050,
+  weapon_throw: 720,
+  weapon_pickup: 0,
+  weapon_drop: 0,
   grab: 0,
   toss: 1_350,
   edge_save: 1_050,
@@ -120,10 +124,18 @@ export class BroadcastDirector {
                 ? "KO 时刻"
                 : event.type === "struggle_break"
                   ? "极限挣脱"
-                  : event.type === "kick_hit"
-                    ? "桌边踢击"
-                    : event.type === "heavy_hit"
-                      ? "冲刺重击"
+                  : event.type === "weapon_hit"
+                    ? event.weapon === "spatula"
+                      ? "锅铲重击"
+                      : event.weapon === "pan"
+                        ? "平底锅命中"
+                        : "飞盘命中"
+                    : event.type === "weapon_throw"
+                      ? "餐具飞袭"
+                      : event.type === "kick_hit"
+                        ? "桌边踢击"
+                        : event.type === "heavy_hit"
+                          ? "冲刺重击"
           : event.type === "big_fall"
             ? "击落跟拍"
             : event.type === "final_elimination"
