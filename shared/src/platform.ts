@@ -43,6 +43,7 @@ export interface GameManifestV1 {
     healthProtocol?: string;
     command?: string[];
     workingDirectoryEnv?: string;
+    bundledPath?: string;
     port?: number;
     startPath?: string;
   };
@@ -88,6 +89,8 @@ export interface GameRuntimeStatus {
   startedAt?: number;
   checkedAt: number;
   message?: string;
+  configSource?: "embedded" | "environment" | "bundled";
+  workingDirectory?: string;
 }
 
 export interface StoreLicense {
@@ -143,6 +146,7 @@ export interface BroadcastState {
 export interface PlatformSnapshot {
   license: StoreLicense;
   games: GameManifestV1[];
+  allGames: GameManifestV1[];
   runtimes: GameRuntimeStatus[];
   rounds: EntertainmentRound[];
   queue: QueueTicket[];
