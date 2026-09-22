@@ -37,7 +37,8 @@ test("V2 player feedback exposes stage, storm and broadside lock cues", () => {
   assert.match(html, /id="storm-warning"/);
   assert.match(app, /function findBroadsideLock/);
   assert.match(app, /safeZoneRing/);
-  assert.match(app, /recent\?\.type\?\.startsWith\("monster"\)/);
+  assert.match(app, /if \(state\.monster\?\.alive\)/);
+  assert.match(app, /nearest living challenger/);
   assert.match(css, /body\[data-stage="maelstrom"\]/);
 });
 
