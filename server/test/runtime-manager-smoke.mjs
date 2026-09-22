@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { RuntimeManager } from "../dist/platform/RuntimeManager.js";
 
 const fixtureDir = resolve("server/test/fixtures/runtime");
+const settingsDir = mkdtempSync(resolve(tmpdir(), "waiting-runtime-"));
+const settingsPath = resolve(settingsDir, "game-settings.json");
 process.env.RUNTIME_FIXTURE_DIR = fixtureDir;
+process.env.FIXTURE_SECONDS = "140";
 
 const manifest = {
   schemaVersion: 1,
@@ -40,6 +45,19 @@ const manifest = {
     codeTtlSeconds: 60,
     lateJoin: false,
   },
+  settings: [
+    {
+      key: "seconds",
+      label: "Fixture Seconds",
+      type: "number",
+      env: "FIXTURE_SECONDS",
+      wired: true,
+      default: 180,
+      min: 60,
+      max: 300,
+      step: 10,
+    },
+  ],
   commercial: {
     tier: "base",
     entitlements: ["game:runtime-fixture"],
@@ -57,11 +75,26 @@ const round = {
   expiresAt: Date.now() + 60_000,
 };
 
-const manager = new RuntimeManager();
+const manager = new RuntimeManager({ settingsPath });
 assert.equal(manager.status(manifest).state, "stopped");
 assert.equal(manager.status(manifest).configured, true);
 assert.equal(manager.status(manifest).configSource, "environment");
 assert.equal(manager.status(manifest).workingDirectory, fixtureDir);
+assert.deepEqual(manager.settings(manifest), [
+  { key: "seconds", value: 140, source: "environment" },
+]);
+assert.throws(
+  () => manager.setSettings(manifest, { seconds: 999 }),
+  /runtime-setting-max:seconds/,
+);
+assert.deepEqual(manager.setSettings(manifest, { seconds: 210 }), [
+  { key: "seconds", value: 210, source: "saved" },
+]);
+
+const reloadedManager = new RuntimeManager({ settingsPath });
+assert.deepEqual(reloadedManager.settings(manifest), [
+  { key: "seconds", value: 210, source: "saved" },
+]);
 
 const prepared = await manager.prepareRound(manifest, round);
 assert.equal(prepared.state, "running");
@@ -71,6 +104,7 @@ assert.ok(prepared.pid);
 const beforeStart = await fetch("http://127.0.0.1:19090/info").then((response) => response.json());
 assert.equal(beforeStart.roomCode, "ABC123");
 assert.equal(beforeStart.starts, 0);
+assert.equal(beforeStart.fixtureSeconds, 210);
 
 const running = await manager.beginRound(manifest, round);
 assert.equal(running.state, "running");
@@ -158,6 +192,7 @@ try {
 }
 
 delete process.env.RUNTIME_FIXTURE_DIR;
+delete process.env.FIXTURE_SECONDS;
 const bundled = manager.status(manifest);
 assert.equal(bundled.configured, true);
 assert.equal(bundled.configSource, "bundled");
@@ -168,4 +203,6 @@ delete unconfiguredManifest.runtime.workingDirectoryEnv;
 delete unconfiguredManifest.runtime.bundledPath;
 assert.equal(manager.status(unconfiguredManifest).state, "not-configured");
 
-console.log("RuntimeManager smoke passed: warm lobby, bundled discovery, health refresh, unmanaged discovery, port preflight, start action, room code, and shutdown.");
+rmSync(settingsDir, { recursive: true, force: true });
+
+console.log("RuntimeManager smoke passed: persistent settings, env injection, warm lobby, bundled discovery, health refresh, unmanaged discovery, port preflight, start action, room code, and shutdown.");
