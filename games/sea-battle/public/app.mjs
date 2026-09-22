@@ -1,8 +1,13 @@
 import * as THREE from "/three/three.module.js";
 
 const $ = (id) => document.getElementById(id);
+const query = new URLSearchParams(location.search);
 const isDisplay = location.pathname === "/display";
+const hubMode = query.get("hub") === "1";
+const hubName = (query.get("name") || "").trim().slice(0, 12);
+const hubRound = (query.get("round") || "").trim().toUpperCase();
 document.body.classList.toggle("display", isDisplay);
+document.body.classList.toggle("hub-mode", hubMode);
 
 const UPGRADE_COPY = {
   speed: ["疾风船体", "基础速度与加速上限提高"],
@@ -251,13 +256,44 @@ const socket = window.io({
 
 socket.on("connect", () => {
   $("connection").textContent = "海域连接正常";
-  if (!isDisplay && token) {
+  if (isDisplay || myId !== null) return;
+  if (hubName) {
+    socket.emit("join", { token, name: hubName });
+  } else if (token) {
     socket.emit("join", { token, name: $("name").value || "船长" });
   }
 });
 
+let hubReturnBusy = false;
+async function returnToHubWhenRoundEnds() {
+  if (!hubMode || !hubRound || hubReturnBusy) return;
+  hubReturnBusy = true;
+  try {
+    const api = location.protocol + "//" + location.hostname + ":3001/api/platform";
+    const response = await fetch(api, { cache: "no-store" });
+    if (response.ok) {
+      const payload = await response.json();
+      const round = payload.rounds?.find((candidate) => candidate.code === hubRound);
+      if (!round || ["finished", "cancelled", "expired"].includes(round.status)) {
+        location.replace(
+          location.protocol + "//" + location.hostname + ":5177/join/" +
+          encodeURIComponent(hubRound),
+        );
+        return;
+      }
+    }
+  } catch {
+    // Hub may itself be restarting; Socket.IO will keep retrying the game.
+  } finally {
+    hubReturnBusy = false;
+  }
+}
+
 socket.on("disconnect", () => {
-  $("connection").textContent = "连接中断 · 正在重连";
+  $("connection").textContent = hubMode
+    ? "本轮连接结束 · 正在确认现场状态"
+    : "连接中断 · 正在重连";
+  void returnToHubWhenRoundEnds();
 });
 
 socket.on("join-error", ({ message }) => {
