@@ -18,6 +18,7 @@ import {
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const THREE_MODULE = fileURLToPath(import.meta.resolve("three"));
+const THREE_CORE = resolve(dirname(THREE_MODULE), "three.core.js");
 
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -83,12 +84,17 @@ export async function createSeaBattle({
         res.end(await QRCode.toString(advertised, { type: "svg", margin: 1, width: 180 }));
         return;
       }
-      if (url.pathname === "/three/three.module.js") {
+      if (
+        url.pathname === "/three/three.module.js" ||
+        url.pathname === "/three/three.core.js"
+      ) {
         res.writeHead(200, {
           "content-type": "text/javascript; charset=utf-8",
           "cache-control": "public, max-age=3600",
         });
-        res.end(await readFile(THREE_MODULE));
+        res.end(await readFile(
+          url.pathname.endsWith("three.core.js") ? THREE_CORE : THREE_MODULE,
+        ));
         return;
       }
       const entry = staticFiles.get(url.pathname);
