@@ -153,6 +153,13 @@ export async function handlePlatformRequest(
       if (!current) throw new Error("round-not-found");
       const manifest = hub.registry.requireAuthorized(current.gameId);
 
+      if (action === "lock" && manifest.runtime.kind === "process") {
+        if (current.status !== "recruiting") {
+          throw new Error(`invalid-round-transition:${current.status}->locked`);
+        }
+        await hub.runtime.prepareRound(manifest, current);
+      }
+
       if (action === "start") {
         if (current.status !== "locked") {
           throw new Error(`invalid-round-transition:${current.status}->running`);
