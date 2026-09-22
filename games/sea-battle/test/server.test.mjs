@@ -22,6 +22,12 @@ test("Sea Battle runtime exposes Hub health protocol and start action", async ()
     const three = await fetch(`http://127.0.0.1:${runtime.port}/three/three.module.js`);
     assert.equal(three.status, 200);
     assert.match(three.headers.get("content-type") || "", /javascript/);
+    assert.match(await three.text(), /three\.core\.js/);
+
+    const threeCore = await fetch(`http://127.0.0.1:${runtime.port}/three/three.core.js`);
+    assert.equal(threeCore.status, 200);
+    assert.match(threeCore.headers.get("content-type") || "", /javascript/);
+    assert.ok((await threeCore.text()).length > 100_000);
   } finally {
     await runtime.close();
   }

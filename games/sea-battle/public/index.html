@@ -18,6 +18,7 @@
       <div class="clock">
         <small id="phase">等待开战</small>
         <strong id="timer">03:00</strong>
+        <em id="stage-chip">物资争夺</em>
       </div>
     </header>
 
@@ -54,6 +55,7 @@
         <small id="player-name">船长</small>
         <strong id="level">LV.1</strong>
         <span id="score">0 PTS</span>
+        <em id="broadside-status">调整船身 · 侧舷自动开炮</em>
       </div>
       <div class="bars glass">
         <label>船体 <span id="hp-value">100/100</span></label>
@@ -84,6 +86,12 @@
     </section>
 
     <div id="monster-warning" hidden>⚠ 深海巨兽来袭</div>
+    <section id="monster-boss" class="glass" hidden>
+      <span>DEEP SEA BOSS · 深海巨兽</span>
+      <i><b id="monster-hp-fill"></b></i>
+      <em id="monster-hp-value">260 / 260</em>
+    </section>
+    <div id="storm-warning" hidden>⚠ 风暴收缩 · 返回安全海域</div>
     <div id="battle-call"></div>
     <footer>
       <span id="connection">连接海域中…</span>

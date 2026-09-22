@@ -8,6 +8,12 @@ export const RESPAWN_INVULN = 1.6;
 export const MONSTER_FIRST_AT = 32;
 export const MONSTER_RESPAWN = 38;
 
+export const BATTLE_STAGES = {
+  salvage: { from: 0, label: "物资争夺" },
+  battle: { from: 0.25, label: "炮火升级" },
+  maelstrom: { from: 0.70, label: "风暴决战" },
+};
+
 export const UPGRADE_DEFS = {
   speed: { label: "疾风船体", desc: "基础速度与加速上限提高" },
   cannons: { label: "追加火炮", desc: "每次侧舷齐射增加一枚炮弹" },
@@ -34,6 +40,31 @@ const normAngle = (a) => {
   while (a < -Math.PI) a += Math.PI * 2;
   return a;
 };
+
+export function battleProgress(state) {
+  const seconds = Math.max(1, Number(state?.seconds) || ROUND_SECONDS);
+  return clamp(1 - (Number(state?.remaining) || 0) / seconds, 0, 1);
+}
+
+export function battleStage(state) {
+  const progress = battleProgress(state);
+  if (progress >= BATTLE_STAGES.maelstrom.from) return "maelstrom";
+  if (progress >= BATTLE_STAGES.battle.from) return "battle";
+  return "salvage";
+}
+
+export function safeRadius(state) {
+  const progress = battleProgress(state);
+  if (progress < BATTLE_STAGES.battle.from) return WORLD_RADIUS;
+  if (progress < BATTLE_STAGES.maelstrom.from) {
+    const local = (progress - BATTLE_STAGES.battle.from) /
+      (BATTLE_STAGES.maelstrom.from - BATTLE_STAGES.battle.from);
+    return WORLD_RADIUS - local * 4;
+  }
+  const local = (progress - BATTLE_STAGES.maelstrom.from) /
+    (1 - BATTLE_STAGES.maelstrom.from);
+  return 54 - clamp(local, 0, 1) * 16;
+}
 
 function random(state) {
   state.rng = (Math.imul(state.rng, 1664525) + 1013904223) >>> 0;
@@ -101,6 +132,7 @@ export function newBoat(id) {
     lastFireAt: -Infinity,
     lastFireSide: 0,
     lastCollisionAt: -Infinity,
+    lastStormAt: -Infinity,
   };
 }
 
@@ -127,6 +159,7 @@ export function makeGame(options = {}) {
     eventId: 0,
     monster: null,
     nextMonsterAt: MONSTER_FIRST_AT,
+    stage: "salvage",
     winnerId: null,
   };
   state.boats = Array.from({ length: CAPACITY }, (_, id) => newBoat(id));
@@ -147,6 +180,17 @@ function emit(state, type, boatId, text, priority = 1, data = {}) {
   state.events.length = Math.min(state.events.length, 12);
 }
 
+function updateBattleStage(state) {
+  const next = battleStage(state);
+  if (next === state.stage) return;
+  state.stage = next;
+  if (next === "battle") {
+    emit(state, "stage", null, "炮火升级：追击敌舰，侧舷齐射！", 4, { stage: next });
+  } else if (next === "maelstrom") {
+    emit(state, "stage", null, "风暴决战：安全海域开始收缩！", 5, { stage: next });
+  }
+}
+
 export function startGame(state) {
   state.round += 1;
   state.phase = "countdown";
@@ -155,6 +199,7 @@ export function startGame(state) {
   state.projectiles = [];
   state.monster = null;
   state.nextMonsterAt = MONSTER_FIRST_AT;
+  state.stage = "salvage";
   state.winnerId = null;
   state.events = [];
   for (const boat of state.boats) {
@@ -167,7 +212,7 @@ export function startGame(state) {
     Object.assign(boat, newBoat(boat.id), keep);
   }
   for (const crate of state.crates) {
-    const p = randomPoint(state, 6, WORLD_RADIUS - 8);
+    const p = randomPoint(state, 6, Math.max(18, safeRadius(state) - 6));
     Object.assign(crate, { x: p.x, z: p.z, active: true, respawnAt: 0 });
   }
 }
@@ -281,8 +326,17 @@ function aiInput(state, boat) {
     chooseUpgrade(state, boat.id, choice);
   }
 
-  const enemy = nearestEnemy(state, boat, 19);
-  const target = enemy ?? nearestCrate(state, boat);
+  const stage = state.phase === "racing" ? battleStage(state) : "salvage";
+  const enemyRange = stage === "salvage" ? 11 : stage === "battle" ? 24 : 34;
+  const enemy = nearestEnemy(state, boat, enemyRange);
+  const crate = nearestCrate(state, boat);
+  const target =
+    stage === "salvage"
+      ? (enemy ?? crate)
+      : stage === "battle"
+        ? (enemy ?? crate)
+        : (enemy ?? { x: 0, z: 0 });
+
   if (!target) {
     boat.steer = Math.sin(state.time * 0.45 + boat.id) * 0.35;
     boat.throttle = boat.energy > 18;
@@ -360,6 +414,7 @@ function fireBroadside(state, boat) {
 
   emit(state, "broadside", boat.id, `${boat.name} 侧舷齐射`, 1, {
     targetKind: best.kind,
+    targetId: best.kind === "boat" ? best.target.id : null,
   });
   return true;
 }
@@ -437,7 +492,7 @@ function stepMonster(state, dt) {
       strikeAt: state.time + 0.9,
       radius: 8.5,
     };
-    monster.nextAttackAt = state.time + 4.5;
+    monster.nextAttackAt = state.time + (battleStage(state) === "maelstrom" ? 3.25 : 4.5);
     emit(state, "monster_warning", leader.id, `海怪锁定 ${leader.name}`, 3);
   }
 
@@ -536,10 +591,34 @@ function collectCrates(state, boat) {
 function stepCrates(state) {
   for (const crate of state.crates) {
     if (crate.active || state.time < crate.respawnAt) continue;
-    const p = randomPoint(state, 6, WORLD_RADIUS - 8);
+    const p = randomPoint(state, 6, Math.max(18, safeRadius(state) - 6));
     crate.x = p.x;
     crate.z = p.z;
     crate.active = true;
+  }
+}
+
+function applyStormPressure(state, boat, dt) {
+  if (!boat.alive || battleStage(state) !== "maelstrom") return;
+  const safe = safeRadius(state);
+  const radius = Math.hypot(boat.x, boat.z);
+  if (radius <= safe - boat.radius) return;
+
+  const overflow = Math.max(0, radius - (safe - boat.radius));
+  const nx = radius > 0 ? -boat.x / radius : 0;
+  const nz = radius > 0 ? -boat.z / radius : 0;
+  boat.knockX += nx * dt * (3.2 + overflow * 0.22);
+  boat.knockZ += nz * dt * (3.2 + overflow * 0.22);
+  boat.energy = Math.max(0, boat.energy - dt * (5 + overflow * 0.25));
+
+  if (state.time >= boat.invulnerableUntil) {
+    boat.hp -= dt * (3.5 + overflow * 0.32);
+    boat.lastHitAt = state.time;
+    if (state.time - boat.lastStormAt > 2.5) {
+      boat.lastStormAt = state.time;
+      emit(state, "storm", boat.id, `${boat.name} 正在风暴区受损`, 2);
+    }
+    if (boat.hp <= 0) sinkBoat(state, boat, null);
   }
 }
 
@@ -580,6 +659,8 @@ function stepBoat(state, boat, dt) {
     boat.speed *= 0.72;
   }
 
+  applyStormPressure(state, boat, dt);
+  if (!boat.alive) return;
   collectCrates(state, boat);
   fireBroadside(state, boat);
 }
@@ -672,6 +753,7 @@ export function stepGame(state, dt) {
   if (state.phase !== "racing") return;
 
   state.remaining = Math.max(0, state.remaining - dt);
+  updateBattleStage(state);
 
   for (const boat of state.boats) stepBoat(state, boat, dt);
   resolveBoatCollisions(state);
@@ -701,6 +783,8 @@ export function snapshot(state) {
     remaining: state.remaining,
     seconds: state.seconds,
     countdown: state.countdown,
+    stage: state.phase === "racing" ? battleStage(state) : state.stage,
+    safeRadius: safeRadius(state),
     winnerId: state.winnerId,
     order: ranking(state).map((boat) => boat.id),
     events: state.events.slice(0, 8),
@@ -759,6 +843,7 @@ export function snapshot(state) {
       lastFireAt: boat.lastFireAt,
       lastFireSide: boat.lastFireSide,
       lastCollisionAt: boat.lastCollisionAt,
+      lastStormAt: boat.lastStormAt,
     })),
   };
 }

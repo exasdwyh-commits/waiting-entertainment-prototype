@@ -48,7 +48,7 @@ sun.shadow.camera.top = 72;
 sun.shadow.camera.bottom = -72;
 scene.add(sun);
 
-const waterGeo = new THREE.CircleGeometry(70, 96);
+const waterGeo = new THREE.CircleGeometry(108, 128);
 const waterMat = new THREE.MeshPhysicalMaterial({
   color: "#087f91",
   roughness: 0.18,
@@ -74,6 +74,24 @@ for (const radius of [18, 34, 52, 58]) {
   ring.position.y = 0.015;
   scene.add(ring);
 }
+
+const safeZoneRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.985, 1.0, 128),
+  new THREE.MeshBasicMaterial({
+    color: "#ff5d73",
+    transparent: true,
+    opacity: 0.72,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  }),
+);
+safeZoneRing.rotation.x = -Math.PI / 2;
+safeZoneRing.position.y = 0.045;
+safeZoneRing.visible = false;
+scene.add(safeZoneRing);
+
+const waterNormalColor = new THREE.Color("#087f91");
+const waterStormColor = new THREE.Color("#274d67");
 
 const islandMat = new THREE.MeshStandardMaterial({ color: "#7f6848", roughness: 0.92 });
 for (let i = 0; i < 13; i++) {
@@ -158,12 +176,26 @@ function makeBoat(color) {
     }
   }
 
-  const wake = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.2, 5.2),
-    new THREE.MeshBasicMaterial({ color: "#d7ffff", transparent: true, opacity: 0.28, depthWrite: false }),
+  const wakeGeometry = new THREE.BufferGeometry();
+  wakeGeometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute([
+      -1.15, 0, -1.6,
+       1.15, 0, -1.6,
+       0.0,  0, -7.0,
+    ], 3),
   );
-  wake.rotation.x = -Math.PI / 2;
-  wake.position.set(0, 0.01, -3.5);
+  const wake = new THREE.Mesh(
+    wakeGeometry,
+    new THREE.MeshBasicMaterial({
+      color: "#d7ffff",
+      transparent: true,
+      opacity: 0.20,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  wake.position.y = 0.025;
   group.add(wake);
   group.userData.wake = wake;
   group.userData.hullMat = hullMat;
@@ -215,29 +247,46 @@ const crateMeshes = Array.from({ length: 22 }, (_, id) => {
   return group;
 });
 
-const projectileGeo = new THREE.SphereGeometry(0.28, 8, 6);
+const projectileGeo = new THREE.SphereGeometry(0.38, 10, 8);
 const projectileMat = new THREE.MeshStandardMaterial({
-  color: "#182127",
-  metalness: 0.55,
-  roughness: 0.28,
+  color: "#342014",
+  emissive: "#ff9f1c",
+  emissiveIntensity: 1.35,
+  metalness: 0.42,
+  roughness: 0.24,
 });
 const projectileMeshes = new Map();
 
 const monster = new THREE.Group();
 const monsterBody = new THREE.Mesh(
-  new THREE.SphereGeometry(3.2, 18, 12),
-  new THREE.MeshStandardMaterial({ color: "#4d2475", roughness: 0.55, emissive: "#25103b", emissiveIntensity: 0.5 }),
+  new THREE.SphereGeometry(4.4, 20, 14),
+  new THREE.MeshStandardMaterial({
+    color: "#6b2c91",
+    roughness: 0.46,
+    emissive: "#3b145d",
+    emissiveIntensity: 0.9,
+  }),
 );
-monsterBody.position.y = 1.2;
-monsterBody.scale.y = 0.75;
+monsterBody.position.y = 1.55;
+monsterBody.scale.y = 0.72;
 monster.add(monsterBody);
+
+for (const x of [-1.35, 1.35]) {
+  const eye = new THREE.Mesh(
+    new THREE.SphereGeometry(0.34, 10, 8),
+    new THREE.MeshBasicMaterial({ color: "#ff5d9b" }),
+  );
+  eye.position.set(x, 2.35, 3.3);
+  monster.add(eye);
+}
+
 for (let i = 0; i < 7; i++) {
   const tentacle = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.2, 0.48, 5.4, 8),
+    new THREE.CylinderGeometry(0.28, 0.62, 7.2, 9),
     monsterBody.material,
   );
   const a = i / 7 * Math.PI * 2;
-  tentacle.position.set(Math.cos(a) * 2.3, 0.3, Math.sin(a) * 2.3);
+  tentacle.position.set(Math.cos(a) * 3.1, 0.25, Math.sin(a) * 3.1);
   tentacle.rotation.z = 0.55 + (i % 2) * 0.3;
   tentacle.rotation.y = -a;
   tentacle.userData.phase = i;
@@ -254,6 +303,21 @@ danger.rotation.x = -Math.PI / 2;
 danger.position.y = 0.03;
 danger.visible = false;
 scene.add(danger);
+
+const broadsideTargetRing = new THREE.Mesh(
+  new THREE.RingGeometry(1.55, 2.05, 36),
+  new THREE.MeshBasicMaterial({
+    color: "#ffd166",
+    transparent: true,
+    opacity: 0.88,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  }),
+);
+broadsideTargetRing.rotation.x = -Math.PI / 2;
+broadsideTargetRing.position.y = 0.08;
+broadsideTargetRing.visible = false;
+scene.add(broadsideTargetRing);
 
 let state = null;
 let myId = null;
@@ -411,6 +475,37 @@ addEventListener("keyup", (event) => {
 
 setInterval(sendInput, 120);
 
+function findBroadsideLock(boat) {
+  if (!state || !boat?.alive) return null;
+  const forward = { x: Math.sin(boat.heading), z: Math.cos(boat.heading) };
+  const right = { x: Math.cos(boat.heading), z: -Math.sin(boat.heading) };
+  const candidates = state.boats
+    .filter((other) => other.id !== boat.id && other.alive)
+    .map((target) => ({ kind: "boat", target }));
+
+  if (state.monster?.alive) candidates.push({ kind: "monster", target: state.monster });
+
+  let best = null;
+  for (const candidate of candidates) {
+    const dx = candidate.target.x - boat.x;
+    const dz = candidate.target.z - boat.z;
+    const distance = Math.hypot(dx, dz);
+    if (distance > 31 || distance < 2) continue;
+    const nx = dx / distance, nz = dz / distance;
+    const sideDot = nx * right.x + nz * right.z;
+    const forwardDot = nx * forward.x + nz * forward.z;
+    if (Math.abs(sideDot) < 0.7 || Math.abs(forwardDot) > 0.72) continue;
+    if (!best || distance < best.distance) {
+      best = {
+        ...candidate,
+        distance,
+        side: sideDot < 0 ? "左舷" : "右舷",
+      };
+    }
+  }
+  return best;
+}
+
 function updateUi() {
   if (!state) return;
   const phaseLabel = {
@@ -421,6 +516,15 @@ function updateUi() {
     result: "本局结算",
   }[state.phase] ?? state.phase;
   $("phase").textContent = phaseLabel;
+
+  const stageLabels = {
+    salvage: "物资争夺",
+    battle: "炮火升级",
+    maelstrom: "风暴决战",
+  };
+  const stage = state.stage ?? "salvage";
+  document.body.dataset.stage = stage;
+  $("stage-chip").textContent = stageLabels[stage] ?? stage;
 
   const seconds = Math.max(0, Math.ceil(state.remaining ?? state.seconds ?? 180));
   $("timer").textContent = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
@@ -444,6 +548,15 @@ function updateUi() {
   }
 
   $("monster-warning").hidden = !(state.monster?.alive);
+  const boss = $("monster-boss");
+  boss.hidden = !(state.monster?.alive);
+  if (state.monster?.alive) {
+    const hp = Math.max(0, state.monster.hp);
+    const maxHp = Math.max(1, state.monster.maxHp);
+    $("monster-hp-fill").style.width = `${Math.max(0, Math.min(100, hp / maxHp * 100))}%`;
+    $("monster-hp-value").textContent = `${Math.ceil(hp)} / ${Math.ceil(maxHp)}`;
+  }
+  $("storm-warning").hidden = !(state.phase === "racing" && stage === "maelstrom");
 
   const call = $("battle-call");
   if (state.phase === "countdown") {
@@ -469,6 +582,19 @@ function updateUi() {
   $("xp-fill").style.width = `${Math.max(0, Math.min(100, me.xp / me.nextLevelXp * 100))}%`;
 
   $("respawn").hidden = me.alive;
+
+  const lock = findBroadsideLock(me);
+  const broadsideStatus = $("broadside-status");
+  if (lock) {
+    broadsideStatus.textContent =
+      `${lock.side}锁定 · ${lock.kind === "monster" ? "海怪" : "敌舰"} ${Math.round(lock.distance)}m`;
+    broadsideStatus.classList.add("locked");
+  } else {
+    broadsideStatus.textContent =
+      stage === "salvage" ? "抢物资升级 · 调整船身准备侧舷" : "调整船身 · 让敌舰进入左右侧舷";
+    broadsideStatus.classList.remove("locked");
+  }
+
   renderUpgrade(me.choices);
 }
 
@@ -580,19 +706,86 @@ function animate(now) {
       danger.visible = false;
     }
 
+    const safeRadius = Number(state.safeRadius ?? 58);
+    const stormActive = state.phase === "racing" && state.stage === "maelstrom";
+    safeZoneRing.visible = stormActive;
+    if (stormActive) {
+      safeZoneRing.scale.setScalar(safeRadius);
+      const pulse = 0.88 + Math.sin(now * 0.006) * 0.08;
+      safeZoneRing.material.opacity = 0.56 + pulse * 0.2;
+      waterMat.color.copy(waterNormalColor).lerp(waterStormColor, 0.58);
+    } else {
+      waterMat.color.lerp(waterNormalColor, Math.min(1, dt * 2.5));
+    }
+
+    broadsideTargetRing.visible = false;
+    if (!isDisplay && myId !== null && state.boats[myId]?.alive) {
+      const lock = findBroadsideLock(state.boats[myId]);
+      if (lock) {
+        broadsideTargetRing.visible = true;
+        broadsideTargetRing.position.set(lock.target.x, 0.08, lock.target.z);
+        const targetRadius = lock.kind === "monster" ? 1.9 : (lock.target.radius ?? 1.15);
+        const scale = targetRadius * (1.35 + Math.sin(now * 0.01) * 0.08);
+        broadsideTargetRing.scale.setScalar(scale);
+      }
+    }
+
     if (isDisplay) {
       const leader = state.boats[state.order[0]] ?? state.boats[0];
-      const focusX = state.monster?.alive
-        ? leader.x * 0.72 + state.monster.x * 0.28
-        : leader.x * 0.55;
-      const focusZ = state.monster?.alive
-        ? leader.z * 0.72 + state.monster.z * 0.28
-        : leader.z * 0.55;
-      cameraTarget.set(focusX + 30, 56, focusZ + 39);
-      lookTarget.set(focusX, 0, focusZ);
-      camera.position.lerp(cameraTarget, 1 - Math.exp(-dt * 1.3));
+      const recent = state.events.find((event) =>
+        state.time - event.time < 2.6 &&
+        [
+          "sink", "broadside", "hit", "collision",
+          "monster_spawn", "monster_warning", "monster_kill", "stage",
+        ].includes(event.type)
+      );
+      const eventFocusId = Number.isInteger(recent?.killerId)
+        ? recent.killerId
+        : Number.isInteger(recent?.attackerId)
+          ? recent.attackerId
+          : Number.isInteger(recent?.boatId)
+            ? recent.boatId
+            : null;
+      const eventTargetId = Number.isInteger(recent?.targetId)
+        ? recent.targetId
+        : (
+            recent?.type === "hit" && Number.isInteger(recent?.boatId)
+              ? recent.boatId
+              : null
+          );
+      const eventBoat = eventFocusId !== null ? state.boats[eventFocusId] : null;
+      const targetBoat = eventTargetId !== null ? state.boats[eventTargetId] : null;
+      const focusBoat = eventBoat?.alive ? eventBoat : leader;
+
+      let focusX = focusBoat.x;
+      let focusZ = focusBoat.z;
+      let cameraHeight = state.stage === "maelstrom" ? 40 : 36;
+      let fov = state.stage === "maelstrom" ? 53 : 49;
+
+      if (targetBoat?.alive) {
+        focusX = (focusBoat.x + targetBoat.x) * 0.5;
+        focusZ = (focusBoat.z + targetBoat.z) * 0.5;
+        const separation = Math.hypot(focusBoat.x - targetBoat.x, focusBoat.z - targetBoat.z);
+        cameraHeight = Math.max(29, Math.min(42, 27 + separation * 0.55));
+        fov = Math.max(46, Math.min(56, 46 + separation * 0.22));
+      }
+
+      if (state.monster?.alive && (
+        recent?.type?.startsWith("monster") ||
+        recent?.targetKind === "monster" ||
+        Math.hypot(focusBoat.x - state.monster.x, focusBoat.z - state.monster.z) < 25
+      )) {
+        focusX = focusBoat.x * 0.32 + state.monster.x * 0.68;
+        focusZ = focusBoat.z * 0.32 + state.monster.z * 0.68;
+        cameraHeight = 34;
+        fov = 50;
+      }
+
+      cameraTarget.set(focusX + 18, cameraHeight, focusZ + 22);
+      lookTarget.set(focusX, 1.0, focusZ);
+      camera.position.lerp(cameraTarget, 1 - Math.exp(-dt * 2.5));
       camera.lookAt(lookTarget);
-      camera.fov = 58;
+      camera.fov = fov;
     } else if (myId !== null && state.boats[myId]) {
       const me = state.boats[myId];
       const backX = -Math.sin(me.heading) * 9;

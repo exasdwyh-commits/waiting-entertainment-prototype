@@ -5,9 +5,11 @@ import {
   ROUND_SECONDS,
   UPGRADE_IDS,
   applyInput,
+  battleStage,
   chooseUpgrade,
   makeGame,
   ranking,
+  safeRadius,
   startGame,
   stepGame,
 } from "../game.mjs";
@@ -192,6 +194,86 @@ test("cannon hits create physical knockback and snapshot muzzle metadata", () =>
   for (let i = 0; i < 20; i++) stepGame(state, 1 / 60);
   assert.ok(victim.lastHitAt > -Infinity, "victim records authoritative hit time");
   assert.ok(Math.hypot(victim.knockX, victim.knockZ) > 0.05, "hit displaces the hull");
+});
+
+test("three-minute pacing transitions from salvage to battle to maelstrom", () => {
+  const state = makeGame({ seconds: 180 });
+  state.phase = "racing";
+
+  state.remaining = 170;
+  assert.equal(battleStage(state), "salvage");
+  assert.equal(safeRadius(state), 58);
+
+  state.remaining = 120;
+  assert.equal(battleStage(state), "battle");
+  assert.ok(safeRadius(state) < 58 && safeRadius(state) >= 54);
+
+  state.remaining = 45;
+  assert.equal(battleStage(state), "maelstrom");
+  assert.ok(safeRadius(state) < 54 && safeRadius(state) > 38);
+
+  state.remaining = 0;
+  assert.equal(safeRadius(state), 38);
+});
+
+test("stage transitions emit explicit battle events", () => {
+  const state = running(91);
+  humanize(state);
+  state.remaining = state.seconds * 0.75 + 0.01;
+  state.stage = "salvage";
+  stepGame(state, 0.02);
+  assert.equal(state.stage, "battle");
+  assert.ok(state.events.some((event) => event.type === "stage" && event.stage === "battle"));
+
+  state.remaining = state.seconds * 0.30 + 0.01;
+  state.stage = "battle";
+  stepGame(state, 0.02);
+  assert.equal(state.stage, "maelstrom");
+  assert.ok(state.events.some((event) => event.type === "stage" && event.stage === "maelstrom"));
+});
+
+test("maelstrom damages and pushes ships back toward the shrinking safe sea", () => {
+  const state = running(92);
+  humanize(state);
+  for (const boat of state.boats.slice(1)) {
+    boat.alive = false;
+    boat.respawnAt = Infinity;
+  }
+  const boat = state.boats[0];
+  state.remaining = state.seconds * 0.20;
+  state.stage = "maelstrom";
+  boat.x = 56;
+  boat.z = 0;
+  boat.hp = boat.maxHp;
+  boat.energy = boat.maxEnergy;
+  boat.invulnerableUntil = 0;
+  const hp = boat.hp;
+  const energy = boat.energy;
+
+  stepGame(state, 0.5);
+
+  assert.equal(battleStage(state), "maelstrom");
+  assert.ok(boat.hp < hp, "storm deals authoritative hull damage");
+  assert.ok(boat.energy < energy, "storm drains boost energy");
+  assert.ok(boat.knockX < 0, "storm pushes an east-side ship back toward center");
+  assert.ok(state.events.some((event) => event.type === "storm"));
+});
+
+test("late-round respawned supplies stay inside the active safe sea", () => {
+  const state = running(93);
+  humanize(state);
+  state.remaining = state.seconds * 0.12;
+  state.stage = "maelstrom";
+  const crate = state.crates[0];
+  crate.active = false;
+  crate.respawnAt = state.time;
+  stepGame(state, 1 / 30);
+
+  assert.equal(crate.active, true);
+  assert.ok(
+    Math.hypot(crate.x, crate.z) <= safeRadius(state) - 5.5,
+    "supply does not respawn outside the shrinking combat zone",
+  );
 });
 
 test("round ends by score after the clock expires", () => {
