@@ -26,7 +26,7 @@ function defaultEntitlements(plan: StoreLicense["plan"]): string[] {
   if (plan === "CUSTOM") {
     return ["game:table-push-king", "game:pilot-racer"];
   }
-  return ["game:table-push-king"];
+  return ["game:table-push-king", "game:pilot-racer"];
 }
 
 export function createStoreLicenseFromEnv(): StoreLicense {
