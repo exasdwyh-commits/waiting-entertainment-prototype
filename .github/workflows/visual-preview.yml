@@ -28,7 +28,7 @@ on:
       - ".github/workflows/visual-preview.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   capture:
@@ -83,15 +83,7 @@ jobs:
           path: docs/screenshots/*.png
           if-no-files-found: error
 
-      - name: Commit refreshed screenshots
-        if: github.event_name != 'pull_request'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/screenshots/big-screen.png docs/screenshots/phone-player.png docs/screenshots/broadcast-replay.png docs/screenshots/hub-host.png docs/screenshots/hub-game-management.png docs/screenshots/hub-broadcast-recruiting.png docs/screenshots/hub-guest-join.png docs/screenshots/hub-broadcast-queue.png
-          if git diff --cached --quiet; then
-            echo "Screenshots unchanged"
-          else
-            git commit -m "docs: refresh visual screenshots"
-            git push origin HEAD:${GITHUB_REF_NAME}
-          fi
+      # Artifact-only policy: this workflow must never commit or push.
+      # The old auto-commit step raced concurrent commits on main and failed
+      # with non-fast-forward even though capture + upload succeeded.
+      # To refresh repo screenshots, capture locally and commit manually.
