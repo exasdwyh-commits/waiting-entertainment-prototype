@@ -10,6 +10,7 @@ import type {
 import { GameRegistry } from "./GameRegistry.js";
 import { QueueService } from "./QueueService.js";
 import { RoundManager } from "./RoundManager.js";
+import { RuntimeManager } from "./RuntimeManager.js";
 
 function parseEntitlements(value: string | undefined): string[] {
   return (value ?? "")
@@ -20,10 +21,10 @@ function parseEntitlements(value: string | undefined): string[] {
 
 function defaultEntitlements(plan: StoreLicense["plan"]): string[] {
   if (plan === "PRO") {
-    return ["game:table-push-king", "game:kart-racing", "updates:pro"];
+    return ["game:table-push-king", "game:pilot-racer", "updates:pro"];
   }
   if (plan === "CUSTOM") {
-    return ["game:table-push-king"];
+    return ["game:table-push-king", "game:pilot-racer"];
   }
   return ["game:table-push-king"];
 }
@@ -45,15 +46,18 @@ export class PlatformHub {
   readonly registry: GameRegistry;
   readonly rounds = new RoundManager();
   readonly queue = new QueueService();
+  readonly runtime = new RuntimeManager();
 
   constructor(readonly license: StoreLicense = createStoreLicenseFromEnv()) {
     this.registry = new GameRegistry(license);
   }
 
   snapshot(): PlatformSnapshot {
+    const games = this.registry.listAuthorized();
     return {
       license: structuredClone(this.license),
-      games: this.registry.listAuthorized(),
+      games,
+      runtimes: this.runtime.list(games),
       rounds: this.rounds.list(),
       queue: this.queue.list(),
       broadcast: this.broadcastState(),
@@ -62,6 +66,7 @@ export class PlatformHub {
 
   createRound(gameId: string, playerLimit?: number): EntertainmentRound {
     const manifest = this.registry.requireAuthorized(gameId);
+    this.runtime.assertConfigured(manifest);
     return this.rounds.create(manifest, playerLimit);
   }
 
