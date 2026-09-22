@@ -55,6 +55,11 @@ try {
   await display.locator("#monster-warning:not([hidden])").waitFor({
     timeout: 45_000,
   });
+  await display.waitForFunction(
+    () => window.__seaBroadcast?.boss === true,
+    null,
+    { timeout: 10_000 },
+  );
   await display.waitForTimeout(1_000);
   await display.screenshot({
     path: "docs/screenshots/sea-battle-monster.png",
