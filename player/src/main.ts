@@ -182,7 +182,7 @@ socket.on("connect", () => {
   status.textContent = "正在接管角色…";
   socket.emit(
     "join",
-    { sessionId, name: defaultName },
+    { sessionId, name: defaultName, roundCode: ROUND_CODE || undefined },
     (response: {
       ok?: boolean;
       recovered?: boolean;
@@ -192,7 +192,12 @@ socket.on("connect", () => {
       reason?: string;
     }) => {
       if (!response?.ok || !response.playerId) {
-        status.textContent = response?.reason === "session-full" ? "当前对局已满" : "加入失败";
+        status.textContent =
+          response?.reason === "session-full"
+            ? "当前对局已满"
+            : response?.reason === "round-admission-required"
+              ? "请扫描本轮二维码报名"
+              : "加入失败";
         status.classList.remove("online");
         return;
       }
