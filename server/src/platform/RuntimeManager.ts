@@ -12,6 +12,7 @@ type RuntimeEntry = {
   managed: boolean;
   startedAt?: number;
   message?: string;
+  checkedAt: number;
   logs: string[];
 };
 
@@ -46,7 +47,7 @@ export class RuntimeManager {
         state: "embedded",
         configured: true,
         managed: true,
-        checkedAt: Date.now(),
+        checkedAt: 0,
       };
     }
 
@@ -63,7 +64,7 @@ export class RuntimeManager {
       ...(manifest.runtime.port ? { port: manifest.runtime.port } : {}),
       ...(entry?.child?.pid ? { pid: entry.child.pid } : {}),
       ...(entry?.startedAt ? { startedAt: entry.startedAt } : {}),
-      checkedAt: Date.now(),
+      checkedAt: entry?.checkedAt ?? 0,
       ...((entry?.message || (!configured ? this.configurationMessage(manifest) : undefined))
         ? { message: entry?.message || this.configurationMessage(manifest) }
         : {}),
@@ -131,6 +132,7 @@ export class RuntimeManager {
     if (await this.isHealthy(manifest)) {
       const entry = this.entry(manifest.id);
       entry.state = "running";
+      entry.checkedAt = Date.now();
       entry.message = undefined;
       if (!entry.child) entry.managed = false;
       return this.status(manifest);
@@ -148,6 +150,7 @@ export class RuntimeManager {
       state: "starting",
       managed: true,
       startedAt: Date.now(),
+      checkedAt: 0,
       logs: [],
     };
     this.entries.set(manifest.id, entry);
@@ -171,11 +174,13 @@ export class RuntimeManager {
       child.stderr?.on("data", (chunk) => appendLog(entry, chunk));
       child.once("error", (error) => {
         entry.state = "failed";
+        entry.checkedAt = Date.now();
         entry.message = error.message;
       });
       child.once("exit", (code, signal) => {
         if (entry.state !== "stopped") {
           entry.state = code === 0 ? "stopped" : "failed";
+          entry.checkedAt = Date.now();
           entry.message =
             code === 0
               ? undefined
@@ -241,6 +246,7 @@ export class RuntimeManager {
       entry = {
         state: "stopped",
         managed: false,
+        checkedAt: 0,
         logs: [],
       };
       this.entries.set(gameId, entry);
@@ -279,6 +285,7 @@ export class RuntimeManager {
       if (entry.state === "failed") throw new Error("runtime-start-failed");
       if (await this.isHealthy(manifest)) {
         entry.state = "running";
+        entry.checkedAt = Date.now();
         entry.message = undefined;
         return;
       }
