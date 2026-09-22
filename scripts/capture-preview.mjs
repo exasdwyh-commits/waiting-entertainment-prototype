@@ -192,17 +192,8 @@ try {
     { timeout: 72_000 },
   );
 
-  const replayModeBefore = await big
-    .locator("#broadcast-bug")
-    .getAttribute("data-mode");
-  const replayCaption = (await big
-    .locator("#message")
-    .textContent())?.trim();
-
-  if (replayModeBefore !== "replay" || !replayCaption) {
-    throw new Error("Replay state disappeared before capture.");
-  }
-
+  // The wait above is the replay functional assertion. Capture immediately;
+  // do not re-read the short-lived replay state in separate round trips.
   await big.screenshot({
     path: "docs/screenshots/broadcast-replay.png",
     fullPage: true,
