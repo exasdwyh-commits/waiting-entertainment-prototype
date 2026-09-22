@@ -224,3 +224,33 @@ button:disabled { cursor: not-allowed; opacity: .38; }
 .manage-settings__title{color:#6f7c8d;font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
 .manage-setting{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:8px;padding-top:6px;border-top:1px solid #ffffff08}
 .manage-setting span{color:#a9b4c2;font-size:10px}.manage-setting strong{color:#edf2f8;font-size:10px}.manage-setting code{color:#617083;font:8px ui-monospace,SFMono-Regular,monospace}
+
+
+/* Editable Game Package settings */
+.manage-settings{
+  display:grid;gap:8px;margin:12px 0;padding:12px;border:1px solid #ffffff0d;
+  border-radius:13px;background:#070a0f99
+}
+.manage-settings__head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:2px}
+.manage-settings__head>div{display:grid;gap:3px}
+.manage-settings__title{color:#dce5ef;font-size:10px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}
+.manage-settings__head small{color:#687587;font-size:9px;line-height:1.35}
+.settings-save{padding:7px 9px;font-size:9px;flex:0 0 auto}
+.manage-setting-field{
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(140px,.8fr);align-items:center;gap:12px;
+  padding:9px 10px;border:1px solid #ffffff09;border-radius:10px;background:#ffffff04
+}
+.manage-setting-field>span{display:grid;gap:2px;min-width:0}
+.manage-setting-field b{font-size:10px;color:#d7dfe9}
+.manage-setting-field small{font-size:8px;color:#647184;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.manage-setting-control{display:flex;align-items:center;justify-content:flex-end;gap:7px;min-width:0}
+.manage-setting-control input:not([type="checkbox"]),.manage-setting-control select{
+  width:100%;min-width:86px;height:29px;padding:0 8px;border:1px solid #ffffff18;border-radius:8px;
+  background:#0b1017;color:#eef3f8;font-size:10px;outline:none
+}
+.manage-setting-control input:focus,.manage-setting-control select:focus{border-color:#8df7cb66;box-shadow:0 0 0 2px #8df7cb12}
+.manage-setting-control input[type="checkbox"]{width:17px;height:17px;accent-color:#8df7cb}
+.setting-source{flex:0 0 auto;padding:4px 6px;border-radius:999px;background:#ffffff08;color:#768397;font-size:7px;font-style:normal}
+.setting-source--saved{background:#8df7cb10;color:#8df7cb}
+.setting-source--environment{background:#79a8ff13;color:#9bbcff}
+.manage-card--locked .manage-settings{opacity:.55}
