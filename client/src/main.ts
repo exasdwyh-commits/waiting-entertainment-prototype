@@ -34,6 +34,14 @@ root.innerHTML = `
     <strong>INSTANT REPLAY</strong>
   </div>
   <div id="message" class="message"></div>
+  <aside id="hub-queue-overlay" class="hub-queue-overlay" hidden>
+    <span class="hub-queue-dot">●</span>
+    <div>
+      <small>请准备入座</small>
+      <strong id="hub-queue-number">A000</strong>
+      <span id="hub-queue-party">2 人桌 · 请前往前台</span>
+    </div>
+  </aside>
 `;
 
 const common = {
@@ -42,9 +50,59 @@ const common = {
   message: document.querySelector<HTMLDivElement>("#message")!,
 };
 
+const hubQueueOverlay = document.querySelector<HTMLElement>("#hub-queue-overlay")!;
+const hubQueueNumber = document.querySelector<HTMLElement>("#hub-queue-number")!;
+const hubQueueParty = document.querySelector<HTMLElement>("#hub-queue-party")!;
+let lastHubQueueCallKey = "";
+let hubQueueTimer: number | undefined;
+
+async function syncHubQueueOverlay() {
+  try {
+    const response = await fetch(
+      location.protocol + "//" + location.hostname + ":3001/api/platform/broadcast",
+      { cache: "no-store" },
+    );
+    if (!response.ok) return;
+    const state = (await response.json()) as {
+      queueOverlay?: {
+        ticketId: string;
+        number: string;
+        partySize: number;
+        calledAt: number;
+      };
+    };
+    const overlay = state.queueOverlay;
+    if (!overlay) {
+      hubQueueOverlay.hidden = true;
+      if (hubQueueTimer !== undefined) {
+        window.clearTimeout(hubQueueTimer);
+        hubQueueTimer = undefined;
+      }
+      return;
+    }
+
+    const key = overlay.ticketId + ":" + overlay.calledAt;
+    if (key === lastHubQueueCallKey) return;
+    lastHubQueueCallKey = key;
+    hubQueueNumber.textContent = overlay.number;
+    hubQueueParty.textContent = overlay.partySize + " 人桌 · 请前往前台";
+    hubQueueOverlay.hidden = false;
+
+    if (hubQueueTimer !== undefined) window.clearTimeout(hubQueueTimer);
+    hubQueueTimer = window.setTimeout(() => {
+      hubQueueOverlay.hidden = true;
+      hubQueueTimer = undefined;
+    }, 10_000);
+  } catch {
+    // Live game stays playable even if the optional platform overlay drops out.
+  }
+}
+
 if (hubMode) {
   document.querySelector<HTMLElement>("#join-panel")!.hidden = true;
   document.querySelector<HTMLElement>(".tip")!.hidden = true;
+  void syncHubQueueOverlay();
+  window.setInterval(() => void syncHubQueueOverlay(), 500);
 }
 
 if (localMode) {
