@@ -2,8 +2,15 @@ import * as THREE from "three";
 import { io } from "socket.io-client";
 import QRCode from "qrcode";
 import { TABLE_PUSH_GEOMETRY } from "@waiting/shared";
-import type { GameEvent, MatchSnapshot, PlayerSnapshot, PlayerState } from "@waiting/shared";
+import type {
+  GameEvent,
+  MatchSnapshot,
+  PlayerSnapshot,
+  PlayerState,
+  WeaponKind,
+} from "@waiting/shared";
 import { createCharacterVisual, type CharacterVisual } from "./CharacterVisual";
+import { createWeaponVisual } from "./WeaponVisual";
 import { ImpactFx } from "./ImpactFx";
 import { AudioFx } from "./AudioFx";
 import { addRestaurantEnvironment } from "./RestaurantEnvironment";
@@ -22,6 +29,15 @@ type View = {
   spawnProtected: boolean;
   tint: number;
   state: PlayerState;
+};
+
+type WeaponView = {
+  root: THREE.Group;
+  kind: WeaponKind;
+  targetPosition: THREE.Vector3;
+  targetYaw: number;
+  held: boolean;
+  moving: boolean;
 };
 
 type ReplayClip = {
@@ -75,6 +91,7 @@ export class NetworkGame {
   private readonly renderer = new THREE.WebGLRenderer({ antialias: true });
   private readonly clock = new THREE.Clock();
   private readonly views = new Map<string, View>();
+  private readonly weaponViews = new Map<string, WeaponView>();
   private readonly history: MatchSnapshot[] = [];
   private readonly fx = new ImpactFx(this.scene);
   private readonly audioFx = new AudioFx();
@@ -756,6 +773,7 @@ export class NetworkGame {
       snapshot.phase === "playing" && snapshot.matchStage === "final",
     );
     this.renderRanking(snapshot);
+    this.applyWeapons(snapshot);
 
     for (const player of snapshot.players) {
       const view = this.views.get(player.id) ?? this.createView(player);
@@ -793,6 +811,44 @@ export class NetworkGame {
           : edgePlayer?.state === "climbing"
             ? `↥ ${edgePlayer.name} 正在爬回来！`
             : "";
+    }
+  }
+
+  private applyWeapons(snapshot: MatchSnapshot) {
+    const visible = new Set<string>();
+
+    for (const weapon of snapshot.weapons ?? []) {
+      let view = this.weaponViews.get(weapon.id);
+      if (!view) {
+        const visual = createWeaponVisual(weapon.kind);
+        this.scene.add(visual.root);
+        view = {
+          root: visual.root,
+          kind: weapon.kind,
+          targetPosition: new THREE.Vector3(...weapon.position),
+          targetYaw: 0,
+          held: false,
+          moving: false,
+        };
+        this.weaponViews.set(weapon.id, view);
+      }
+
+      visible.add(weapon.id);
+      view.root.visible = weapon.active;
+      view.targetPosition.set(...weapon.position);
+      view.held = Boolean(weapon.heldBy);
+      view.moving = Math.hypot(weapon.velocity[0], weapon.velocity[2]) > 0.25;
+
+      if (weapon.heldBy) {
+        const holder = snapshot.players.find((player) => player.id === weapon.heldBy);
+        if (holder) view.targetYaw = holder.facingYaw;
+      } else if (view.moving) {
+        view.targetYaw = Math.atan2(weapon.velocity[0], weapon.velocity[2]);
+      }
+    }
+
+    for (const [id, view] of this.weaponViews) {
+      if (!visible.has(id)) view.root.visible = false;
     }
   }
 
@@ -878,6 +934,24 @@ export class NetworkGame {
     }
     const hitStopped = !this.replay && now < this.hitStopUntil;
     const delta = hitStopped ? 0 : rawDelta;
+
+    for (const weapon of this.weaponViews.values()) {
+      if (!weapon.root.visible || hitStopped) continue;
+      weapon.root.position.lerp(weapon.targetPosition, this.replay ? 0.5 : 0.38);
+      weapon.root.rotation.y = THREE.MathUtils.lerp(
+        weapon.root.rotation.y,
+        weapon.targetYaw,
+        weapon.held ? 0.45 : 0.28,
+      );
+      if (weapon.kind === "plate" && weapon.moving) {
+        weapon.root.rotation.y += delta * 11;
+        weapon.root.rotation.z += delta * 7;
+      } else if (weapon.held) {
+        weapon.root.rotation.z = weapon.kind === "spatula" ? -0.48 : -0.28;
+      } else {
+        weapon.root.rotation.z *= 0.82;
+      }
+    }
 
     for (const view of this.views.values()) {
       if (!hitStopped) {
