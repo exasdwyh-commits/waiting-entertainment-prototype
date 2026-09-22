@@ -113,6 +113,12 @@ export async function handlePlatformRequest(
         games,
         runtimes: hub.runtime.list(games),
         allGames: hub.registry.listAll(),
+        gameSettings: Object.fromEntries(
+          hub.registry.listAll().map((game) => [
+            game.id,
+            hub.runtime.settings(game),
+          ]),
+        ),
       });
       return true;
     }
@@ -226,6 +232,38 @@ export async function handlePlatformRequest(
       const games = hub.registry.listAuthorized();
       await hub.runtime.refreshAll(games);
       json(res, 200, { runtimes: hub.runtime.list(games) });
+      return true;
+    }
+
+    const runtimeSettingsMatch = url.pathname.match(
+      /^\/api\/platform\/runtimes\/([^/]+)\/settings$/,
+    );
+    if (runtimeSettingsMatch && req.method === "GET") {
+      const manifest = hub.registry.requireAuthorized(runtimeSettingsMatch[1]);
+      json(res, 200, {
+        settings: hub.runtime.settings(manifest),
+        runtime: hub.runtime.status(manifest),
+      });
+      return true;
+    }
+    if (runtimeSettingsMatch && req.method === "POST") {
+      const manifest = hub.registry.requireAuthorized(runtimeSettingsMatch[1]);
+      const body = await readJson(req);
+      const values = body.values;
+      if (!values || typeof values !== "object" || Array.isArray(values)) {
+        throw new Error("runtime-settings-values-required");
+      }
+      const settings = hub.runtime.setSettings(
+        manifest,
+        values as Record<string, unknown>,
+      );
+      const runtime = hub.runtime.status(manifest);
+      json(res, 200, {
+        settings,
+        runtime,
+        appliesAfterRestart:
+          manifest.runtime.kind === "process" && runtime.state === "running",
+      });
       return true;
     }
 
