@@ -87,6 +87,21 @@ try {
         entry.struggleProgress <= 1,
     ),
   );
+  assert.ok(Array.isArray(initial.weapons));
+  assert.equal(initial.weapons.length, 4);
+  assert.deepEqual(
+    new Set(initial.weapons.map((weapon) => weapon.kind)),
+    new Set(["pan", "spatula", "plate"]),
+  );
+  assert.ok(
+    initial.weapons.every(
+      (weapon) =>
+        weapon.position.every(Number.isFinite) &&
+        weapon.velocity.every(Number.isFinite) &&
+        typeof weapon.active === "boolean",
+    ),
+  );
+
   assert.ok(
     ["opening", "brawl", "danger", "final"].includes(initial.matchStage),
   );
