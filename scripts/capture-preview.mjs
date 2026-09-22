@@ -108,6 +108,21 @@ try {
 
   await host.locator('[data-round-action="lock"]').click();
   await host.locator('[data-round-action="start"]').waitFor({ timeout: 8_000 });
+
+  // Call a queue ticket before the game launch, then verify the same overlay
+  // survives the READY -> LIVE_GAME transition.
+  const ticket = await platform("/queue", {
+    method: "POST",
+    body: JSON.stringify({ partySize: 4, label: "Preview Table" }),
+  });
+  await platform("/queue/" + ticket.ticket.id + "/call", {
+    method: "POST",
+    body: "{}",
+  });
+  await screen.waitForSelector("#queue-overlay:not([hidden])", {
+    timeout: 8_000,
+  });
+
   await host.locator('[data-round-action="start"]').click();
 
   await guest.waitForFunction(
@@ -122,19 +137,9 @@ try {
     () => document.querySelector("#mode-label")?.textContent === "LIVE_GAME",
     { timeout: 10_000 },
   );
-  await screen.waitForTimeout(4_000);
-
-  const ticket = await platform("/queue", {
-    method: "POST",
-    body: JSON.stringify({ partySize: 4, label: "Preview Table" }),
-  });
-  await platform("/queue/" + ticket.ticket.id + "/call", {
-    method: "POST",
-    body: "{}",
-  });
-
+  await screen.waitForTimeout(2_000);
   await screen.waitForSelector("#queue-overlay:not([hidden])", {
-    timeout: 8_000,
+    timeout: 5_000,
   });
   await screen.screenshot({
     path: "docs/screenshots/hub-broadcast-queue.png",
