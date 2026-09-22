@@ -36,7 +36,7 @@ export const BUILTIN_GAME_MANIFESTS: readonly GameManifestV1[] = [
   },
   {
     schemaVersion: 1,
-    id: "kart-racing",
+    id: "pilot-racer",
     name: "极速等位赛",
     version: "0.1.0",
     category: "racing",
@@ -47,6 +47,8 @@ export const BUILTIN_GAME_MANIFESTS: readonly GameManifestV1[] = [
       healthPath: "/info",
       command: ["node", "server.mjs"],
       workingDirectoryEnv: "PILOT_RACER_DIR",
+      port: 9010,
+      startPath: "/api/start",
     },
     entrypoints: {
       display: "http://{host}:9010/display",
@@ -66,7 +68,7 @@ export const BUILTIN_GAME_MANIFESTS: readonly GameManifestV1[] = [
     },
     commercial: {
       tier: "base",
-      entitlements: ["game:kart-racing"],
+      entitlements: ["game:pilot-racer"],
     },
   },
 ];
