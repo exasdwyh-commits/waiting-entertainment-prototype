@@ -2,7 +2,9 @@ import "./style.css";
 import { NetworkGame } from "./game/NetworkGame";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
-const localMode = new URLSearchParams(location.search).get("mode") === "local";
+const params = new URLSearchParams(location.search);
+const localMode = params.get("mode") === "local";
+const hubMode = params.get("hub") === "1";
 
 root.innerHTML = `
   <div id="stage"></div>
@@ -39,6 +41,11 @@ const common = {
   timer: document.querySelector<HTMLSpanElement>("#timer")!,
   message: document.querySelector<HTMLDivElement>("#message")!,
 };
+
+if (hubMode) {
+  document.querySelector<HTMLElement>("#join-panel")!.hidden = true;
+  document.querySelector<HTMLElement>(".tip")!.hidden = true;
+}
 
 if (localMode) {
   document.querySelector<HTMLElement>("#join-panel")!.hidden = true;
