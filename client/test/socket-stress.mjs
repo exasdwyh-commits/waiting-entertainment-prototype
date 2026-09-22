@@ -253,13 +253,32 @@ try {
     4_000,
   );
 
-  const throwEvent = waitForEvent(
+  const thrownSnapshot = waitForEvent(
     observer,
-    "game:event",
-    (event) =>
-      event?.type === "weapon_throw" &&
-      event.actorId === weaponPlayer.ack.playerId &&
-      event.weapon === "plate",
+    "match:snapshot",
+    (snapshot) => {
+      const player = snapshot.players.find(
+        (candidate) => candidate.id === weaponPlayer.ack.playerId,
+      );
+      const plate = snapshot.weapons.find(
+        (weapon) =>
+          weapon.kind === "plate" &&
+          !weapon.heldBy &&
+          weapon.active &&
+          Math.hypot(weapon.velocity[0], weapon.velocity[2]) > 1,
+      );
+      return (
+        player &&
+        !player.heldWeapon &&
+        plate &&
+        snapshot.events.some(
+          (event) =>
+            event.type === "weapon_throw" &&
+            event.actorId === weaponPlayer.ack.playerId &&
+            event.weapon === "plate",
+        )
+      );
+    },
     4_000,
   );
   weaponPlayer.seq += 1;
@@ -274,10 +293,7 @@ try {
     jump: false,
     kick: false,
   });
-  await throwEvent;
-
-  measuredStartedAt = performance.now();
-  snapshotCount = 0;
+  assertSnapshotHealthy(await thrownSnapshot);
 
   measuredStartedAt = performance.now();
   snapshotCount = 0;
