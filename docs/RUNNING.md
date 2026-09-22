@@ -26,20 +26,32 @@ The local host exposes these surfaces:
 
 Use the LAN IP, not `localhost`, on any page that must be reachable from phones.
 
+### Enable Pilot Racer as a local game package
+
+Pilot Racer remains a separate game repository/runtime. Point the Hub at its local checkout before starting:
+
+```bash
+PILOT_RACER_DIR=/absolute/path/to/pilot-racer npm run dev
+```
+
+On the current development machine this can point at the existing Pilot Racer repository. The Hub does not copy or fork the game. It launches `node server.mjs` in that directory on port `9010`, health-checks `/info`, and stops only processes that the Hub itself started.
+
+If `PILOT_RACER_DIR` is missing or invalid, Pilot Racer remains visible in the Base game library as **未配置本地游戏目录** and cannot create a hosted round.
+
 ## Recommended venue flow
 
 The normal hosted flow now starts from the platform surfaces rather than the legacy game QR.
 
 1. Open the Host Console on `:5175`.
 2. Open the venue Broadcast Shell full-screen on `:5176`.
-3. The host selects an enabled embedded game and clicks **开放本轮报名**.
+3. The host selects an enabled game and clicks **开放本轮报名**.
 4. The Broadcast Shell switches to **RECRUITING** and shows a fresh round QR/code.
 5. Guests scan the QR and enter only a nickname. Queue tickets are not required.
-6. Guest phones enter the controller in a waiting state; they do not take over a game slot yet.
+6. For the embedded Table Push King, guest phones stay on the Hub waiting page until the host starts. For a process game such as Pilot Racer, locking the roster warms the external runtime and then sends registered guests into that game's own lobby.
 7. The host locks the roster and clicks **主持人开局**.
-8. The Hub changes the round to `running`, resets the embedded Table Push King GameSession, and starts its 3-second authoritative countdown.
-9. Waiting phones connect and take over Bot slots.
-10. When the host ends the Hub round, round-scoped phone controllers disconnect and AI immediately resumes control.
+8. Embedded games reset their authoritative session. Process games receive their package start action only after the runtime health check passes.
+9. The Broadcast Shell switches to the selected game's display entrypoint. Queue calls remain a platform overlay.
+10. When the host ends or cancels a process-game round, the Hub terminates the child process only if it was launched by RuntimeManager.
 
 A new round gets a new code. Old round codes do not serve as permanent store join codes.
 
@@ -66,7 +78,8 @@ The Host Console renders only games granted by the current store entitlements.
 Current foundation:
 
 - `table-push-king`: embedded runtime; host launch is wired.
-- `kart-racing`: Game Package v1 manifest exists, but the Host Console intentionally disables process launch until RuntimeManager is connected.
+- `pilot-racer`: external process Game Package v1. When `PILOT_RACER_DIR` is configured, roster lock warms the process, `/info` is health-checked, host start calls `/api/start`, and round finish shuts down the Hub-managed child process.
+- Runtime status is exposed to the Host Console as embedded / not configured / stopped / starting / running / failed instead of treating a hidden URL as licensing or readiness.
 
 Commercial tiers are represented by entitlements rather than separate application forks, so Base / Pro / Custom packages can share one host application.
 
@@ -111,6 +124,7 @@ GitHub Actions verifies:
 - independent queue/calling transitions;
 - Broadcast Shell state composition;
 - ten-client concurrent combat stress;
+- external RuntimeManager launch, health check, room-code propagation, start action and shutdown with a disposable fixture process;
 - existing big-screen / phone visual preview workflow.
 
 Real-device LAN, touch, heat and venue operations still require field validation.
