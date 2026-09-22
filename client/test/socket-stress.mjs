@@ -240,6 +240,19 @@ try {
     kick: false,
   });
 
+  await waitForEvent(
+    observer,
+    "match:snapshot",
+    (snapshot) =>
+      snapshot.players.some(
+        (player) =>
+          player.id === weaponPlayer.ack.playerId &&
+          player.heldWeapon === "plate" &&
+          player.pushCooldownLeftMs <= 45,
+      ),
+    4_000,
+  );
+
   const throwEvent = waitForEvent(
     observer,
     "game:event",
