@@ -430,9 +430,11 @@ export function currentBountyId(state) {
   return leader.id;
 }
 
-function sinkBoat(state, victim, killerId) {
+function sinkBoat(state, victim, killerId, bountyIdAtImpact = null) {
   if (!victim.alive) return;
-  const bountyId = currentBountyId(state);
+  const bountyId = Number.isInteger(bountyIdAtImpact)
+    ? bountyIdAtImpact
+    : currentBountyId(state);
   victim.alive = false;
   victim.deaths += 1;
   victim.speed = 0;
@@ -573,12 +575,15 @@ function stepProjectiles(state, dt) {
       const projectileSpeed = Math.hypot(projectile.vx, projectile.vz) || 1;
       boat.knockX += projectile.vx / projectileSpeed * impulse;
       boat.knockZ += projectile.vz / projectileSpeed * impulse;
+      // Lock bounty identity before the +2 hit score mutates ranking. A
+      // killing shot must pay the target that was visibly marked when it hit.
+      const bountyIdAtImpact = currentBountyId(state);
       const attacker = state.boats[projectile.ownerId];
       if (attacker) attacker.score += 2;
       emit(state, "hit", boat.id, `${attacker?.name ?? "炮弹"} 命中 ${boat.name}`, 2, {
         attackerId: projectile.ownerId,
       });
-      if (boat.hp <= 0) sinkBoat(state, boat, projectile.ownerId);
+      if (boat.hp <= 0) sinkBoat(state, boat, projectile.ownerId, bountyIdAtImpact);
       break;
     }
 
