@@ -295,6 +295,21 @@ for (let i = 0; i < 7; i++) {
 monster.visible = false;
 scene.add(monster);
 
+const monsterHalo = new THREE.Mesh(
+  new THREE.RingGeometry(5.0, 6.4, 64),
+  new THREE.MeshBasicMaterial({
+    color: "#ff5d9b",
+    transparent: true,
+    opacity: 0.48,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  }),
+);
+monsterHalo.rotation.x = -Math.PI / 2;
+monsterHalo.position.y = 0.06;
+monsterHalo.visible = false;
+scene.add(monsterHalo);
+
 const danger = new THREE.Mesh(
   new THREE.RingGeometry(7.4, 8.6, 48),
   new THREE.MeshBasicMaterial({ color: "#ff4664", transparent: true, opacity: 0.62, side: THREE.DoubleSide }),
@@ -629,6 +644,7 @@ function syncProjectiles() {
       projectileMeshes.set(projectile.id, mesh);
     }
     mesh.position.set(projectile.x, 0.68, projectile.z);
+    mesh.scale.setScalar(isDisplay ? 1.35 : 1);
   }
   for (const [id, mesh] of projectileMeshes) {
     if (active.has(id)) continue;
@@ -654,7 +670,7 @@ function animate(now) {
       while (delta > Math.PI) delta -= Math.PI * 2;
       while (delta < -Math.PI) delta += Math.PI * 2;
       mesh.rotation.y += delta * Math.min(1, dt * 10);
-      mesh.scale.setScalar(0.86 + boat.radius * 0.12);
+      mesh.scale.setScalar((0.86 + boat.radius * 0.12) * (isDisplay ? 1.24 : 1));
       mesh.userData.wake.material.opacity = 0.12 + Math.min(0.42, boat.speed / 34);
 
       const fireAge = state.time - (boat.lastFireAt ?? -999);
@@ -686,7 +702,13 @@ function animate(now) {
     if (state.monster?.alive) {
       monster.visible = true;
       monster.position.set(state.monster.x, 0, state.monster.z);
+      monster.scale.setScalar(isDisplay ? 1.18 : 1);
       monster.rotation.y += dt * 0.25;
+      monsterHalo.visible = true;
+      monsterHalo.position.set(state.monster.x, 0.06, state.monster.z);
+      const haloPulse = 1 + Math.sin(now * 0.006) * 0.08;
+      monsterHalo.scale.setScalar(haloPulse);
+      monsterHalo.material.opacity = 0.42 + Math.sin(now * 0.008) * 0.12;
       for (const child of monster.children) {
         if (child.userData.phase !== undefined) {
           child.rotation.x = Math.sin(now * 0.002 + child.userData.phase) * 0.35;
@@ -703,6 +725,7 @@ function animate(now) {
       }
     } else {
       monster.visible = false;
+      monsterHalo.visible = false;
       danger.visible = false;
     }
 
@@ -766,26 +789,52 @@ function animate(now) {
         focusX = (focusBoat.x + targetBoat.x) * 0.5;
         focusZ = (focusBoat.z + targetBoat.z) * 0.5;
         const separation = Math.hypot(focusBoat.x - targetBoat.x, focusBoat.z - targetBoat.z);
-        cameraHeight = Math.max(29, Math.min(42, 27 + separation * 0.55));
-        fov = Math.max(46, Math.min(56, 46 + separation * 0.22));
+        cameraHeight = Math.max(27, Math.min(38, 25 + separation * 0.48));
+        fov = Math.max(44, Math.min(52, 44 + separation * 0.18));
       }
 
-      if (state.monster?.alive && (
-        recent?.type?.startsWith("monster") ||
-        recent?.targetKind === "monster" ||
-        Math.hypot(focusBoat.x - state.monster.x, focusBoat.z - state.monster.z) < 25
-      )) {
-        focusX = focusBoat.x * 0.32 + state.monster.x * 0.68;
-        focusZ = focusBoat.z * 0.32 + state.monster.z * 0.68;
-        cameraHeight = 34;
-        fov = 50;
+      if (state.monster?.alive) {
+        // Boss phases should read as a shared encounter, not a normal leader
+        // follow with a boss UI floating over an off-screen monster. Always
+        // keep the boss and its nearest living challenger in the same frame.
+        const challenger = state.boats
+          .filter((boat) => boat.alive)
+          .map((boat) => ({
+            boat,
+            distance: Math.hypot(
+              boat.x - state.monster.x,
+              boat.z - state.monster.z,
+            ),
+          }))
+          .sort((a, b) => a.distance - b.distance)[0];
+
+        if (challenger) {
+          const separation = challenger.distance;
+          focusX = state.monster.x * 0.58 + challenger.boat.x * 0.42;
+          focusZ = state.monster.z * 0.58 + challenger.boat.z * 0.42;
+          cameraHeight = Math.max(28, Math.min(38, 25 + separation * 0.42));
+          fov = Math.max(45, Math.min(53, 45 + separation * 0.18));
+        } else {
+          focusX = state.monster.x;
+          focusZ = state.monster.z;
+          cameraHeight = 30;
+          fov = 47;
+        }
       }
 
-      cameraTarget.set(focusX + 18, cameraHeight, focusZ + 22);
+      cameraTarget.set(focusX + 15, cameraHeight, focusZ + 18);
       lookTarget.set(focusX, 1.0, focusZ);
-      camera.position.lerp(cameraTarget, 1 - Math.exp(-dt * 2.5));
+      camera.position.lerp(cameraTarget, 1 - Math.exp(-dt * 2.9));
       camera.lookAt(lookTarget);
       camera.fov = fov;
+      try {
+        window.__seaBroadcast = {
+          focus: recent?.type ?? "leader",
+          boss: Boolean(state.monster?.alive),
+          fov,
+          height: cameraHeight,
+        };
+      } catch {}
     } else if (myId !== null && state.boats[myId]) {
       const me = state.boats[myId];
       const backX = -Math.sin(me.heading) * 9;
