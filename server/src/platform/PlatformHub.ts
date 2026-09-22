@@ -64,6 +64,19 @@ export class PlatformHub {
     };
   }
 
+  async snapshotFresh(): Promise<PlatformSnapshot> {
+    const games = this.registry.listAuthorized();
+    await this.runtime.refreshAll(games);
+    return {
+      license: structuredClone(this.license),
+      games,
+      runtimes: this.runtime.list(games),
+      rounds: this.rounds.list(),
+      queue: this.queue.list(),
+      broadcast: this.broadcastState(),
+    };
+  }
+
   createRound(gameId: string, playerLimit?: number): EntertainmentRound {
     const manifest = this.registry.requireAuthorized(gameId);
     this.runtime.assertConfigured(manifest);
