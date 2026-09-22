@@ -129,4 +129,12 @@ if (localMode) {
     replayWipe: document.querySelector<HTMLDivElement>("#replay-wipe")!,
   });
   game.start();
+
+  if (params.get("visualPreview") === "1") {
+    type VisualPreviewWindow = Window & {
+      __waitingVisualReplay?: () => boolean;
+    };
+    (window as VisualPreviewWindow).__waitingVisualReplay = () =>
+      game.previewReplay();
+  }
 }
