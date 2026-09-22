@@ -126,7 +126,8 @@ try {
   }
 }
 
-// A wrong service on a declared port must fail preflight without being killed.
+// A different service on the declared port must fail preflight without the Hub
+// spawning/killing anything on that port.
 const wrongService = spawn(
   "node",
   [
@@ -140,16 +141,27 @@ try {
   for (let attempt = 0; attempt < 30; attempt++) {
     try {
       const response = await fetch("http://127.0.0.1:19090/info");
-      if (response.ok) { ready = true; break; }
+      if (response.ok) {
+        ready = true;
+        break;
+      }
     } catch {}
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 60));
   }
   assert.equal(ready, true);
-  await assert.rejects(manager.prepareRound(manifest, round), /runtime-port-conflict/);
+
+  await assert.rejects(
+    manager.prepareRound(manifest, round),
+    /runtime-port-conflict/,
+  );
+
+
   const conflict = manager.status(manifest);
   assert.equal(conflict.state, "failed");
   assert.equal(conflict.managed, false);
   assert.match(conflict.message ?? "", /unexpected service/);
+  assert.match(conflict.message ?? "", /other-game\/1/);
+
   const stillThere = await fetch("http://127.0.0.1:19090/info").then((response) => response.json());
   assert.equal(stillThere.protocol, "other-game/1");
 } finally {
