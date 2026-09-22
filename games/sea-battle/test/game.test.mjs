@@ -358,12 +358,17 @@ test("fatal hit preserves the bounty target that was marked before hit score cha
   const state = running(123);
   humanize(state);
   for (const boat of state.boats) {
-    boat.x = 45 + boat.id;
-    boat.z = 45;
+    boat.x = 35 + boat.id;
+    boat.z = 35;
     boat.hp = boat.maxHp;
   }
   const attacker = state.boats[0];
   const leader = state.boats[1];
+  attacker.x = -4;
+  attacker.z = 0;
+  leader.x = 0;
+  leader.z = 0;
+  leader.invulnerableUntil = 0;
   attacker.score = 7;
   leader.score = 8;
   leader.hp = 5;
