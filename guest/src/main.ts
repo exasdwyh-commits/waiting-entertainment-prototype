@@ -9,6 +9,13 @@ const code = (parts.at(-1) || new URLSearchParams(location.search).get("code") |
 let snapshot: PlatformSnapshot | null = null;
 let round: EntertainmentRound | undefined;
 let game: GameManifestV1 | undefined;
+let joinedName = "";
+let watchTimer: number | undefined;
+let redirecting = false;
+
+try {
+  joinedName = sessionStorage.getItem("waiting-round:" + code + ":name") || "";
+} catch {}
 
 function esc(value: unknown): string {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
@@ -58,8 +65,20 @@ function render() {
     return;
   }
 
-  const open = round.status === "recruiting" && round.players.length < round.playerLimit;
+  const open =
+    !joinedName &&
+    round.status === "recruiting" &&
+    round.players.length < round.playerLimit;
   const names = round.players.map((player) => '<span>' + esc(player.name) + '</span>').join("");
+  const joinedState = joinedName
+    ? '<div class="closed joined-wait"><strong>' +
+      (round.status === "running" ? "主持人已开局 · 正在进入游戏" : "报名成功 · 已锁定席位") +
+      '</strong><span>' +
+      (round.status === "running"
+        ? "正在连接本轮游戏运行时…"
+        : "保持此页面打开，主持人开局后会自动进入游戏。") +
+      '</span></div>'
+    : "";
   root.innerHTML =
     '<main class="guest-shell"><section class="join-card">' +
       '<div class="brand"><span>WE</span><strong>WAITING ENTERTAINMENT</strong></div>' +
@@ -67,10 +86,12 @@ function render() {
       '<h1>' + esc(game.name) + '</h1><p class="summary">' + esc(game.summary) + '</p>' +
       '<div class="capacity"><strong>' + round.players.length + ' / ' + round.playerLimit + '</strong><span>已报名</span></div>' +
       '<div class="joined-names">' + (names || '<span class="muted">等你加入第一席</span>') + '</div>' +
-      (open
-        ? '<form id="join-form"><label><span>你的昵称</span><input name="name" maxlength="24" autocomplete="nickname" placeholder="输入现场昵称" required /></label>' +
-          '<button type="submit">报名本轮</button><small>不需要登录，也不需要绑定等位号码</small></form>'
-        : '<div class="closed"><strong>' + statusText(round.status) + '</strong><span>请等待主持人开放下一轮。</span></div>') +
+      (joinedName
+        ? joinedState
+        : open
+          ? '<form id="join-form"><label><span>你的昵称</span><input name="name" maxlength="24" autocomplete="nickname" placeholder="输入现场昵称" required /></label>' +
+            '<button type="submit">报名本轮</button><small>不需要登录，也不需要绑定等位号码</small></form>'
+          : '<div class="closed"><strong>' + statusText(round.status) + '</strong><span>请等待主持人开放下一轮。</span></div>') +
       '<div id="message" class="message" aria-live="polite"></div>' +
     '</section></main>';
 
@@ -97,19 +118,18 @@ async function join(name: string) {
 
     round = payload.round;
     if (!game) throw new Error("game-not-found");
+    joinedName = name;
+    try {
+      sessionStorage.setItem("waiting-round:" + code + ":name", joinedName);
+    } catch {}
 
     if (message) {
       message.classList.add("message--ok");
       message.textContent = "报名成功 · 等待主持人开局";
     }
 
-    const target = new URL(entryUrl(game));
-    target.searchParams.set("round", code);
-    target.searchParams.set("name", name);
-
-    window.setTimeout(() => {
-      location.href = target.toString();
-    }, 700);
+    render();
+    startRoundWatch();
   } catch (error) {
     if (button) button.disabled = false;
     if (message) {
@@ -125,16 +145,53 @@ async function join(name: string) {
   }
 }
 
-async function refresh() {
+function launchGameIfReady() {
+  if (
+    redirecting ||
+    !joinedName ||
+    !round ||
+    !game ||
+    round.status !== "running"
+  ) {
+    return;
+  }
+
+  redirecting = true;
+  const target = new URL(entryUrl(game));
+  target.searchParams.set("round", code);
+  target.searchParams.set("name", joinedName);
+  target.searchParams.set("hub", "1");
+  location.replace(target.toString());
+}
+
+function startRoundWatch() {
+  if (watchTimer !== undefined) return;
+  watchTimer = window.setInterval(() => void refresh(true), 500);
+}
+
+async function refresh(fromWatch = false) {
   try {
     snapshot = (await api()) as PlatformSnapshot;
     round = snapshot.rounds.find((item) => item.code === code);
     game = round ? snapshot.games.find((item) => item.id === round?.gameId) : undefined;
     render();
+    launchGameIfReady();
+
+    if (
+      fromWatch &&
+      round &&
+      ["finished", "cancelled", "expired"].includes(round.status) &&
+      watchTimer !== undefined
+    ) {
+      window.clearInterval(watchTimer);
+      watchTimer = undefined;
+    }
   } catch {
     root.innerHTML = '<main class="guest-shell"><section class="join-card error-card"><h1>暂时连接不到现场主机</h1><p>请确认手机与餐厅大屏在同一 Wi-Fi 后重试。</p></section></main>';
   }
 }
 
 render();
-void refresh();
+void refresh().then(() => {
+  if (joinedName) startRoundWatch();
+});
