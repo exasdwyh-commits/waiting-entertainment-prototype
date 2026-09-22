@@ -76,3 +76,11 @@ body[data-stage="maelstrom"] #timer{color:#ffd7de;text-shadow:0 0 18px #ff5d7366
 #monster-boss i{display:block;height:6px;margin:7px 0 5px;border-radius:999px;background:#240f31;overflow:hidden}
 #monster-boss b{display:block;height:100%;width:100%;background:linear-gradient(90deg,#a855f7,#ff5d9b);transition:width .18s linear}
 #monster-boss em{display:block;color:#d9bbec;font-size:8px;font-style:normal}
+
+
+/* V3 objective loop: leader bounty + sinking streak readability. */
+#combat-bonus{display:block;margin-top:4px;color:#ffe58a;font-size:9px;font-style:normal;font-weight:750;letter-spacing:.35px}
+#combat-bonus.hot{color:#ffd0d8;text-shadow:0 0 10px #ff5d7377}
+#ranks li.bounty{border-color:#ffe36e55;background:#ffe36e0d}
+#ranks li.bounty>b{color:#ffe36e;text-shadow:0 0 10px #ffe36e66;font-size:14px}
+#ranks li.bounty small{color:#ffe8a8}
