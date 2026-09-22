@@ -76,7 +76,7 @@ function render() {
 
   document.querySelector<HTMLFormElement>("#join-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(event.currentTarget as HTMLFormElement);
     const name = String(form.get("name") ?? "").trim().slice(0, 24);
     if (!name) return;
     void join(name);
