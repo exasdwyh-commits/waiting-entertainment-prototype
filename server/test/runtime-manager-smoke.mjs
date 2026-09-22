@@ -20,6 +20,7 @@ const manifest = {
     healthProtocol: "runtime-fixture/1",
     command: ["node", "fixture-server.mjs"],
     workingDirectoryEnv: "RUNTIME_FIXTURE_DIR",
+    bundledPath: "server/test/fixtures/runtime",
     port: 19090,
     startPath: "/api/start",
   },
@@ -59,6 +60,8 @@ const round = {
 const manager = new RuntimeManager();
 assert.equal(manager.status(manifest).state, "stopped");
 assert.equal(manager.status(manifest).configured, true);
+assert.equal(manager.status(manifest).configSource, "environment");
+assert.equal(manager.status(manifest).workingDirectory, fixtureDir);
 
 const prepared = await manager.prepareRound(manifest, round);
 assert.equal(prepared.state, "running");
@@ -123,7 +126,46 @@ try {
   }
 }
 
-delete process.env.RUNTIME_FIXTURE_DIR;
-assert.equal(manager.status(manifest).state, "not-configured");
+// A wrong service on a declared port must fail preflight without being killed.
+const wrongService = spawn(
+  "node",
+  [
+    "-e",
+    `require("http").createServer((req,res)=>{res.setHeader("content-type","application/json");res.end(JSON.stringify({protocol:"other-game/1"}));}).listen(19090,"127.0.0.1")`,
+  ],
+  { stdio: "ignore" },
+);
+try {
+  let ready = false;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    try {
+      const response = await fetch("http://127.0.0.1:19090/info");
+      if (response.ok) { ready = true; break; }
+    } catch {}
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 60));
+  }
+  assert.equal(ready, true);
+  await assert.rejects(manager.prepareRound(manifest, round), /runtime-port-conflict/);
+  const conflict = manager.status(manifest);
+  assert.equal(conflict.state, "failed");
+  assert.equal(conflict.managed, false);
+  assert.match(conflict.message ?? "", /unexpected service/);
+  const stillThere = await fetch("http://127.0.0.1:19090/info").then((response) => response.json());
+  assert.equal(stillThere.protocol, "other-game/1");
+} finally {
+  wrongService.kill("SIGTERM");
+  await new Promise((resolvePromise) => wrongService.once("exit", resolvePromise));
+}
 
-console.log("RuntimeManager smoke passed: warm lobby, health refresh, unmanaged discovery, start action, room code, and shutdown.");
+delete process.env.RUNTIME_FIXTURE_DIR;
+const bundled = manager.status(manifest);
+assert.equal(bundled.configured, true);
+assert.equal(bundled.configSource, "bundled");
+assert.match(bundled.workingDirectory ?? "", /server\/test\/fixtures\/runtime$/);
+
+const unconfiguredManifest = structuredClone(manifest);
+delete unconfiguredManifest.runtime.workingDirectoryEnv;
+delete unconfiguredManifest.runtime.bundledPath;
+assert.equal(manager.status(unconfiguredManifest).state, "not-configured");
+
+console.log("RuntimeManager smoke passed: warm lobby, bundled discovery, health refresh, unmanaged discovery, port preflight, start action, room code, and shutdown.");
