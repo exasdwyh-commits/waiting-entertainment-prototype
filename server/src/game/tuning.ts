@@ -114,6 +114,8 @@ export const GAME_TUNING = {
     uprightMaxTorque: 0.11,
     uprightTiltFactor: 0.045,
     uprightRecoveryBoost: 1.85,
+    recoverySnapBalance: 0.7,
+    stableUprightMinBalance: 0.5,
   },
 
   ledge: {
@@ -246,6 +248,11 @@ export function validateGameTuning() {
   requireUnitRange("balance.minimumAfterHit", GAME_TUNING.balance.minimumAfterHit);
   requireFinitePositive("balance.recoveringPerSecond", GAME_TUNING.balance.recoveringPerSecond);
   requireFinitePositive("balance.uprightMaxTorque", GAME_TUNING.balance.uprightMaxTorque);
+  requireUnitRange("balance.recoverySnapBalance", GAME_TUNING.balance.recoverySnapBalance);
+  requireUnitRange(
+    "balance.stableUprightMinBalance",
+    GAME_TUNING.balance.stableUprightMinBalance,
+  );
 
   requireFinitePositive("ledge.hangWindowMs", GAME_TUNING.ledge.hangWindowMs);
   requireFinitePositive("ledge.climbDurationMs", GAME_TUNING.ledge.climbDurationMs);
