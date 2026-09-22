@@ -361,10 +361,14 @@ test("fatal hit preserves the bounty target that was marked before hit score cha
     boat.x = 35 + boat.id;
     boat.z = 35;
     boat.hp = boat.maxHp;
+    if (boat.id > 1) {
+      boat.alive = false;
+      boat.respawnAt = Infinity;
+    }
   }
   const attacker = state.boats[0];
   const leader = state.boats[1];
-  attacker.x = -4;
+  attacker.x = -20;
   attacker.z = 0;
   leader.x = 0;
   leader.z = 0;
@@ -379,7 +383,9 @@ test("fatal hit preserves the bounty target that was marked before hit score cha
     x: leader.x, z: leader.z, vx: 0, vz: 0,
     damage: 20, radius: 0.3, bornAt: state.time, life: 2, alive: true,
   });
-  stepGame(state, 1 / 120);
+  // Tiny tick isolates projectile resolution from auto-forward movement and
+  // hull collision correction while still exercising the real step order.
+  stepGame(state, 1e-6);
 
   assert.equal(leader.alive, false);
   assert.equal(attacker.bountyKills, 1);
