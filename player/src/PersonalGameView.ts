@@ -1,7 +1,22 @@
 import * as THREE from "three";
 import { TABLE_PUSH_GEOMETRY } from "@waiting/shared";
-import type { MatchSnapshot, PlayerSnapshot, PlayerState } from "@waiting/shared";
+import type {
+  MatchSnapshot,
+  PlayerSnapshot,
+  PlayerState,
+  WeaponKind,
+} from "@waiting/shared";
 import { createCharacterVisual, type CharacterVisual } from "./CharacterVisual";
+import { createWeaponVisual } from "./WeaponVisual";
+
+type WeaponView = {
+  root: THREE.Group;
+  kind: WeaponKind;
+  targetPosition: THREE.Vector3;
+  targetYaw: number;
+  held: boolean;
+  moving: boolean;
+};
 
 type ActorView = {
   root: THREE.Group;
@@ -24,6 +39,7 @@ export class PersonalGameView {
     powerPreference: "high-performance",
   });
   private readonly actors = new Map<string, ActorView>();
+  private readonly weaponViews = new Map<string, WeaponView>();
   private readonly cameraPosition = new THREE.Vector3(0, 7.1, 6.2);
   private readonly cameraLook = new THREE.Vector3();
   private readonly tmp = new THREE.Vector3();
@@ -302,6 +318,8 @@ export class PersonalGameView {
       this.centerSpinSpeed = snapshot.arenaState.centerSpinSpeed;
     }
 
+    this.applyWeapons(snapshot);
+
     for (const player of snapshot.players) {
       const actor = this.actors.get(player.id) ?? this.createActor(player);
       actor.targetPosition.set(...player.position);
@@ -331,6 +349,44 @@ export class PersonalGameView {
       const visible = !player.eliminated;
       actor.root.visible = visible;
       actor.ring.visible = visible && player.id === this.ownPlayerId;
+    }
+  }
+
+  private applyWeapons(snapshot: MatchSnapshot) {
+    const visible = new Set<string>();
+
+    for (const weapon of snapshot.weapons ?? []) {
+      let view = this.weaponViews.get(weapon.id);
+      if (!view) {
+        const visual = createWeaponVisual(weapon.kind);
+        this.scene.add(visual.root);
+        view = {
+          root: visual.root,
+          kind: weapon.kind,
+          targetPosition: new THREE.Vector3(...weapon.position),
+          targetYaw: 0,
+          held: false,
+          moving: false,
+        };
+        this.weaponViews.set(weapon.id, view);
+      }
+
+      visible.add(weapon.id);
+      view.root.visible = weapon.active;
+      view.targetPosition.set(...weapon.position);
+      view.held = Boolean(weapon.heldBy);
+      view.moving = Math.hypot(weapon.velocity[0], weapon.velocity[2]) > 0.25;
+
+      if (weapon.heldBy) {
+        const holder = snapshot.players.find((player) => player.id === weapon.heldBy);
+        if (holder) view.targetYaw = holder.facingYaw;
+      } else if (view.moving) {
+        view.targetYaw = Math.atan2(weapon.velocity[0], weapon.velocity[2]);
+      }
+    }
+
+    for (const [id, view] of this.weaponViews) {
+      if (!visible.has(id)) view.root.visible = false;
     }
   }
 
@@ -481,6 +537,24 @@ export class PersonalGameView {
     }
     const hitStopped = now < this.hitStopUntil;
     const delta = hitStopped ? 0 : rawDelta;
+
+    for (const weapon of this.weaponViews.values()) {
+      if (!weapon.root.visible || hitStopped) continue;
+      weapon.root.position.lerp(weapon.targetPosition, 0.42);
+      weapon.root.rotation.y = THREE.MathUtils.lerp(
+        weapon.root.rotation.y,
+        weapon.targetYaw,
+        weapon.held ? 0.5 : 0.3,
+      );
+      if (weapon.kind === "plate" && weapon.moving) {
+        weapon.root.rotation.y += delta * 11;
+        weapon.root.rotation.z += delta * 7;
+      } else if (weapon.held) {
+        weapon.root.rotation.z = weapon.kind === "spatula" ? -0.48 : -0.28;
+      } else {
+        weapon.root.rotation.z *= 0.82;
+      }
+    }
 
     for (const actor of this.actors.values()) {
       if (!hitStopped) {
