@@ -29,66 +29,7 @@ async function platform(path = "", options = {}) {
 }
 
 try {
-  const big = await browser.newPage({
-    viewport: { width: 1600, height: 900 },
-    deviceScaleFactor: 1,
-  });
-  await big.goto("http://127.0.0.1:5173", { waitUntil: "networkidle" });
-
-  const phone = await browser.newPage({
-    viewport: { width: 844, height: 390 },
-    deviceScaleFactor: 1,
-    isMobile: true,
-    hasTouch: true,
-  });
-  await phone.goto("http://127.0.0.1:5174", { waitUntil: "networkidle" });
-
-  // Keep the original game preview and replay assertions intact while Hub
-  // surfaces are layered around the game.
-  await big.waitForTimeout(8_500);
-
-  await big.screenshot({
-    path: "docs/screenshots/big-screen.png",
-    fullPage: true,
-  });
-
-  await phone.screenshot({
-    path: "docs/screenshots/phone-player.png",
-    fullPage: true,
-  });
-
-  await big.waitForFunction(
-    () => {
-      const bug = document.querySelector("#broadcast-bug");
-      const message = document.querySelector("#message");
-      const caption = message?.textContent?.trim() ?? "";
-      return (
-        bug?.getAttribute("data-mode") === "replay" &&
-        message?.classList.contains("replay-caption") &&
-        caption.length > 0 &&
-        (caption.includes("×") || caption.includes("反打机位"))
-      );
-    },
-    { timeout: 72_000 },
-  );
-
-  const replayModeBefore = await big
-    .locator("#broadcast-bug")
-    .getAttribute("data-mode");
-  const replayCaption = (await big
-    .locator("#message")
-    .textContent())?.trim();
-
-  if (replayModeBefore !== "replay" || !replayCaption) {
-    throw new Error("Replay state disappeared before capture.");
-  }
-
-  await big.screenshot({
-    path: "docs/screenshots/broadcast-replay.png",
-    fullPage: true,
-  });
-
-  // Hub flow: create a fresh host-led round and verify all three new surfaces.
+  // Exercise Hub surfaces first so round/signup regressions fail quickly.
   const created = await platform("/rounds", {
     method: "POST",
     body: JSON.stringify({ gameId: "table-push-king", playerLimit: 4 }),
@@ -141,7 +82,18 @@ try {
 
   await guest.locator('input[name="name"]').fill("Preview Guest");
   await guest.locator("#join-form button").click();
-  await guest.waitForURL(/:5174\//, { timeout: 10_000, waitUntil: "domcontentloaded" });
+  await guest.waitForTimeout(1_800);
+
+  if (!guest.url().includes(":5174/")) {
+    const message = await guest.locator("#message").textContent().catch(() => null);
+    throw new Error(
+      "Guest signup did not redirect to controller. url=" +
+        guest.url() +
+        " message=" +
+        JSON.stringify(message),
+    );
+  }
+
   await guest.waitForFunction(
     () =>
       document.querySelector("#status")?.textContent?.includes("等待主持人开局"),
@@ -192,6 +144,68 @@ try {
   await platform("/rounds/" + round.id + "/finish", {
     method: "POST",
     body: "{}",
+  });
+
+  await guest.close();
+  await host.close();
+  await screen.close();
+
+  // Keep the original direct-game visual regression and replay assertion.
+  const big = await browser.newPage({
+    viewport: { width: 1600, height: 900 },
+    deviceScaleFactor: 1,
+  });
+  await big.goto("http://127.0.0.1:5173", { waitUntil: "networkidle" });
+
+  const phone = await browser.newPage({
+    viewport: { width: 844, height: 390 },
+    deviceScaleFactor: 1,
+    isMobile: true,
+    hasTouch: true,
+  });
+  await phone.goto("http://127.0.0.1:5174", { waitUntil: "networkidle" });
+
+  await big.waitForTimeout(8_500);
+
+  await big.screenshot({
+    path: "docs/screenshots/big-screen.png",
+    fullPage: true,
+  });
+
+  await phone.screenshot({
+    path: "docs/screenshots/phone-player.png",
+    fullPage: true,
+  });
+
+  await big.waitForFunction(
+    () => {
+      const bug = document.querySelector("#broadcast-bug");
+      const message = document.querySelector("#message");
+      const caption = message?.textContent?.trim() ?? "";
+      return (
+        bug?.getAttribute("data-mode") === "replay" &&
+        message?.classList.contains("replay-caption") &&
+        caption.length > 0 &&
+        (caption.includes("×") || caption.includes("反打机位"))
+      );
+    },
+    { timeout: 72_000 },
+  );
+
+  const replayModeBefore = await big
+    .locator("#broadcast-bug")
+    .getAttribute("data-mode");
+  const replayCaption = (await big
+    .locator("#message")
+    .textContent())?.trim();
+
+  if (replayModeBefore !== "replay" || !replayCaption) {
+    throw new Error("Replay state disappeared before capture.");
+  }
+
+  await big.screenshot({
+    path: "docs/screenshots/broadcast-replay.png",
+    fullPage: true,
   });
 } finally {
   await browser.close();
