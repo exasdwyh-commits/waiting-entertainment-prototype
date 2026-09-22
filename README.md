@@ -1,122 +1,188 @@
-# Waiting Entertainment Prototype
+# Waiting Entertainment
 
-Waiting Entertainment is a browser-based public multiplayer game system for restaurant waiting areas.
+Waiting Entertainment 是面向餐厅等位场景的本地多人娱乐系统：一台门店主机负责权威游戏状态与大屏输出，顾客扫码后用手机加入；Hub 负责等位、场次、游戏包、运行时和大屏播控。
 
-The first game is **餐桌推推王 / Table Push King**: guests scan a QR code, use their phones as controllers, and fight on a shared big screen in a short physics match.
+> 当前阶段：**平台基础结构已成型，进入本地收尾与真机验收阶段。**
+>
+> 不建议继续扩架构或大量增加玩法。下一步请优先完成 `docs/LOCAL_FINISH_HANDOFF.md` 中的 P0/P1 收尾任务。
 
-## Current MVP
+## Current baseline
 
-Implemented:
+截至 2026-09-22，主分支已合并：
 
-- 10 persistent player slots
-- 1-10 human players with automatic AI fill
-- Single local GameSession with server-authoritative Rapier3D physics
-- 60Hz host physics / 20Hz state snapshots
-- Three.js big-screen renderer
-- Phone personal 3D gameplay view + camera-relative joystick + Attack/Grab combat controls
-- Human disconnect -> immediate AI takeover
-- Phone refresh / wake / reconnect -> reclaim the same character
-- Expanded circular table arena with run-up space
-- Authoritative rotating center lazy Susan that ramps through the round
-- Sprint + authoritative Stamina + Punch / Sprint Heavy Strike
-- Persistent Grab / Carry / manual directional Throw with stamina drain
-- Simplified ledge catch and climb-back
-- Pre-Final falls respawn after a short delay; Final Chaos uses permanent elimination
-- 3-second round countdown
-- ~180-second staged brawls: Opening / Brawl / Danger / Final Chaos
-- Elimination scoring and live ranking
-- Automatic winner selection and round restart
-- QR join flow
-- Player names on the big screen
-- TV-style automatic broadcast director with master/action/edge/duel/winner shots
-- Highlight selection across tosses, saves and eliminations
-- Multi-angle 0.45x replay package for decisive moments
-- Replaceable local CC0 low-poly GLB character variants; original IP pack is archived separately
-- Centralized authoritative game-feel tuning config
-- Symptom-driven tuning guide for real-device feedback
-- Local physics tuning sandbox
-- CI build, server runtime smoke test, and Socket end-to-end test
+- **Table Push King / 餐桌推推王**：内置 1-10 人物理乱斗，AI 补位、断线接管、个人手机视角、大屏自动导播与回放。
+- **Pilot Racer / 极速等位赛**：作为外部 Game Package 接入 Hub，使用 `PILOT_RACER_DIR` 指向本地赛车仓库，默认端口 `:9010`。
+- **Sea Battle V3 / 海战竞技**：仓库内置 process Game Package，默认端口 `:9020`，已完成物资成长、自动侧舷炮、三阶段节奏、复活、海怪、风暴缩圈、悬赏旗舰与连沉奖励。
+- **Host Game Management Center**：已经合并，可查看全部 Game Package、授权、版本、端口、PID、运行目录、健康状态和日志，并对可管理的外部进程执行启动 / 预热 / 停止 / 健康检查。
+- **Broadcast Shell**：统一承载游戏大屏、叫号 Overlay 与外部游戏运行中断提示。叫号不再由每个游戏重复实现。
+- **Runtime safety**：支持仓库内置运行目录、环境变量覆盖、错误端口 / 错误协议预检；不会误杀占用目标端口的未知进程。
 
-## Technology
+相关合并：
+- PR #49 — Sea Battle V3 bounty + sink streak
+- PR #52 — Sea Battle bounty impact lock
+- PR #51 — Host game management center + runtime safety
 
-- Three.js
-- Rapier3D
-- TypeScript
-- Node.js
-- Socket.IO
-- Vite
+## Important current status
 
-## Run
+当前功能主线不是“持续坏掉”。
 
-Requirements: Node.js 22+, npm 10+, and phones on the same LAN as the host computer.
+最近主分支验证结果：
+
+- **CI：通过**
+- **Sea Battle Visual Preview：通过**
+- **Hub Visual Preview：功能截图流程已完成并成功上传 artifact，但 workflow 最后自动提交截图回 `main` 时遇到并发提交，`git push` non-fast-forward，因此整条 Action 被标记为 failure。**
+
+也就是说，当前最新 Visual Preview 红灯的根因是 **GitHub Actions 自己写回主分支的竞态**，不是游戏逻辑、Hub、管理界面或截图捕获失败。
+
+本地模型收尾时请先修 `.github/workflows/visual-preview.yml` 的 screenshot auto-commit 策略，不要因为这条红灯重写游戏代码。
+
+## Architecture
+
+平台按 Game Package 管理多个游戏：
+
+| Game | Runtime | Players | Port | Status |
+| --- | --- | ---: | ---: | --- |
+| 餐桌推推王 | embedded | 1-10 | 5173 / 5174 | 基础样板 |
+| 极速等位赛 | external process | 1-8 | 9010 | 已接 Hub，独立仓库维护 |
+| 海战竞技 | bundled process | 1-8 | 9020 | V3 已完成，待本地视觉 / 真机收尾 |
+
+Hub 公共能力：
+
+- Game Registry / entitlement
+- Round lifecycle
+- QR / guest join
+- AI fill contract
+- RuntimeManager
+- Host Console
+- Game Management Center
+- Broadcast Shell
+- Queue overlay
+- Runtime health / logs / port preflight
+- CI / browser visual regression
+
+原则：**共享平台能力放 Hub；玩法、simulation、render 留在各 Game Package。**
+
+## Services
+
+运行：
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open the big screen using the host computer's LAN address, for example:
+要求 Node.js 22+、npm 10+。
+
+| Service | Port |
+| --- | ---: |
+| Table Push King big screen | 5173 |
+| Table Push King phone | 5174 |
+| Host Console / 游戏管理 | 5175 |
+| Broadcast Shell | 5176 |
+| Guest join | 5177 |
+| Hub authoritative server | 3001 |
+| Pilot Racer | 9010 |
+| Sea Battle | 9020 |
+
+主机健康检查：
 
 ```text
-http://192.168.1.20:5173
+http://127.0.0.1:3001/health
 ```
 
-Do **not** use `localhost` on the restaurant big screen if phones need to scan the QR code. The QR code points phones to port `5174` on the same host.
-
-Services:
-
-- Big screen: `:5173`
-- Mobile controller: `:5174`
-- Authoritative game server: `:3001`
-- Health check: `:3001/health`
-
-For the keyboard-only physics sandbox:
+Host Console：
 
 ```text
-http://localhost:5173/?mode=local
+http://127.0.0.1:5175
 ```
 
-Controls: WASD / arrows to move, Shift to sprint, Space to attack, R to restart.
+游戏管理页可以在 Host Console 顶部切换到 **游戏管理**。
+
+如果要接本地 Pilot Racer：
+
+```bash
+export PILOT_RACER_DIR=/absolute/path/to/pilot-racer
+npm run dev
+```
+
+Sea Battle 已支持仓库内置路径，正常情况下无需设置 `SEA_BATTLE_DIR`；该环境变量仍可用于覆盖运行目录。
+
+## Validation
+
+基础构建：
+
+```bash
+npm run build
+```
+
+关键平台 smoke：
+
+```bash
+node server/test/runtime-manager-smoke.mjs
+node server/test/game-registry-smoke.mjs
+node client/test/platform-ui-contract.mjs
+```
+
+Sea Battle 单独验证：
+
+```bash
+npm run build -w @waiting/sea-battle
+```
+
+最终交付前仍必须做真实门店环境验证：Windows 主机、大屏、门店 Wi-Fi、至少 8 台真实手机混合 iOS / Android。
+
+## What is intentionally not finished
+
+以下不是架构缺失，而是明确留给最后本地收尾：
+
+1. 修复 Visual Preview workflow 自动回写截图导致的并发 push 竞态。
+2. 游戏管理页的 settings 当前主要是 manifest 默认参数展示；还需要做“可编辑 → 持久化 → 下次启动注入环境变量”的完整闭环。
+3. Sea Battle 的船体 / 海域 / 海怪仍需更正式的 Blender / Hyper3D 资产与真机视觉调优；不要再靠大量程序几何硬堆。
+4. Pilot Racer 继续在独立仓库完成 Bay GP V3 美术与 8 真机验收。
+5. 所有游戏需要一次真实餐厅网络压力测试和长时间 soak。
+
+完整收尾说明见：
+
+**[docs/LOCAL_FINISH_HANDOFF.md](docs/LOCAL_FINISH_HANDOFF.md)**
 
 ## Product principle
 
-This is not a traditional mobile game and not a SaaS-first product.
-
-Priority order:
+这不是传统手机游戏，也不是云 SaaS 优先产品。当前优先级保持：
 
 1. Game feel
 2. Big-screen spectacle
 3. Three-second learnability
-4. Multiplayer stability
+4. LAN multiplayer stability
 5. Personal phone-screen experience
 6. AI fill
-7. Fast creation of additional games
-8. Commercial management systems
+7. Fast creation of additional Game Packages
+8. Venue / commercial management
 
-See `docs/CORE_RECOMMENDATIONS.md` for the long-term product direction, `docs/PARTY_ANIMALS_PARITY_MATRIX.md` for the combat parity target, `docs/PHYSICS_PARTY_DIRECTION.md` for the gameplay roadmap, and `docs/BROADCAST_DIRECTOR.md` for the TV-style camera/replay system, plus `docs/RUNNING.md`, `docs/ARCHITECTURE.md`, `docs/TUNING.md`, and `docs/ROADMAP.md`.
+当前产品边界仍是 **单门店 / 单主机 / 单活动游戏场次**。不要在本轮收尾扩展公网匹配、云权威服务器、多门店编排或复杂账号系统。
 
+## Visual previews
 
-## Topology boundary
+真实运行构建的截图位于 `docs/screenshots/`，包括：
 
-The current product is intentionally **single restaurant / single host / single live game session**.
+- `big-screen.png`
+- `phone-player.png`
+- `broadcast-replay.png`
+- `hub-host.png`
+- `hub-game-management.png`
+- `hub-broadcast-recruiting.png`
+- `hub-broadcast-queue.png`
+- `sea-battle-live.png`
+- `sea-battle-monster.png`
 
-There is no matchmaking, public room browser, multi-room orchestration, or cloud-authoritative gameplay in the MVP. The phone is a personal game/control screen connected to the restaurant host over LAN.
+截图应作为验收 artifact，而不是让 GitHub Action 高频并发修改 `main`。具体整改见收尾文档。
 
+## More docs
 
-## Visual Preview
-
-Current automated screenshots from the actual running build:
-
-### Big screen
-
-![Table Push King big-screen preview](docs/screenshots/big-screen.png)
-
-### Phone player view
-
-![Table Push King phone-player preview](docs/screenshots/phone-player.png)
-
-### TV-style replay
-
-![Table Push King broadcast replay preview](docs/screenshots/broadcast-replay.png)
-
-These images are captured from the real Three.js/Socket.IO build rather than mockups. Refresh them through the `Visual Preview` GitHub Action after meaningful visual changes.
+- `docs/GAME_PACKAGE_V1.md`
+- `docs/HUB_ARCHITECTURE.md`
+- `docs/ARCHITECTURE.md`
+- `docs/BROADCAST_DIRECTOR.md`
+- `docs/TUNING.md`
+- `docs/ROADMAP.md`
+- `docs/CORE_RECOMMENDATIONS.md`
+- `docs/LOCAL_FINISH_HANDOFF.md`
