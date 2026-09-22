@@ -75,6 +75,13 @@ function renderRound(round: EntertainmentRound | undefined, games: GameManifestV
   }
 
   const game = games.find((item) => item.id === round.gameId);
+  const runtime = game
+    ? snapshot?.runtimes.find((item) => item.gameId === game.id)
+    : undefined;
+  const runtimeDegraded =
+    round.status === "running" &&
+    game?.runtime.kind === "process" &&
+    runtime?.state !== "running";
   const seats = Array.from({ length: round.playerLimit }, (_, index) => round.players[index]);
   const seatHtml = seats.map((player, index) =>
     '<div class="player-slot ' + (player ? "player-slot--filled" : "") + '">' +
@@ -82,7 +89,18 @@ function renderRound(round: EntertainmentRound | undefined, games: GameManifestV
       '<strong>' + (player ? esc(player.name) : "等待报名") + '</strong></div>'
   ).join("");
 
-  return '<section class="round-card round-card--' + round.status + '">' +
+  const runtimeWarning = runtimeDegraded
+    ? '<div class="round-runtime-alert"><div><span>RUNTIME DEGRADED</span><strong>' +
+        esc(runtimeText(runtime)) + '</strong><small>' +
+        esc(runtime?.message || "外部游戏进程未通过健康检查。比赛状态不会自动结束，请主持人确认后处理。") +
+      '</small></div><div class="round-runtime-actions">' +
+        '<button class="secondary" data-runtime-check="' + esc(round.gameId) + '">重新检查</button>' +
+        '<button class="ghost" data-runtime-logs="' + esc(round.gameId) + '">查看日志</button>' +
+      '</div></div>'
+    : '';
+
+  return '<section class="round-card round-card--' + round.status +
+      (runtimeDegraded ? ' round-card--degraded' : '') + '">' +
     '<div class="round-heading"><div><span class="eyebrow">CURRENT ROUND · ' + roundLabel(round.status) + '</span>' +
     '<h2>' + esc(game?.name ?? round.gameId) + '</h2></div>' +
     '<div class="round-code"><small>本轮动态码</small><strong>' + esc(round.code) + '</strong></div></div>' +
@@ -90,7 +108,7 @@ function renderRound(round: EntertainmentRound | undefined, games: GameManifestV
       '<div><strong>' + round.players.length + '</strong><span>/ ' + round.playerLimit + ' 已报名</span></div>' +
       '<div><strong>' + roundLabel(round.status) + '</strong><span>现场状态</span></div>' +
       '<div><strong>' + esc(snapshot?.broadcast.mode ?? "—") + '</strong><span>大屏状态</span></div>' +
-    '</div><div class="player-grid">' + seatHtml + '</div>' +
+    '</div>' + runtimeWarning + '<div class="player-grid">' + seatHtml + '</div>' +
     '<div class="actions">' + roundActions(round) + '</div></section>';
 }
 
