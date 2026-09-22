@@ -16,24 +16,35 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run build
-      - name: Smoke test authoritative server and socket flow
+      - name: Smoke, platform, and ten-client combat stress
         run: |
-          npm run start -w server > /tmp/waiting-server.log 2>&1 &
-          SERVER_PID=$!
-          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          start_server () {
+            LOG_FILE="$1"
+            shift
+            "$@" > "$LOG_FILE" 2>&1 &
+            SERVER_PID=$!
+            trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
 
-          for attempt in {1..20}; do
-            if curl --fail --silent http://127.0.0.1:3001/health | grep -q '"ok":true'; then
-              echo "Authoritative server health check passed."
-              break
-            fi
-            if [ "$attempt" -eq 20 ]; then
-              echo "Server failed to become healthy."
-              cat /tmp/waiting-server.log
-              exit 1
-            fi
-            sleep 0.5
-          done
+            for attempt in {1..30}; do
+              if curl --fail --silent http://127.0.0.1:3001/health | grep -q '"ok":true'; then
+                echo "Authoritative server health check passed."
+                return
+              fi
+              if [ "$attempt" -eq 30 ]; then
+                echo "Server failed to become healthy."
+                cat "$LOG_FILE"
+                exit 1
+              fi
+              sleep 0.4
+            done
+          }
 
+          start_server /tmp/waiting-server-smoke.log node server/dist/index.js
           node client/test/socket-smoke.mjs
           node client/test/platform-smoke.mjs
+          kill "$SERVER_PID" 2>/dev/null || true
+          wait "$SERVER_PID" 2>/dev/null || true
+          sleep 0.5
+
+          start_server /tmp/waiting-server-stress.log env WAITING_ROUND_MS=60000 WAITING_STRESS_MODE=1 node server/dist/index.js
+          node client/test/socket-stress.mjs
