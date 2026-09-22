@@ -112,11 +112,113 @@ export const BUILTIN_GAME_MANIFESTS: readonly GameManifestV1[] = [
   },
 ];
 
+function manifestError(id: string, reason: string): never {
+  throw new Error(`manifest-invalid:${id}:${reason}`);
+}
+
+function assertPortableEntrypoint(id: string, kind: string, value: string): void {
+  if (!value) manifestError(id, `${kind}-entrypoint-empty`);
+  if (value.includes("localhost") || value.includes("127.0.0.1")) {
+    manifestError(id, `${kind}-entrypoint-not-lan-portable`);
+  }
+  if (!(value.startsWith("/") || value.includes("{host}"))) {
+    manifestError(id, `${kind}-entrypoint-missing-host-placeholder`);
+  }
+}
+
+export function validateGameManifests(
+  manifests: readonly GameManifestV1[],
+): void {
+  const ids = new Set<string>();
+  const processPorts = new Map<number, string>();
+
+  for (const manifest of manifests) {
+    const id = manifest.id?.trim();
+    if (!id || !/^[a-z0-9][a-z0-9-]*$/.test(id)) {
+      manifestError(id || "unknown", "invalid-id");
+    }
+    if (ids.has(id)) throw new Error(`manifest-duplicate-id:${id}`);
+    ids.add(id);
+
+    if (manifest.schemaVersion !== 1) manifestError(id, "schema-version");
+    if (!manifest.name?.trim()) manifestError(id, "name-empty");
+    if (!manifest.version?.trim()) manifestError(id, "version-empty");
+    if (!manifest.category?.trim()) manifestError(id, "category-empty");
+    if (!manifest.summary?.trim()) manifestError(id, "summary-empty");
+
+    const minPlayers = manifest.players?.min;
+    const maxPlayers = manifest.players?.max;
+    if (
+      !Number.isInteger(minPlayers) ||
+      !Number.isInteger(maxPlayers) ||
+      minPlayers < 1 ||
+      maxPlayers < minPlayers ||
+      maxPlayers > 32
+    ) {
+      manifestError(id, "invalid-player-range");
+    }
+
+    if (!manifest.runtime.healthPath?.startsWith("/")) {
+      manifestError(id, "health-path");
+    }
+    if (
+      manifest.runtime.startPath !== undefined &&
+      !manifest.runtime.startPath.startsWith("/")
+    ) {
+      manifestError(id, "start-path");
+    }
+
+    assertPortableEntrypoint(id, "display", manifest.entrypoints.display);
+    assertPortableEntrypoint(id, "player", manifest.entrypoints.player);
+
+    const expectedEntitlement = `game:${id}`;
+    if (
+      !Array.isArray(manifest.commercial.entitlements) ||
+      manifest.commercial.entitlements.length === 0 ||
+      !manifest.commercial.entitlements.includes(expectedEntitlement)
+    ) {
+      manifestError(id, `missing-entitlement:${expectedEntitlement}`);
+    }
+
+    if (manifest.runtime.kind === "process") {
+      if (!manifest.runtime.command?.length) manifestError(id, "process-command");
+      if (!manifest.runtime.workingDirectoryEnv?.trim()) {
+        manifestError(id, "process-working-directory-env");
+      }
+      if (!manifest.runtime.healthProtocol?.trim()) {
+        manifestError(id, "process-health-protocol");
+      }
+
+      const port = manifest.runtime.port;
+      if (!Number.isInteger(port) || (port ?? 0) < 1024 || (port ?? 0) > 65535) {
+        manifestError(id, "process-port");
+      }
+      const existing = processPorts.get(port!);
+      if (existing) {
+        throw new Error(`manifest-duplicate-port:${port}:${existing}:${id}`);
+      }
+      processPorts.set(port!, id);
+    } else {
+      if (
+        manifest.runtime.command?.length ||
+        manifest.runtime.workingDirectoryEnv ||
+        manifest.runtime.port ||
+        manifest.runtime.healthProtocol ||
+        manifest.runtime.startPath
+      ) {
+        manifestError(id, "embedded-runtime-has-process-fields");
+      }
+    }
+  }
+}
+
 export class GameRegistry {
   constructor(
     private readonly license: StoreLicense,
     private readonly manifests: readonly GameManifestV1[] = BUILTIN_GAME_MANIFESTS,
-  ) {}
+  ) {
+    validateGameManifests(manifests);
+  }
 
   listAll(): GameManifestV1[] {
     return this.manifests.map((manifest) => structuredClone(manifest));
