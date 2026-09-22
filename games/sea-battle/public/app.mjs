@@ -93,14 +93,17 @@ for (let i = 0; i < 13; i++) {
 function makeBoat(color) {
   const group = new THREE.Group();
 
+  const hullMat = new THREE.MeshPhysicalMaterial({
+    color,
+    roughness: 0.42,
+    metalness: 0.12,
+    clearcoat: 0.45,
+    emissive: "#000000",
+    emissiveIntensity: 0,
+  });
   const hull = new THREE.Mesh(
     new THREE.BoxGeometry(2.4, 0.75, 4.5),
-    new THREE.MeshPhysicalMaterial({
-      color,
-      roughness: 0.42,
-      metalness: 0.12,
-      clearcoat: 0.45,
-    }),
+    hullMat,
   );
   hull.position.y = 0.55;
   hull.castShadow = true;
@@ -163,6 +166,22 @@ function makeBoat(color) {
   wake.position.set(0, 0.01, -3.5);
   group.add(wake);
   group.userData.wake = wake;
+  group.userData.hullMat = hullMat;
+
+  const flashMat = new THREE.MeshBasicMaterial({
+    color: "#ffe7a3",
+    transparent: true,
+    opacity: 0.95,
+    depthWrite: false,
+  });
+  for (const side of [-1, 1]) {
+    const flash = new THREE.Mesh(new THREE.SphereGeometry(0.42, 8, 6), flashMat.clone());
+    flash.position.set(side * 1.85, 0.92, 0);
+    flash.visible = false;
+    group.add(flash);
+    if (side < 0) group.userData.flashLeft = flash;
+    else group.userData.flashRight = flash;
+  }
 
   scene.add(group);
   return group;
@@ -511,6 +530,21 @@ function animate(now) {
       mesh.rotation.y += delta * Math.min(1, dt * 10);
       mesh.scale.setScalar(0.86 + boat.radius * 0.12);
       mesh.userData.wake.material.opacity = 0.12 + Math.min(0.42, boat.speed / 34);
+
+      const fireAge = state.time - (boat.lastFireAt ?? -999);
+      const firing = fireAge >= 0 && fireAge < 0.16;
+      mesh.userData.flashLeft.visible = firing && boat.lastFireSide < 0;
+      mesh.userData.flashRight.visible = firing && boat.lastFireSide > 0;
+      if (firing) {
+        const flashScale = 0.75 + (1 - fireAge / 0.16) * 1.4;
+        (boat.lastFireSide < 0 ? mesh.userData.flashLeft : mesh.userData.flashRight)
+          .scale.setScalar(flashScale);
+      }
+
+      const hitAge = state.time - (boat.lastHitAt ?? -999);
+      const hitGlow = hitAge >= 0 && hitAge < 0.24 ? 1 - hitAge / 0.24 : 0;
+      mesh.userData.hullMat.emissive.setRGB(hitGlow * 0.9, hitGlow * 0.14, hitGlow * 0.05);
+      mesh.userData.hullMat.emissiveIntensity = hitGlow * 1.7;
     }
 
     for (const crate of state.crates) {
