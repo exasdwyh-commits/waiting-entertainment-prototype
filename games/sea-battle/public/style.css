@@ -62,3 +62,11 @@ body:not(.display) #leaderboard{width:205px}
 
 body.hub-mode #display-tools{display:none}
 body.hub-admission #join-card{display:none}
+
+#broadside-ready{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:11px;font-size:8px;color:var(--muted)}
+#broadside-ready b{font-size:8px;color:#d6eef0;font-weight:700;letter-spacing:.6px}
+#broadside-ready span{min-width:52px;text-align:center;padding:7px 8px;border-radius:7px;background:#0a2931;border:1px solid #ffffff12;transition:.12s ease}
+#broadside-ready span.locked{background:#6b4a13;color:#ffe39b;border-color:#ffd16688;box-shadow:0 0 14px #ffb70355}
+#broadside-ready span.ready{background:#174d49;color:#8affec;border-color:#55e6df77;box-shadow:0 0 15px #55e6df55}
+body:not(.player-active) #broadside-ready,body.display #broadside-ready{display:none}
+@media(max-height:500px){#broadside-ready{bottom:9px}}
