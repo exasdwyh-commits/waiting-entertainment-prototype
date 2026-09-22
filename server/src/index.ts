@@ -102,11 +102,15 @@ httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`Waiting Entertainment authoritative server listening on :${PORT}`);
 });
 
-const shutdown = () => {
+let shuttingDown = false;
+const shutdown = async () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
   session.stop();
+  await platform.runtime.stopAll();
   io.close();
   httpServer.close(() => process.exit(0));
 };
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+process.on("SIGINT", () => void shutdown());
+process.on("SIGTERM", () => void shutdown());
