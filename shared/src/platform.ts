@@ -40,6 +40,7 @@ export interface GameManifestV1 {
   runtime: {
     kind: RuntimeKind;
     healthPath: string;
+    healthProtocol?: string;
     command?: string[];
     workingDirectoryEnv?: string;
     port?: number;
