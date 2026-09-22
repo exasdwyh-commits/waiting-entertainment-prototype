@@ -21,10 +21,10 @@ function parseEntitlements(value: string | undefined): string[] {
 
 function defaultEntitlements(plan: StoreLicense["plan"]): string[] {
   if (plan === "PRO") {
-    return ["game:table-push-king", "game:pilot-racer", "updates:pro"];
+    return ["game:table-push-king", "game:pilot-racer", "game:sea-battle", "updates:pro"];
   }
   if (plan === "CUSTOM") {
-    return ["game:table-push-king", "game:pilot-racer"];
+    return ["game:table-push-king", "game:pilot-racer", "game:sea-battle"];
   }
   return ["game:table-push-king", "game:pilot-racer"];
 }
