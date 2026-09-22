@@ -63,6 +63,25 @@ h3 { margin: 12px 0 6px; font-size: 18px; }
 .empty-stage p { max-width: 650px; line-height: 1.65; }
 .round-card--recruiting { box-shadow: inset 0 2px 0 rgba(141,247,203,.5), 0 18px 60px rgba(0,0,0,.18); }
 .round-card--running { box-shadow: inset 0 2px 0 rgba(121,168,255,.65), 0 18px 60px rgba(0,0,0,.18); }
+.round-card--degraded {
+  border-color: rgba(255,111,127,.28);
+  box-shadow: inset 0 2px 0 rgba(255,111,127,.72), 0 18px 60px rgba(0,0,0,.24);
+}
+.round-runtime-alert {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  margin: -4px 0 16px; padding: 13px 14px;
+  border: 1px solid rgba(255,111,127,.22); border-radius: 13px;
+  background: rgba(255,111,127,.055);
+}
+.round-runtime-alert > div:first-child { min-width: 0; }
+.round-runtime-alert span, .round-runtime-alert strong, .round-runtime-alert small { display: block; }
+.round-runtime-alert span { color: #ff7f8e; font-size: 9px; font-weight: 900; letter-spacing: .14em; }
+.round-runtime-alert strong { margin-top: 3px; color: #ffd6db; font-size: 14px; }
+.round-runtime-alert small {
+  margin-top: 4px; max-width: 70ch; color: #a87e85; font-size: 10px; line-height: 1.45;
+}
+.round-runtime-actions { display: flex; gap: 7px; flex: 0 0 auto; }
+.round-runtime-actions button { padding: 8px 10px; font-size: 10px; }
 .round-heading { display: flex; justify-content: space-between; align-items: flex-start; }
 .round-heading h2 { font-size: 30px; }
 .round-code { text-align: right; }
