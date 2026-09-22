@@ -45,6 +45,7 @@ export const BUILTIN_GAME_MANIFESTS: readonly GameManifestV1[] = [
     runtime: {
       kind: "process",
       healthPath: "/info",
+      healthProtocol: "pilot-racer/1",
       command: ["node", "server.mjs"],
       workingDirectoryEnv: "PILOT_RACER_DIR",
       port: 9010,
