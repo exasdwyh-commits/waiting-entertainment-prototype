@@ -105,6 +105,21 @@ button:disabled { cursor: not-allowed; opacity: .38; }
 .game-meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 14px; }
 .game-meta span { padding: 5px 7px; border-radius: 8px; color: #b6c0ce; background: rgba(255,255,255,.045); font-size: 10px; }
 .game-card button { width: 100%; }
+.runtime-badge {
+  display: inline-flex; align-items: center; gap: 6px; margin: 0 0 10px;
+  padding: 6px 8px; border-radius: 9px; border: 1px solid var(--line);
+  color: #9ba8b9; background: rgba(255,255,255,.025); font-size: 10px; font-weight: 800;
+}
+.runtime-badge::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: #6d7786;
+}
+.runtime-badge--online { color: #9ff5d5; border-color: rgba(141,247,203,.2); }
+.runtime-badge--online::before { background: #8df7cb; box-shadow: 0 0 10px rgba(141,247,203,.55); }
+.runtime-badge--error { color: #ffb1ba; border-color: rgba(255,111,127,.22); }
+.runtime-badge--error::before { background: #ff6f7f; }
+.runtime-message {
+  min-height: 28px; margin: -4px 0 10px; color: #697689; font-size: 10px; line-height: 1.4;
+}
 .queue-form { display: grid; grid-template-columns: 80px 1fr auto; gap: 8px; margin-bottom: 15px; align-items: end; }
 .queue-form label span { display: block; margin-bottom: 5px; color: var(--muted); font-size: 10px; }
 .queue-form input {
