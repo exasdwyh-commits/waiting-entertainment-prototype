@@ -95,12 +95,13 @@ export async function handlePlatformRequest(
 
   try {
     if (req.method === "GET" && url.pathname === "/api/platform") {
-      json(res, 200, hub.snapshot());
+      json(res, 200, await hub.snapshotFresh());
       return true;
     }
 
     if (req.method === "GET" && url.pathname === "/api/platform/games") {
       const games = hub.registry.listAuthorized();
+      await hub.runtime.refreshAll(games);
       json(res, 200, {
         license: hub.license,
         games,
@@ -217,7 +218,19 @@ export async function handlePlatformRequest(
 
     if (req.method === "GET" && url.pathname === "/api/platform/runtimes") {
       const games = hub.registry.listAuthorized();
+      await hub.runtime.refreshAll(games);
       json(res, 200, { runtimes: hub.runtime.list(games) });
+      return true;
+    }
+
+    const runtimeCheckMatch = url.pathname.match(
+      /^\/api\/platform\/runtimes\/([^/]+)\/check$/,
+    );
+    if (req.method === "POST" && runtimeCheckMatch) {
+      const manifest = hub.registry.requireAuthorized(runtimeCheckMatch[1]);
+      json(res, 200, {
+        runtime: await hub.runtime.refresh(manifest, true),
+      });
       return true;
     }
 
