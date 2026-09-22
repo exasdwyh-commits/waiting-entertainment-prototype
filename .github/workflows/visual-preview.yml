@@ -52,7 +52,7 @@ jobs:
 
       - name: Start Waiting Entertainment
         env:
-          WAITING_ROUND_MS: 60000
+          WAITING_ROUND_MS: 18000
         run: |
           npm run dev > /tmp/waiting-preview.log 2>&1 &
           echo $! > /tmp/waiting-preview.pid
