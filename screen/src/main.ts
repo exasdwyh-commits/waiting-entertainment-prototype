@@ -196,3 +196,7 @@ async function refresh() {
 
 void refresh();
 window.setInterval(() => void refresh(), 450);
+window.addEventListener("focus", () => void refresh());
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) void refresh();
+});
