@@ -79,6 +79,7 @@ function hubDisplayUrl(game: GameManifestV1): string {
   const base = entryUrl(game, "display");
   const url = new URL(base);
   url.searchParams.set("hub", "1");
+  url.searchParams.set("shellQueue", "1");
   return url.toString();
 }
 
@@ -168,18 +169,10 @@ async function refresh() {
       }
     }
 
-    const gameOwnsLiveQueueOverlay =
-      state.mode === "LIVE_GAME" && game?.runtime.kind === "embedded";
-
-    if (gameOwnsLiveQueueOverlay) {
-      // Embedded games can render the call inside their own DOM. External
-      // process games stay behind the shell-level overlay.
-      queueOverlay.hidden = true;
-      if (queueOverlayTimer !== undefined) {
-        window.clearTimeout(queueOverlayTimer);
-        queueOverlayTimer = undefined;
-      }
-    } else if (state.queueOverlay) {
+    // Queue calling is a platform concern. The Broadcast Shell owns this
+    // overlay for embedded and process games alike, so every Game Package gets
+    // identical venue behavior without implementing restaurant queue UI.
+    if (state.queueOverlay) {
       presentQueueCall(state.queueOverlay);
     } else {
       queueOverlay.hidden = true;
