@@ -72,11 +72,17 @@ function render() {
   const names = round.players.map((player) => '<span>' + esc(player.name) + '</span>').join("");
   const joinedState = joinedName
     ? '<div class="closed joined-wait"><strong>' +
-      (round.status === "running" ? "主持人已开局 · 正在进入游戏" : "报名成功 · 已锁定席位") +
+      (round.status === "running"
+        ? "主持人已开局 · 正在进入游戏"
+        : game?.runtime.kind === "process" && round.status === "locked"
+          ? "阵容已锁定 · 正在进入发车区"
+          : "报名成功 · 已锁定席位") +
       '</strong><span>' +
       (round.status === "running"
         ? "正在连接本轮游戏运行时…"
-        : "保持此页面打开，主持人开局后会自动进入游戏。") +
+        : game?.runtime.kind === "process" && round.status === "locked"
+          ? "先进入游戏等候区，主持人开局后统一发车。"
+          : "保持此页面打开，主持人开局后会自动进入游戏。") +
       '</span></div>'
     : "";
   root.innerHTML =
@@ -146,12 +152,18 @@ async function join(name: string) {
 }
 
 function launchGameIfReady() {
+  const processLobbyReady =
+    game?.runtime.kind === "process" &&
+    round?.status === "locked";
+  const gameReady =
+    round?.status === "running" || processLobbyReady;
+
   if (
     redirecting ||
     !joinedName ||
     !round ||
     !game ||
-    round.status !== "running"
+    !gameReady
   ) {
     return;
   }
