@@ -31,6 +31,46 @@ const pilotRuntime = games.runtimes.find((runtime) => runtime.gameId === "pilot-
 assert.equal(pilotRuntime.state, "not-configured");
 assert.equal(pilotRuntime.configured, false);
 
+const pilotSettingsBefore = games.gameSettings["pilot-racer"];
+assert.ok(Array.isArray(pilotSettingsBefore));
+assert.equal(
+  pilotSettingsBefore.find((setting) => setting.key === "laps")?.value,
+  3,
+);
+
+const savedPilotSettings = await api("/api/platform/runtimes/pilot-racer/settings", {
+  method: "POST",
+  body: JSON.stringify({
+    values: { trackId: "ridge", laps: 5, seconds: 180 },
+  }),
+});
+assert.equal(
+  savedPilotSettings.settings.find((setting) => setting.key === "trackId")?.value,
+  "ridge",
+);
+assert.equal(
+  savedPilotSettings.settings.find((setting) => setting.key === "laps")?.source,
+  "saved",
+);
+assert.equal(savedPilotSettings.appliesAfterRestart, false);
+
+const readPilotSettings = await api("/api/platform/runtimes/pilot-racer/settings");
+assert.equal(
+  readPilotSettings.settings.find((setting) => setting.key === "seconds")?.value,
+  180,
+);
+
+const invalidPilotSetting = await fetch(
+  base + "/api/platform/runtimes/pilot-racer/settings",
+  {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ values: { laps: 99 } }),
+  },
+);
+assert.equal(invalidPilotSetting.status, 400);
+assert.equal((await invalidPilotSetting.json()).error, "runtime-setting-max:laps");
+
 const embeddedCheck = await api("/api/platform/runtimes/table-push-king/check", {
   method: "POST",
   body: "{}",
@@ -152,4 +192,4 @@ const unconfiguredPilot = await fetch(base + "/api/platform/rounds", {
 assert.equal(unconfiguredPilot.status, 503);
 assert.equal((await unconfiguredPilot.json()).error, "runtime-not-configured");
 
-console.log("Platform smoke test passed: CORS, runtime diagnostics, single active round, round admission, configuration guard, independent queue and broadcast composition are healthy.");
+console.log("Platform smoke test passed: CORS, persistent game settings, runtime diagnostics, single active round, round admission, configuration guard, independent queue and broadcast composition are healthy.");
