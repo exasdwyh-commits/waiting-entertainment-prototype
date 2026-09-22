@@ -127,6 +127,27 @@ export class RoundManager {
     return round ? cloneRound(round) : undefined;
   }
 
+  activeForGame(gameId: string): EntertainmentRound | undefined {
+    this.expireStaleRounds();
+    const round = [...this.rounds.values()]
+      .filter(
+        (candidate) =>
+          candidate.gameId === gameId &&
+          ["recruiting", "locked", "running"].includes(candidate.status),
+      )
+      .sort((a, b) => b.createdAt - a.createdAt)[0];
+    return round ? cloneRound(round) : undefined;
+  }
+
+  isRegisteredParticipant(gameId: string, code: string, name: string): boolean {
+    const active = this.activeForGame(gameId);
+    if (!active) return true;
+    if (active.code !== code.trim().toUpperCase()) return false;
+    const normalizedName = name.trim();
+    if (!normalizedName) return false;
+    return active.players.some((player) => player.name === normalizedName);
+  }
+
   private expireStaleRounds(): void {
     const now = Date.now();
     for (const round of this.rounds.values()) {
