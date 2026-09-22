@@ -10,9 +10,17 @@ const platform = new PlatformHub();
 
 const httpServer = createServer(async (req, res) => {
   if (await handlePlatformRequest(req, res, platform)) return;
+
   if (req.url === "/health") {
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ ok: true, mode: "authoritative", topology: "single-local-session", platform: "hub-foundation" }));
+    res.end(
+      JSON.stringify({
+        ok: true,
+        mode: "authoritative",
+        topology: "single-local-session",
+        platform: "hub-foundation",
+      }),
+    );
     return;
   }
 
@@ -40,6 +48,15 @@ io.on("connection", (socket) => {
   socket.on("input", (payload: Partial<PlayerInput>) => {
     session.input(socket.id, payload ?? {});
   });
+
+  if (process.env.WAITING_STRESS_MODE === "1") {
+    socket.on(
+      "stress:force-fall",
+      (_payload: unknown, ack?: (value: { ok: boolean }) => void) => {
+        ack?.({ ok: session.debugForceFall(socket.id) });
+      },
+    );
+  }
 
   socket.on(
     "latency:ping",
