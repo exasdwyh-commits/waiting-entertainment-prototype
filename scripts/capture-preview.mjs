@@ -50,6 +50,21 @@ try {
     fullPage: true,
   });
 
+  // The management workspace is a release surface, not a hidden admin route.
+  // Capture it with an active round so runtime safety/ownership states are
+  // represented in the real browser output.
+  await host.locator('[data-view="games"]').click();
+  await host.locator(".management").waitFor({ timeout: 8_000 });
+  if ((await host.locator(".manage-card").count()) < 3) {
+    throw new Error("Game management did not render the full package catalog.");
+  }
+  await host.screenshot({
+    path: "docs/screenshots/hub-game-management.png",
+    fullPage: true,
+  });
+  await host.locator('[data-view="live"]').click();
+  await host.locator(".workspace").waitFor({ timeout: 8_000 });
+
   const screen = await browser.newPage({
     viewport: { width: 1600, height: 900 },
     deviceScaleFactor: 1,
