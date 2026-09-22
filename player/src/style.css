@@ -155,7 +155,8 @@ body,
 
 .joystick,
 .push,
-.grab {
+.grab,
+.combat-mini {
   pointer-events: auto;
 }
 
@@ -218,8 +219,56 @@ body,
 .action-cluster {
   display: flex;
   align-items: end;
-  gap: 14px;
+  gap: 12px;
   pointer-events: none;
+}
+
+.secondary-actions {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 8px;
+  align-items: end;
+  pointer-events: none;
+  transform: translateY(-10px);
+}
+
+.combat-mini {
+  width: clamp(58px, 11vw, 78px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 50%;
+  color: white;
+  display: grid;
+  place-content: center;
+  gap: 1px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 5px 0 rgba(15,23,42,.78), 0 9px 22px rgba(0,0,0,.24);
+  transition: transform .08s ease, filter .12s ease, opacity .12s ease;
+}
+
+.combat-mini.jump {
+  background: rgba(14,165,233,.88);
+}
+
+.combat-mini.kick {
+  background: rgba(168,85,247,.88);
+}
+
+.combat-mini span {
+  font-size: clamp(15px, 3vw, 21px);
+  font-weight: 1000;
+}
+
+.combat-mini small {
+  max-width: 58px;
+  font-size: 8px;
+  line-height: 1.1;
+  opacity: .7;
+}
+
+.combat-mini.active {
+  transform: translateY(4px) scale(.96);
+  box-shadow: 0 1px 0 rgba(15,23,42,.78), 0 3px 12px rgba(0,0,0,.2);
 }
 
 .grab {
@@ -368,6 +417,14 @@ body,
     width: min(22vw, 104px);
   }
 
+  .combat-mini {
+    width: min(15vw, 70px);
+  }
+
+  .secondary-actions {
+    gap: 5px;
+  }
+
   .stamina-hud {
     width: min(250px, 50vw);
     bottom: 8px;
@@ -407,8 +464,21 @@ body,
     width: min(20vh, 104px);
   }
 
+  .combat-mini {
+    width: min(14vh, 72px);
+  }
+
+  .combat-mini small {
+    display: none;
+  }
+
+  .secondary-actions {
+    gap: 6px;
+    transform: translateY(-6px);
+  }
+
   .action-cluster {
-    gap: 10px;
+    gap: 8px;
   }
 
   .stamina-hud {
@@ -493,7 +563,8 @@ body,
 
 .controller.spectating .joystick,
 .controller.spectating .push,
-.controller.spectating .grab {
+.controller.spectating .grab,
+.controller.spectating .combat-mini {
   pointer-events: none;
   opacity: .24;
   filter: grayscale(.8);
@@ -540,7 +611,8 @@ body,
 }
 
 .push.action-disabled,
-.grab.action-disabled {
+.grab.action-disabled,
+.combat-mini.action-disabled {
   pointer-events: none;
   filter: saturate(.45);
   opacity: .5;

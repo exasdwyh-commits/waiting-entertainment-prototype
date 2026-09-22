@@ -41,6 +41,8 @@ const STABLE_STATES = new Set([
   "pushing",
   "grabbing",
   "throwing",
+  "kicking",
+  "headbutting",
   "celebrate",
 ]);
 
@@ -91,6 +93,10 @@ function assertSnapshotHealthy(snapshot) {
     assert.ok(player.balance >= 0 && player.balance <= 1);
     assert.ok(Number.isFinite(player.stamina));
     assert.ok(player.stamina >= 0 && player.stamina <= 1);
+    assert.ok(Number.isFinite(player.koResistance));
+    assert.ok(player.koResistance >= 0 && player.koResistance <= 1);
+    assert.ok(Number.isFinite(player.struggleProgress));
+    assert.ok(player.struggleProgress >= 0 && player.struggleProgress <= 1);
     assert.ok(Number.isFinite(player.spawnProtectionLeftMs));
     assert.ok(player.spawnProtectionLeftMs >= 0);
     if (player.grabTargetId) {
@@ -181,6 +187,8 @@ try {
         attack: player.seq % 11 === 0,
         grab: false,
         sprint: player.seq % 4 !== 0,
+        jump: player.seq % 31 === 0,
+        kick: player.seq % 17 === 0,
       });
     }
   }, INPUT_INTERVAL_MS);
@@ -248,6 +256,8 @@ try {
         attack: player.seq % 7 === 0,
         grab: player.seq % 13 < 4,
         sprint: player.seq % 5 !== 0,
+        jump: player.seq % 29 === 0,
+        kick: player.seq % 11 === 0,
       });
     }
   }, INPUT_INTERVAL_MS);

@@ -32,6 +32,11 @@ const EVENT_HOLD_MS: Partial<Record<GameEvent["type"], number>> = {
   push_hit: 500,
   punch_hit: 0,
   heavy_hit: 950,
+  kick_hit: 620,
+  headbutt_hit: 900,
+  dropkick_hit: 1_250,
+  ko: 1_100,
+  struggle_break: 780,
   grab: 0,
   toss: 1_350,
   edge_save: 1_050,
@@ -107,8 +112,18 @@ export class BroadcastDirector {
       const label =
         event.type === "toss"
           ? "甩人特写"
-          : event.type === "heavy_hit"
-            ? "冲刺重击"
+          : event.type === "dropkick_hit"
+            ? "飞踢命中"
+            : event.type === "headbutt_hit"
+              ? "近身头槌"
+              : event.type === "ko"
+                ? "KO 时刻"
+                : event.type === "struggle_break"
+                  ? "极限挣脱"
+                  : event.type === "kick_hit"
+                    ? "桌边踢击"
+                    : event.type === "heavy_hit"
+                      ? "冲刺重击"
           : event.type === "big_fall"
             ? "击落跟拍"
             : event.type === "final_elimination"

@@ -25,6 +25,15 @@ type Slot = {
   balance: number;
   stamina: number;
   staminaRecoverAt: number;
+  koResistance: number;
+  koUntil: number;
+  wakeUntil: number;
+  struggleProgress: number;
+  lastStruggleAt: number;
+  jumpReadyAt: number;
+  airborneUntil: number;
+  dropkickArmedUntil: number;
+  kickReadyAt: number;
   sprinting: boolean;
   state: PlayerState;
   alive: boolean;
@@ -207,6 +216,8 @@ export class GameSession {
         slot.input.attack,
       grab: Boolean(raw.grab),
       sprint: Boolean(raw.sprint),
+      jump: Boolean(raw.jump) || slot.input.jump,
+      kick: Boolean(raw.kick) || slot.input.kick,
     };
     if (!slot.input.grab) slot.grabNeedsRelease = false;
   }
@@ -253,6 +264,15 @@ export class GameSession {
         balance: 1,
         stamina: GAME_TUNING.stamina.max,
         staminaRecoverAt: 0,
+        koResistance: GAME_TUNING.ko.maxResistance,
+        koUntil: 0,
+        wakeUntil: 0,
+        struggleProgress: 0,
+        lastStruggleAt: 0,
+        jumpReadyAt: 0,
+        airborneUntil: 0,
+        dropkickArmedUntil: 0,
+        kickReadyAt: 0,
         sprinting: false,
         state: "idle",
         alive: true,
@@ -296,6 +316,8 @@ export class GameSession {
       attack: false,
       grab: false,
       sprint: false,
+      jump: false,
+      kick: false,
     };
   }
 
@@ -323,6 +345,15 @@ export class GameSession {
       slot.balance = 1;
       slot.stamina = GAME_TUNING.stamina.max;
       slot.staminaRecoverAt = 0;
+      slot.koResistance = GAME_TUNING.ko.maxResistance;
+      slot.koUntil = 0;
+      slot.wakeUntil = 0;
+      slot.struggleProgress = 0;
+      slot.lastStruggleAt = 0;
+      slot.jumpReadyAt = 0;
+      slot.airborneUntil = 0;
+      slot.dropkickArmedUntil = 0;
+      slot.kickReadyAt = 0;
       slot.sprinting = false;
       slot.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
       slot.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
@@ -380,9 +411,22 @@ export class GameSession {
 
     for (const slot of this.slots) {
       if (!slot.alive) continue;
-      if (slot.carriedBy) continue;
 
       this.updateStamina(slot, now);
+      this.recoverKoResistance(slot, now);
+
+      if (slot.carriedBy) {
+        this.processCarriedStruggle(slot, now);
+        if (!slot.bot) {
+          slot.input.attack = false;
+          slot.input.push = false;
+          slot.input.jump = false;
+          slot.input.kick = false;
+        }
+        continue;
+      }
+
+      if (this.advanceKoState(slot, now)) continue;
       this.advanceRecovery(slot, now);
       if (this.advanceClimb(slot, now)) continue;
 
@@ -399,7 +443,13 @@ export class GameSession {
         this.tryGrab(slot, direction, now);
       }
 
+      const wantsJump = !slot.bot && slot.input.jump;
+      if (wantsJump) this.jump(slot, direction, now);
+
       this.drive(slot, direction, now);
+
+      const wantsKick = !slot.bot && slot.input.kick;
+      if (wantsKick) this.kickAction(slot, direction, now);
 
       const wantsAttack = slot.bot
         ? this.shouldBotPush(slot, now)
@@ -413,6 +463,8 @@ export class GameSession {
       if (!slot.bot) {
         slot.input.attack = false;
         slot.input.push = false;
+        slot.input.jump = false;
+        slot.input.kick = false;
       }
 
       this.stabilizeStanding(slot, now);
@@ -540,6 +592,15 @@ export class GameSession {
     slot.balance = 0.72;
     slot.stamina = Math.max(slot.stamina, 0.58);
     slot.staminaRecoverAt = now + 250;
+    slot.koResistance = Math.max(slot.koResistance, GAME_TUNING.ko.wakeRecovery);
+    slot.koUntil = 0;
+    slot.wakeUntil = 0;
+    slot.struggleProgress = 0;
+    slot.lastStruggleAt = 0;
+    slot.jumpReadyAt = now + 350;
+    slot.airborneUntil = 0;
+    slot.dropkickArmedUntil = 0;
+    slot.kickReadyAt = now + 350;
     slot.sprinting = false;
     slot.edgeHanging = false;
     slot.edgeHangUntil = 0;
@@ -716,6 +777,8 @@ export class GameSession {
       slot.edgeHanging ||
       slot.state === "hit" ||
       slot.state === "ragdoll" ||
+      slot.state === "ko" ||
+      slot.state === "waking" ||
       slot.state === "climbing" ||
       now < slot.knockedUntil;
 
@@ -758,7 +821,7 @@ export class GameSession {
     );
     target.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     target.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
-    target.state = "carried";
+    target.state = target.koUntil > now ? "ko" : "carried";
     return true;
   }
 
@@ -842,6 +905,8 @@ export class GameSession {
     slot.facingYaw = Math.atan2(dir.x, dir.z);
 
     best.carriedBy = slot.id;
+    best.struggleProgress = 0;
+    best.lastStruggleAt = 0;
     best.edgeHanging = false;
     best.body.setGravityScale(0, true);
     best.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -947,9 +1012,14 @@ export class GameSession {
   private dropTossTarget(slot: Slot, target: Slot, now: number) {
     target.body.setGravityScale(1, true);
     target.carriedBy = undefined;
-    target.state = "ragdoll";
+    target.struggleProgress = 0;
+    target.lastStruggleAt = 0;
+    target.state = target.koUntil > now ? "ko" : "ragdoll";
     target.balance = Math.min(target.balance, 0.28);
-    target.knockedUntil = Math.max(target.knockedUntil, now + 260);
+    target.knockedUntil = Math.max(
+      target.knockedUntil,
+      target.koUntil > now ? target.koUntil : now + 260,
+    );
     this.clearToss(slot);
   }
 
@@ -963,6 +1033,14 @@ export class GameSession {
 
   private advanceRecovery(slot: Slot, now: number) {
     if (slot.edgeHanging || slot.state === "climbing") return;
+
+    if (slot.state === "dropkicking" && now >= slot.pushStateUntil) {
+      slot.state = "ragdoll";
+      slot.knockedUntil = Math.max(
+        slot.knockedUntil,
+        now + GAME_TUNING.dropkick.selfKnockdownMs,
+      );
+    }
 
     if ((slot.state === "hit" || slot.state === "ragdoll") && now >= slot.knockedUntil) {
       slot.state = "recovering";
@@ -1035,6 +1113,8 @@ export class GameSession {
       slot.state === "pushing" ||
       slot.state === "grabbing" ||
       slot.state === "throwing" ||
+      slot.state === "kicking" ||
+      slot.state === "headbutting" ||
       slot.state === "celebrate";
 
     if (!stableState) return;
@@ -1210,12 +1290,24 @@ export class GameSession {
 
     const magnitude = Math.hypot(direction.x, direction.z);
     const attackLocked =
-      (slot.state === "pushing" || slot.state === "throwing") &&
+      (
+        slot.state === "pushing" ||
+        slot.state === "throwing" ||
+        slot.state === "kicking" ||
+        slot.state === "headbutting" ||
+        slot.state === "dropkicking"
+      ) &&
       now < slot.pushStateUntil;
+    const jumping = slot.state === "jumping" && now < slot.airborneUntil;
 
     if (magnitude < 0.05) {
       slot.sprinting = false;
-      if (slot.state !== "recovering" && !attackLocked && !slot.tossTargetId) {
+      if (
+        slot.state !== "recovering" &&
+        !attackLocked &&
+        !jumping &&
+        !slot.tossTargetId
+      ) {
         slot.state = "idle";
       }
       return;
@@ -1264,6 +1356,7 @@ export class GameSession {
     if (
       slot.state !== "recovering" &&
       !attackLocked &&
+      !jumping &&
       !slot.tossTargetId
     ) {
       slot.state = "moving";
@@ -1303,6 +1396,470 @@ export class GameSession {
         true,
       );
     }
+  }
+
+
+  private recoverKoResistance(slot: Slot, now: number) {
+    if (
+      slot.state === "ko" ||
+      slot.state === "waking" ||
+      now - slot.lastHitAt < 1_000
+    ) {
+      return;
+    }
+
+    slot.koResistance = clamp(
+      slot.koResistance +
+        GAME_TUNING.ko.passiveRecoveryPerSecond / PHYSICS_HZ,
+      0,
+      GAME_TUNING.ko.maxResistance,
+    );
+  }
+
+  private advanceKoState(slot: Slot, now: number) {
+    if (slot.state === "ko") {
+      slot.sprinting = false;
+      if (now < slot.koUntil) return true;
+
+      slot.state = "waking";
+      slot.wakeUntil = now + GAME_TUNING.ko.wakeDurationMs;
+      slot.invulnerableUntil = Math.max(
+        slot.invulnerableUntil,
+        slot.wakeUntil + GAME_TUNING.ko.wakeProtectionMs,
+      );
+      slot.koResistance = Math.max(
+        slot.koResistance,
+        GAME_TUNING.ko.wakeRecovery,
+      );
+      this.emitEvent("wake", now, slot.id, undefined, 0.38);
+      return true;
+    }
+
+    if (slot.state === "waking") {
+      slot.sprinting = false;
+      if (now < slot.wakeUntil) return true;
+      this.snapUpright(slot);
+      slot.balance = Math.max(slot.balance, 0.58);
+      slot.state = "recovering";
+      slot.recoverUntil = now + 260;
+    }
+
+    return false;
+  }
+
+  private enterKo(slot: Slot, now: number, actorId?: string) {
+    if (slot.state === "ko" || slot.state === "waking") return;
+
+    if (slot.tossTargetId) {
+      const carried = this.slots.find(
+        (candidate) =>
+          candidate.id === slot.tossTargetId &&
+          candidate.carriedBy === slot.id,
+      );
+      if (carried) this.dropTossTarget(slot, carried, now);
+      else this.clearToss(slot);
+    }
+
+    const deficit = clamp(
+      1 - slot.koResistance / GAME_TUNING.ko.maxResistance,
+      0,
+      1,
+    );
+    const duration =
+      GAME_TUNING.ko.minDurationMs +
+      (GAME_TUNING.ko.maxDurationMs - GAME_TUNING.ko.minDurationMs) *
+        deficit;
+
+    slot.state = "ko";
+    slot.koUntil = now + duration;
+    slot.knockedUntil = Math.max(slot.knockedUntil, slot.koUntil);
+    slot.balance = Math.min(slot.balance, 0.08);
+    slot.sprinting = false;
+    slot.body.applyTorqueImpulse(
+      { x: 0.12, y: 0.04, z: -0.1 },
+      true,
+    );
+    this.emitEvent("ko", now, actorId, slot.id, clamp(0.72 + deficit * 0.28, 0, 1));
+  }
+
+  private applyKoDamage(
+    slot: Slot,
+    amount: number,
+    now: number,
+    actorId?: string,
+  ) {
+    if (now < slot.invulnerableUntil || slot.state === "ko") return;
+    slot.koResistance = clamp(
+      slot.koResistance - amount,
+      0,
+      GAME_TUNING.ko.maxResistance,
+    );
+    if (slot.koResistance <= 0.001) this.enterKo(slot, now, actorId);
+  }
+
+  private processCarriedStruggle(slot: Slot, now: number) {
+    const holder = this.slots.find(
+      (candidate) => candidate.id === slot.carriedBy && candidate.alive,
+    );
+    if (!holder) {
+      slot.carriedBy = undefined;
+      slot.body.setGravityScale(1, true);
+      return;
+    }
+
+    if (slot.koUntil > now) {
+      slot.state = "ko";
+      slot.struggleProgress = 0;
+      return;
+    }
+
+    if (slot.koUntil > 0 && now >= slot.koUntil) {
+      slot.koUntil = 0;
+      slot.koResistance = Math.max(
+        slot.koResistance,
+        GAME_TUNING.ko.wakeRecovery,
+      );
+      slot.state = "carried";
+      this.emitEvent("wake", now, slot.id, undefined, 0.3);
+    }
+
+    slot.struggleProgress = Math.max(
+      0,
+      slot.struggleProgress -
+        GAME_TUNING.struggle.decayPerSecond / PHYSICS_HZ,
+    );
+
+    if (slot.bot) return;
+    const pressed = slot.input.attack || slot.input.push || slot.input.kick;
+    if (
+      !pressed ||
+      now - slot.lastStruggleAt < GAME_TUNING.struggle.minPressIntervalMs ||
+      !this.spendStamina(slot, GAME_TUNING.stamina.struggleCost, now)
+    ) {
+      return;
+    }
+
+    slot.lastStruggleAt = now;
+    slot.struggleProgress += GAME_TUNING.struggle.perPress;
+    holder.stamina = clamp(
+      holder.stamina - GAME_TUNING.struggle.holderStaminaDamage,
+      0,
+      GAME_TUNING.stamina.max,
+    );
+
+    if (slot.struggleProgress + 1e-6 < GAME_TUNING.struggle.breakThreshold) {
+      return;
+    }
+
+    const hp = holder.body.translation();
+    const sp = slot.body.translation();
+    const away = normalize(sp.x - hp.x, sp.z - hp.z);
+    this.dropTossTarget(holder, slot, now);
+    slot.struggleProgress = 0;
+    slot.state = "recovering";
+    slot.recoverUntil = now + 260;
+    slot.body.applyImpulse(
+      { x: away.x * 1.2, y: 0.32, z: away.z * 1.2 },
+      true,
+    );
+    holder.state = "hit";
+    holder.knockedUntil = Math.max(holder.knockedUntil, now + 180);
+    this.emitEvent("struggle_break", now, slot.id, holder.id, 0.72);
+  }
+
+  private jump(
+    slot: Slot,
+    direction: { x: number; z: number },
+    now: number,
+  ) {
+    if (
+      slot.edgeHanging ||
+      slot.tossTargetId ||
+      now < slot.invulnerableUntil ||
+      now < slot.jumpReadyAt ||
+      now < slot.knockedUntil ||
+      slot.state === "ko" ||
+      slot.state === "waking"
+    ) {
+      return false;
+    }
+
+    if (!this.spendStamina(slot, GAME_TUNING.stamina.jumpCost, now)) {
+      return false;
+    }
+
+    let dx = direction.x;
+    let dz = direction.z;
+    if (Math.hypot(dx, dz) < 0.05) {
+      dx = Math.sin(slot.facingYaw);
+      dz = Math.cos(slot.facingYaw);
+    }
+    const dir = normalize(dx, dz);
+    const velocity = slot.body.linvel();
+    const speed = Math.hypot(velocity.x, velocity.z);
+    const sprintArmed =
+      slot.sprinting ||
+      (!slot.bot &&
+        slot.input.sprint &&
+        speed >= GAME_TUNING.movement.maxHorizontalSpeed * 0.55);
+
+    slot.facingYaw = Math.atan2(dir.x, dir.z);
+    slot.jumpReadyAt = now + GAME_TUNING.jump.cooldownMs;
+    slot.airborneUntil = now + GAME_TUNING.jump.airborneWindowMs;
+    slot.dropkickArmedUntil = sprintArmed ? slot.airborneUntil : 0;
+    slot.state = "jumping";
+    slot.sprinting = false;
+    slot.body.applyImpulse(
+      {
+        x: dir.x * GAME_TUNING.jump.forwardImpulse,
+        y: GAME_TUNING.jump.verticalImpulse,
+        z: dir.z * GAME_TUNING.jump.forwardImpulse,
+      },
+      true,
+    );
+    return true;
+  }
+
+  private kickAction(
+    slot: Slot,
+    direction: { x: number; z: number },
+    now: number,
+  ) {
+    if (
+      !slot.alive ||
+      slot.edgeHanging ||
+      now < slot.invulnerableUntil ||
+      now < slot.kickReadyAt ||
+      now < slot.knockedUntil
+    ) {
+      return false;
+    }
+
+    if (slot.tossTargetId) {
+      return this.headbutt(slot, now);
+    }
+
+    if (now < slot.dropkickArmedUntil) {
+      return this.dropkick(slot, direction, now);
+    }
+
+    if (!this.spendStamina(slot, GAME_TUNING.stamina.kickCost, now)) {
+      return false;
+    }
+
+    let dx = direction.x;
+    let dz = direction.z;
+    if (Math.hypot(dx, dz) < 0.05) {
+      dx = Math.sin(slot.facingYaw);
+      dz = Math.cos(slot.facingYaw);
+    }
+    const dir = normalize(dx, dz);
+
+    slot.facingYaw = Math.atan2(dir.x, dir.z);
+    slot.kickReadyAt = now + GAME_TUNING.kick.cooldownMs;
+    slot.pushStateUntil = now + GAME_TUNING.kick.animationHoldMs;
+    slot.state = "kicking";
+
+    const origin = slot.body.translation();
+    for (const target of this.slots) {
+      if (
+        target === slot ||
+        !target.alive ||
+        target.carriedBy ||
+        now < target.invulnerableUntil
+      ) {
+        continue;
+      }
+
+      const p = target.body.translation();
+      const rx = p.x - origin.x;
+      const rz = p.z - origin.z;
+      const distance = Math.hypot(rx, rz);
+      if (distance > GAME_TUNING.kick.hitRange || distance < 0.001) continue;
+
+      const radial = normalize(rx, rz);
+      const facing = dir.x * radial.x + dir.z * radial.z;
+      if (facing < GAME_TUNING.kick.minimumFacingDot) continue;
+
+      const proneBonus =
+        target.state === "ragdoll" ||
+        target.state === "recovering" ||
+        target.state === "edge_hang"
+          ? 1.22
+          : 1;
+      target.body.applyImpulseAtPoint(
+        {
+          x: radial.x * GAME_TUNING.kick.strength * proneBonus,
+          y: GAME_TUNING.kick.verticalHitImpulse,
+          z: radial.z * GAME_TUNING.kick.strength * proneBonus,
+        },
+        { x: p.x, y: p.y + 0.2, z: p.z },
+        true,
+      );
+      target.balance = clamp(
+        target.balance - GAME_TUNING.kick.balanceLoss * proneBonus,
+        GAME_TUNING.balance.minimumAfterHit,
+        1,
+      );
+      target.state = "hit";
+      target.knockedUntil = Math.max(
+        target.knockedUntil,
+        now + GAME_TUNING.kick.staggerMs,
+      );
+      target.lastHitBy = slot.id;
+      target.lastHitAt = now;
+      this.applyKoDamage(
+        target,
+        GAME_TUNING.ko.kickDamage * proneBonus,
+        now,
+        slot.id,
+      );
+      this.emitEvent("kick_hit", now, slot.id, target.id, 0.58 * proneBonus);
+      break;
+    }
+
+    return true;
+  }
+
+  private headbutt(slot: Slot, now: number) {
+    const target = this.slots.find(
+      (candidate) =>
+        candidate.id === slot.tossTargetId &&
+        candidate.carriedBy === slot.id &&
+        candidate.alive,
+    );
+    if (!target) return false;
+    if (!this.spendStamina(slot, GAME_TUNING.stamina.headbuttCost, now)) {
+      return false;
+    }
+
+    slot.kickReadyAt = now + GAME_TUNING.headbutt.cooldownMs;
+    slot.pushStateUntil = now + GAME_TUNING.headbutt.animationHoldMs;
+    slot.state = "headbutting";
+    slot.balance = Math.max(
+      GAME_TUNING.balance.minimumAfterHit,
+      slot.balance - GAME_TUNING.headbutt.selfBalanceLoss,
+    );
+
+    target.balance = clamp(
+      target.balance - GAME_TUNING.headbutt.balanceLoss,
+      GAME_TUNING.balance.minimumAfterHit,
+      1,
+    );
+    target.lastHitBy = slot.id;
+    target.lastHitAt = now;
+    this.applyKoDamage(
+      target,
+      GAME_TUNING.headbutt.koDamage,
+      now,
+      slot.id,
+    );
+    this.emitEvent("headbutt_hit", now, slot.id, target.id, 0.78);
+    return true;
+  }
+
+  private dropkick(
+    slot: Slot,
+    direction: { x: number; z: number },
+    now: number,
+  ) {
+    if (!this.spendStamina(slot, GAME_TUNING.stamina.dropkickCost, now)) {
+      return false;
+    }
+
+    let dx = direction.x;
+    let dz = direction.z;
+    if (Math.hypot(dx, dz) < 0.05) {
+      dx = Math.sin(slot.facingYaw);
+      dz = Math.cos(slot.facingYaw);
+    }
+    const dir = normalize(dx, dz);
+
+    slot.facingYaw = Math.atan2(dir.x, dir.z);
+    slot.dropkickArmedUntil = 0;
+    slot.airborneUntil = Math.max(slot.airborneUntil, now + 220);
+    slot.kickReadyAt = now + GAME_TUNING.dropkick.cooldownMs;
+    slot.pushReadyAt = Math.max(slot.pushReadyAt, slot.kickReadyAt);
+    slot.pushStateUntil = now + GAME_TUNING.dropkick.animationHoldMs;
+    slot.state = "dropkicking";
+    slot.sprinting = false;
+    slot.body.applyImpulse(
+      {
+        x: dir.x * GAME_TUNING.dropkick.forwardImpulse,
+        y: GAME_TUNING.dropkick.verticalImpulse,
+        z: dir.z * GAME_TUNING.dropkick.forwardImpulse,
+      },
+      true,
+    );
+
+    const origin = slot.body.translation();
+    let hit = false;
+    for (const target of this.slots) {
+      if (
+        target === slot ||
+        !target.alive ||
+        target.carriedBy ||
+        now < target.invulnerableUntil
+      ) {
+        continue;
+      }
+
+      const p = target.body.translation();
+      const rx = p.x - origin.x;
+      const rz = p.z - origin.z;
+      const distance = Math.hypot(rx, rz);
+      if (
+        distance > GAME_TUNING.dropkick.hitRange ||
+        distance < 0.001
+      ) {
+        continue;
+      }
+
+      const radial = normalize(rx, rz);
+      const facing = dir.x * radial.x + dir.z * radial.z;
+      if (facing < GAME_TUNING.dropkick.minimumFacingDot) continue;
+
+      target.body.applyImpulseAtPoint(
+        {
+          x: radial.x * GAME_TUNING.dropkick.strength,
+          y: GAME_TUNING.dropkick.verticalHitImpulse,
+          z: radial.z * GAME_TUNING.dropkick.strength,
+        },
+        { x: p.x, y: p.y + 0.42, z: p.z },
+        true,
+      );
+      target.body.applyTorqueImpulse(
+        { x: radial.z * 0.34, y: 0.12, z: -radial.x * 0.34 },
+        true,
+      );
+      target.balance = clamp(
+        target.balance - GAME_TUNING.dropkick.balanceLoss,
+        GAME_TUNING.balance.minimumAfterHit,
+        1,
+      );
+      target.state = "ragdoll";
+      target.knockedUntil = Math.max(
+        target.knockedUntil,
+        now + GAME_TUNING.dropkick.targetKnockdownMs,
+      );
+      target.lastHitBy = slot.id;
+      target.lastHitAt = now;
+      this.applyKoDamage(
+        target,
+        GAME_TUNING.dropkick.koDamage,
+        now,
+        slot.id,
+      );
+      this.emitEvent("dropkick_hit", now, slot.id, target.id, 1);
+      hit = true;
+      break;
+    }
+
+    slot.body.applyTorqueImpulse(
+      { x: dir.z * 0.24, y: hit ? 0.08 : 0.14, z: -dir.x * 0.24 },
+      true,
+    );
+    return true;
   }
 
   private shouldBotGrab(slot: Slot, now: number) {
@@ -1506,6 +2063,12 @@ export class GameSession {
       );
       target.lastHitBy = slot.id;
       target.lastHitAt = now;
+      this.applyKoDamage(
+        target,
+        GAME_TUNING.ko.punchDamage * distanceScale,
+        now,
+        slot.id,
+      );
       this.emitEvent(
         "punch_hit",
         now,
@@ -1615,6 +2178,12 @@ export class GameSession {
         impact * GAME_TUNING.balance.knockdownImpactMs;
       target.lastHitBy = slot.id;
       target.lastHitAt = now;
+      this.applyKoDamage(
+        target,
+        GAME_TUNING.ko.heavyDamage * (0.65 + impact * 0.55),
+        now,
+        slot.id,
+      );
       this.emitEvent("heavy_hit", now, slot.id, target.id, impact);
     }
   }
@@ -1785,6 +2354,16 @@ export class GameSession {
           balance: slot.balance,
           stamina: clamp(
             slot.stamina / GAME_TUNING.stamina.max,
+            0,
+            1,
+          ),
+          koResistance: clamp(
+            slot.koResistance / GAME_TUNING.ko.maxResistance,
+            0,
+            1,
+          ),
+          struggleProgress: clamp(
+            slot.struggleProgress / GAME_TUNING.struggle.breakThreshold,
             0,
             1,
           ),

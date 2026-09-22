@@ -45,6 +45,16 @@ root.innerHTML = `
           <span>抓取</span>
           <small>按住</small>
         </button>
+        <div class="secondary-actions">
+          <button class="combat-mini jump" id="jump" type="button">
+            <span>跳</span>
+            <small>闪避/飞踢</small>
+          </button>
+          <button class="combat-mini kick" id="kick" type="button">
+            <span>踢</span>
+            <small>倒地/桌边</small>
+          </button>
+        </div>
         <button class="push attack" id="push" type="button">
           <span>出拳</span>
           <small>快速攻击</small>
@@ -73,6 +83,12 @@ const pushHint = pushButton.querySelector<HTMLElement>("small")!;
 const grabButton = document.querySelector<HTMLButtonElement>("#grab")!;
 const grabLabel = grabButton.querySelector<HTMLElement>("span")!;
 const grabHint = grabButton.querySelector<HTMLElement>("small")!;
+const jumpButton = document.querySelector<HTMLButtonElement>("#jump")!;
+const jumpLabel = jumpButton.querySelector<HTMLElement>("span")!;
+const jumpHint = jumpButton.querySelector<HTMLElement>("small")!;
+const kickButton = document.querySelector<HTMLButtonElement>("#kick")!;
+const kickLabel = kickButton.querySelector<HTMLElement>("span")!;
+const kickHint = kickButton.querySelector<HTMLElement>("small")!;
 const stage = document.querySelector<HTMLDivElement>("#personal-stage")!;
 const controllerEl = document.querySelector<HTMLElement>(".controller")!;
 const debugPanel = document.querySelector<HTMLElement>("#debug-panel")!;
@@ -114,12 +130,15 @@ let moveX = 0;
 let moveY = 0;
 let pushing = false;
 let grabbing = false;
+let jumping = false;
+let kicking = false;
 let sprinting = false;
 let activePointer: number | null = null;
 let inputSeq = 0;
 let pushCooldownLeftMs = 0;
 let eliminated = false;
 let actionDisabled = false;
+let carriedMode = false;
 let rttMs = 0;
 let snapshotCounter = 0;
 let snapshotRate = 0;
@@ -251,6 +270,11 @@ socket.on("game:event", (event: GameEvent) => {
       event.type === "push_hit" ||
       event.type === "punch_hit" ||
       event.type === "heavy_hit" ||
+      event.type === "kick_hit" ||
+      event.type === "headbutt_hit" ||
+      event.type === "dropkick_hit" ||
+      event.type === "ko" ||
+      event.type === "struggle_break" ||
       event.type === "grab" ||
       event.type === "toss"
     )
@@ -270,13 +294,15 @@ socket.on("game:event", (event: GameEvent) => {
 
     if ("vibrate" in navigator) {
       navigator.vibrate(
-        event.type === "toss"
+        event.type === "toss" || event.type === "dropkick_hit"
           ? [24, 18, 36]
-          : event.type === "heavy_hit"
+          : event.type === "heavy_hit" || event.type === "headbutt_hit"
             ? [22, 12, 30]
-            : event.type === "grab"
-              ? 12
-              : 16,
+            : event.type === "ko"
+              ? [35, 22, 45]
+              : event.type === "grab"
+                ? 12
+                : 16,
       );
     }
   }
@@ -334,30 +360,66 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
     : undefined;
 
   const spawnProtected = me.spawnProtectionLeftMs > 0;
-  actionDisabled = me.state === "carried";
+  const carried = me.state === "carried";
+  carriedMode = carried;
+  const incapacitated = me.state === "ko" || me.state === "waking";
+  actionDisabled = incapacitated;
   const attackDisabled =
-    actionDisabled || spawnProtected || pushCooldownLeftMs > 45;
+    incapacitated ||
+    spawnProtected ||
+    (!carried && pushCooldownLeftMs > 45);
   const grabDisabled =
-    actionDisabled ||
+    incapacitated ||
+    carried ||
     spawnProtected ||
     me.state === "throwing" ||
+    me.state === "edge_hang" ||
+    me.state === "climbing";
+  const jumpDisabled =
+    incapacitated ||
+    carried ||
+    spawnProtected ||
+    me.state === "edge_hang" ||
+    me.state === "climbing" ||
+    Boolean(grabbedTarget);
+  const kickDisabled =
+    incapacitated ||
+    carried ||
+    spawnProtected ||
     me.state === "edge_hang" ||
     me.state === "climbing";
 
   pushButton.classList.toggle("action-disabled", attackDisabled);
   grabButton.classList.toggle("action-disabled", grabDisabled);
+  jumpButton.classList.toggle("action-disabled", jumpDisabled);
+  kickButton.classList.toggle("action-disabled", kickDisabled);
   grabButton.classList.toggle("holding", Boolean(grabbedTarget));
+
+  jumpLabel.textContent = "跳";
+  jumpHint.textContent = me.sprinting ? "接踢=飞踢" : "闪避/走位";
+  kickLabel.textContent = grabbedTarget ? "头槌" : "踢";
+  kickHint.textContent = grabbedTarget ? "近身压制" : "倒地/桌边";
 
   if (spawnProtected) {
     pushLabel.textContent = "保护中";
     pushHint.textContent = "先找位置";
     grabLabel.textContent = "保护中";
     grabHint.textContent = "短暂无敌";
+  } else if (me.state === "ko") {
+    pushLabel.textContent = "昏迷";
+    pushHint.textContent = "等待醒来";
+    grabLabel.textContent = "KO";
+    grabHint.textContent = "暂时失控";
+  } else if (me.state === "waking") {
+    pushLabel.textContent = "起身";
+    pushHint.textContent = "短暂保护";
+    grabLabel.textContent = "恢复";
+    grabHint.textContent = "马上可动";
   } else if (me.state === "carried") {
-    pushLabel.textContent = "被抓住";
-    pushHint.textContent = "挣脱中";
-    grabLabel.textContent = "被控制";
-    grabHint.textContent = "等机会";
+    pushLabel.textContent = "挣脱";
+    pushHint.textContent = Math.round(me.struggleProgress * 100) + "% · 连按";
+    grabLabel.textContent = "被抓住";
+    grabHint.textContent = "连续攻击";
   } else if (grabbedTarget) {
     pushLabel.textContent = "甩飞";
     pushHint.textContent = "按摇杆方向";
@@ -396,9 +458,22 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
   } else if (me.state === "grabbing") {
     statePill.textContent = "抓住了！移动可以拖走 · 攻击键甩飞";
   } else if (me.state === "carried") {
-    statePill.textContent = "被抓住了！";
+    statePill.textContent =
+      "被抓住！连按攻击挣脱 · " + Math.round(me.struggleProgress * 100) + "%";
   } else if (me.state === "throwing") {
     statePill.textContent = "甩出去！";
+  } else if (me.state === "jumping") {
+    statePill.textContent = "空中！冲刺跳后按踢 = 飞踢";
+  } else if (me.state === "kicking") {
+    statePill.textContent = "踢击！";
+  } else if (me.state === "headbutting") {
+    statePill.textContent = "头槌！抓住对手时可持续压制";
+  } else if (me.state === "dropkicking") {
+    statePill.textContent = "飞踢！高风险高击飞";
+  } else if (me.state === "ko") {
+    statePill.textContent = "KO · 暂时昏迷";
+  } else if (me.state === "waking") {
+    statePill.textContent = "正在醒来 · 短暂保护";
   } else if (me.state === "edge_hang") {
     statePill.textContent = "抓住了！摇杆推向桌内";
   } else if (me.state === "climbing") {
@@ -431,6 +506,8 @@ function sendInput() {
     attack: pushing,
     grab: grabbing,
     sprint: sprinting,
+    jump: jumping,
+    kick: kicking,
   });
 }
 
@@ -487,7 +564,7 @@ joystick.addEventListener("pointercancel", releaseStick);
 
 pushButton.addEventListener("pointerdown", () => {
   if (eliminated || actionDisabled) return;
-  if (pushCooldownLeftMs > 45) {
+  if (!carriedMode && pushCooldownLeftMs > 45) {
     if ("vibrate" in navigator) navigator.vibrate(7);
     return;
   }
@@ -526,17 +603,65 @@ grabButton.addEventListener("pointerup", releaseGrab);
 grabButton.addEventListener("pointercancel", releaseGrab);
 grabButton.addEventListener("pointerleave", releaseGrab);
 
+jumpButton.addEventListener("pointerdown", () => {
+  if (
+    eliminated ||
+    actionDisabled ||
+    jumpButton.classList.contains("action-disabled")
+  ) return;
+  jumping = true;
+  jumpButton.classList.add("active");
+  if ("vibrate" in navigator) navigator.vibrate(10);
+  sendInput();
+});
+
+function releaseJump() {
+  jumping = false;
+  jumpButton.classList.remove("active");
+  sendInput();
+}
+
+jumpButton.addEventListener("pointerup", releaseJump);
+jumpButton.addEventListener("pointercancel", releaseJump);
+jumpButton.addEventListener("pointerleave", releaseJump);
+
+kickButton.addEventListener("pointerdown", () => {
+  if (
+    eliminated ||
+    actionDisabled ||
+    kickButton.classList.contains("action-disabled")
+  ) return;
+  kicking = true;
+  kickButton.classList.add("active");
+  if ("vibrate" in navigator) navigator.vibrate(14);
+  sendInput();
+});
+
+function releaseKick() {
+  kicking = false;
+  kickButton.classList.remove("active");
+  sendInput();
+}
+
+kickButton.addEventListener("pointerup", releaseKick);
+kickButton.addEventListener("pointercancel", releaseKick);
+kickButton.addEventListener("pointerleave", releaseKick);
+
 function clearHeldInput() {
   moveX = 0;
   moveY = 0;
   pushing = false;
   grabbing = false;
+  jumping = false;
+  kicking = false;
   sprinting = false;
   activePointer = null;
   stick.style.transform = "translate(0, 0)";
   joystick.classList.remove("sprinting");
   pushButton.classList.remove("active");
   grabButton.classList.remove("active");
+  jumpButton.classList.remove("active");
+  kickButton.classList.remove("active");
   sendInput();
 }
 
