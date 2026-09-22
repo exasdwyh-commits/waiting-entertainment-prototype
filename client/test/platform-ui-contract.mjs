@@ -28,6 +28,8 @@ assert.match(screenCss, /\.runtime-alert \{/);
 assert.match(screenCss, /z-index: 16/);
 assert.match(screenCss, /\.queue-overlay \{\s*position: absolute; z-index: 20/);
 assert.match(screen, /shellQueue/);
+assert.match(screen, /refreshIssued/);
+assert.match(screen, /refreshId < refreshApplied/);
 assert.match(client, /shellOwnsQueue/);
 assert.match(preview, /#queue-overlay:not\(\[hidden\]\)/);
 
