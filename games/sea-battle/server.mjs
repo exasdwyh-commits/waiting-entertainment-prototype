@@ -4,7 +4,6 @@ import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRequire } from "node:module";
 import QRCode from "qrcode";
 import { Server as SocketIOServer } from "socket.io";
 import {
@@ -18,8 +17,7 @@ import {
 } from "./game.mjs";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const require = createRequire(import.meta.url);
-const THREE_MODULE = require.resolve("three/build/three.module.js");
+const THREE_MODULE = fileURLToPath(import.meta.resolve("three"));
 
 const TYPES = {
   ".html": "text/html; charset=utf-8",
