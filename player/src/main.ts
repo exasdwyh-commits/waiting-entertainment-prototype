@@ -275,6 +275,10 @@ socket.on("game:event", (event: GameEvent) => {
       event.type === "dropkick_hit" ||
       event.type === "ko" ||
       event.type === "struggle_break" ||
+      event.type === "weapon_pickup" ||
+      event.type === "weapon_hit" ||
+      event.type === "weapon_throw" ||
+      event.type === "weapon_drop" ||
       event.type === "grab" ||
       event.type === "toss"
     )
@@ -296,13 +300,19 @@ socket.on("game:event", (event: GameEvent) => {
       navigator.vibrate(
         event.type === "toss" || event.type === "dropkick_hit"
           ? [24, 18, 36]
-          : event.type === "heavy_hit" || event.type === "headbutt_hit"
-            ? [22, 12, 30]
-            : event.type === "ko"
-              ? [35, 22, 45]
-              : event.type === "grab"
-                ? 12
-                : 16,
+          : event.type === "weapon_hit"
+            ? [28, 12, 34]
+            : event.type === "weapon_throw"
+              ? 18
+              : event.type === "weapon_pickup"
+                ? 10
+                : event.type === "heavy_hit" || event.type === "headbutt_hit"
+                  ? [22, 12, 30]
+                  : event.type === "ko"
+                    ? [35, 22, 45]
+                    : event.type === "grab"
+                      ? 12
+                      : 16,
       );
     }
   }
@@ -400,6 +410,15 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
   kickLabel.textContent = grabbedTarget ? "头槌" : "踢";
   kickHint.textContent = grabbedTarget ? "近身压制" : "倒地/桌边";
 
+  const weaponName =
+    me.heldWeapon === "pan"
+      ? "平底锅"
+      : me.heldWeapon === "spatula"
+        ? "巨型锅铲"
+        : me.heldWeapon === "plate"
+          ? "盘子"
+          : "";
+
   if (spawnProtected) {
     pushLabel.textContent = "保护中";
     pushHint.textContent = "先找位置";
@@ -425,6 +444,21 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
     pushHint.textContent = "按摇杆方向";
     grabLabel.textContent = "抓住中";
     grabHint.textContent = grabbedTarget.name;
+  } else if (me.heldWeapon) {
+    pushLabel.textContent =
+      me.heldWeapon === "plate"
+        ? "投盘"
+        : me.heldWeapon === "spatula"
+          ? "重拍"
+          : "锅砸";
+    pushHint.textContent =
+      me.heldWeapon === "plate"
+        ? "瞄准后投掷"
+        : me.heldWeapon === "spatula"
+          ? "慢但击飞强"
+          : "快速近战";
+    grabLabel.textContent = "放下";
+    grabHint.textContent = weaponName;
   } else if (me.sprinting && me.stamina >= 0.17) {
     pushLabel.textContent = "重击";
     pushHint.textContent = "冲刺攻击";
@@ -474,6 +508,9 @@ socket.on("match:snapshot", (snapshot: MatchSnapshot) => {
     statePill.textContent = "KO · 暂时昏迷";
   } else if (me.state === "waking") {
     statePill.textContent = "正在醒来 · 短暂保护";
+  } else if (me.heldWeapon) {
+    statePill.textContent =
+      weaponName + "在手 · 攻击使用 · 抓取键放下";
   } else if (me.state === "edge_hang") {
     statePill.textContent = "抓住了！摇杆推向桌内";
   } else if (me.state === "climbing") {
