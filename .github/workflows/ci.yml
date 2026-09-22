@@ -36,3 +36,4 @@ jobs:
           done
 
           node client/test/socket-smoke.mjs
+          node client/test/platform-smoke.mjs
