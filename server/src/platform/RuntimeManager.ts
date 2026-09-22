@@ -57,8 +57,7 @@ export class RuntimeManager {
 
   constructor(options: { settingsPath?: string } = {}) {
     this.settingsPath =
-      options.settingsPath ??
-      process.env.WAITING_SETTINGS_FILE?.trim() ||
+      (options.settingsPath ?? process.env.WAITING_SETTINGS_FILE?.trim()) ||
       resolve(PROJECT_ROOT, ".waiting-data/game-settings.json");
     this.loadSettings();
   }
