@@ -199,7 +199,7 @@ try {
     viewport: { width: 1600, height: 900 },
     deviceScaleFactor: 1,
   });
-  await big.goto("http://127.0.0.1:5173", { waitUntil: "networkidle" });
+  await big.goto("http://127.0.0.1:5173/?visualPreview=1", { waitUntil: "networkidle" });
 
   const phone = await browser.newPage({
     viewport: { width: 844, height: 390 },
@@ -222,6 +222,17 @@ try {
   });
 
   await big.waitForFunction(
+    () => typeof window.__waitingVisualReplay === "function",
+    { timeout: 10_000 },
+  );
+  const replayStarted = await big.evaluate(() =>
+    window.__waitingVisualReplay?.() ?? false
+  );
+  if (!replayStarted) {
+    throw new Error("Deterministic replay preview could not start from captured history.");
+  }
+
+  await big.waitForFunction(
     () => {
       const bug = document.querySelector("#broadcast-bug");
       const message = document.querySelector("#message");
@@ -229,11 +240,10 @@ try {
       return (
         bug?.getAttribute("data-mode") === "replay" &&
         message?.classList.contains("replay-caption") &&
-        caption.length > 0 &&
-        (caption.includes("×") || caption.includes("反打机位"))
+        caption.includes("视觉回放验收")
       );
     },
-    { timeout: 72_000 },
+    { timeout: 10_000 },
   );
 
   // The wait above is the replay functional assertion. Capture immediately;
