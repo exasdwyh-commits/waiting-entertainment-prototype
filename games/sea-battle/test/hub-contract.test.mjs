@@ -6,6 +6,9 @@ const app = readFileSync(new URL("../public/app.mjs", import.meta.url), "utf8");
 const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 const manifest = JSON.parse(readFileSync(new URL("../game-package.json", import.meta.url), "utf8"));
+const visualAssets = JSON.parse(
+  readFileSync(new URL("../public/assets/sea-battle-assets.json", import.meta.url), "utf8"),
+);
 
 test("Sea Battle package follows Hub process contract", () => {
   assert.equal(manifest.runtime.kind, "process");
@@ -48,4 +51,20 @@ test("venue broadcast keeps ships and the boss visually readable", () => {
   assert.match(app, /nearest living challenger/);
   assert.match(app, /window\.__seaBroadcast/);
   assert.match(app, /boss: Boolean\(state\.monster\?\.alive\)/);
+});
+
+
+test("V4 visual assets are optional and preserve procedural fallbacks", () => {
+  assert.equal(visualAssets.schemaVersion, 1);
+  assert.equal(visualAssets.ship.url, null);
+  assert.equal(visualAssets.monster.url, null);
+  assert.deepEqual(visualAssets.islands, []);
+  assert.match(html, /type="importmap"/);
+  assert.match(html, /three\/addons\//);
+  assert.match(app, /GLTFLoader/);
+  assert.match(app, /loadVisualAssets/);
+  assert.match(app, /proceduralVisual\.visible = false/);
+  assert.match(app, /monsterProcedural\.visible = false/);
+  assert.match(app, /proceduralIslandRoot\.visible = false/);
+  assert.match(app, /Sea Battle ship asset fallback/);
 });
