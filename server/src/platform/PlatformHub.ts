@@ -11,8 +11,6 @@ import { GameRegistry } from "./GameRegistry.js";
 import { QueueService } from "./QueueService.js";
 import { RoundManager } from "./RoundManager.js";
 
-const QUEUE_OVERLAY_TTL_MS = 20_000;
-
 function parseEntitlements(value: string | undefined): string[] {
   return (value ?? "")
     .split(",")
@@ -102,7 +100,7 @@ export class PlatformHub {
 
     const called = this.queue.latestCalled();
     let queueOverlay: QueueOverlay | undefined;
-    if (called?.calledAt && Date.now() - called.calledAt <= QUEUE_OVERLAY_TTL_MS) {
+    if (called?.calledAt) {
       queueOverlay = {
         ticketId: called.id,
         number: called.number,
