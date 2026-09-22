@@ -821,7 +821,7 @@ export class GameSession {
     );
     target.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     target.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
-    target.state = "carried";
+    target.state = target.koUntil > now ? "ko" : "carried";
     return true;
   }
 
@@ -905,6 +905,8 @@ export class GameSession {
     slot.facingYaw = Math.atan2(dir.x, dir.z);
 
     best.carriedBy = slot.id;
+    best.struggleProgress = 0;
+    best.lastStruggleAt = 0;
     best.edgeHanging = false;
     best.body.setGravityScale(0, true);
     best.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -1010,9 +1012,14 @@ export class GameSession {
   private dropTossTarget(slot: Slot, target: Slot, now: number) {
     target.body.setGravityScale(1, true);
     target.carriedBy = undefined;
-    target.state = "ragdoll";
+    target.struggleProgress = 0;
+    target.lastStruggleAt = 0;
+    target.state = target.koUntil > now ? "ko" : "ragdoll";
     target.balance = Math.min(target.balance, 0.28);
-    target.knockedUntil = Math.max(target.knockedUntil, now + 260);
+    target.knockedUntil = Math.max(
+      target.knockedUntil,
+      target.koUntil > now ? target.koUntil : now + 260,
+    );
     this.clearToss(slot);
   }
 
@@ -1498,6 +1505,22 @@ export class GameSession {
       slot.carriedBy = undefined;
       slot.body.setGravityScale(1, true);
       return;
+    }
+
+    if (slot.koUntil > now) {
+      slot.state = "ko";
+      slot.struggleProgress = 0;
+      return;
+    }
+
+    if (slot.koUntil > 0 && now >= slot.koUntil) {
+      slot.koUntil = 0;
+      slot.koResistance = Math.max(
+        slot.koResistance,
+        GAME_TUNING.ko.wakeRecovery,
+      );
+      slot.state = "carried";
+      this.emitEvent("wake", now, slot.id, undefined, 0.3);
     }
 
     slot.struggleProgress = Math.max(
