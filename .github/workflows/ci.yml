@@ -40,6 +40,7 @@ jobs:
           }
 
           node server/test/runtime-manager-smoke.mjs
+          node server/test/game-registry-smoke.mjs
 
           start_server /tmp/waiting-server-smoke.log node server/dist/index.js
           node client/test/socket-smoke.mjs
