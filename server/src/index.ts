@@ -50,8 +50,25 @@ await session.start();
 io.on("connection", (socket) => {
   socket.on(
     "join",
-    (payload: { sessionId?: string; name?: string }, ack?: (value: unknown) => void) => {
-      const player = session.join(socket.id, payload?.sessionId, payload?.name);
+    (
+      payload: { sessionId?: string; name?: string; roundCode?: string },
+      ack?: (value: unknown) => void,
+    ) => {
+      const requestedName = payload?.name ?? "";
+      const hostedRound = platform.rounds.activeForGame("table-push-king");
+      if (
+        hostedRound &&
+        !platform.rounds.isRegisteredParticipant(
+          "table-push-king",
+          payload?.roundCode ?? "",
+          requestedName,
+        )
+      ) {
+        ack?.({ ok: false, reason: "round-admission-required" });
+        return;
+      }
+
+      const player = session.join(socket.id, payload?.sessionId, requestedName);
       ack?.(player ? { ok: true, ...player } : { ok: false, reason: "session-full" });
     },
   );
