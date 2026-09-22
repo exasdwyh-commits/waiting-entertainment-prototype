@@ -155,6 +155,45 @@ test("deep-sea monster enters mid-match and telegraphs attacks", () => {
   assert.ok(state.monster.attack, "monster creates a visible warning zone before damage");
 });
 
+test("ship collisions separate overlapping hulls and exchange shove", () => {
+  const state = running(77);
+  humanize(state);
+  state.projectiles = [];
+  const [a, b] = state.boats;
+  for (const boat of state.boats.slice(2)) {
+    boat.alive = false;
+    boat.respawnAt = Infinity;
+  }
+  a.x = 0; a.z = 0; a.heading = Math.PI / 2; a.speed = 12;
+  b.x = 0.5; b.z = 0; b.heading = -Math.PI / 2; b.speed = 8;
+  const before = Math.hypot(a.x - b.x, a.z - b.z);
+  stepGame(state, 1 / 30);
+  const after = Math.hypot(a.x - b.x, a.z - b.z);
+  assert.ok(after > before, "overlapping hulls are physically separated");
+  assert.ok(Math.abs(a.knockX) + Math.abs(a.knockZ) > 0);
+  assert.ok(Math.abs(b.knockX) + Math.abs(b.knockZ) > 0);
+  assert.ok(state.events.some((event) => event.type === "collision"));
+});
+
+test("cannon hits create physical knockback and snapshot muzzle metadata", () => {
+  const state = running(78);
+  humanize(state);
+  for (const boat of state.boats.slice(2)) {
+    boat.alive = false;
+    boat.respawnAt = Infinity;
+  }
+  const [attacker, victim] = state.boats;
+  attacker.x = 0; attacker.z = 0; attacker.heading = 0; attacker.nextFireAt = 0;
+  victim.x = 8; victim.z = 0; victim.heading = 0;
+  state.projectiles = [];
+  stepGame(state, 1 / 30);
+  assert.ok(attacker.lastFireAt > -Infinity);
+  assert.equal(attacker.lastFireSide, 1);
+  for (let i = 0; i < 20; i++) stepGame(state, 1 / 60);
+  assert.ok(victim.lastHitAt > -Infinity, "victim records authoritative hit time");
+  assert.ok(Math.hypot(victim.knockX, victim.knockZ) > 0.05, "hit displaces the hull");
+});
+
 test("round ends by score after the clock expires", () => {
   const state = running(45);
   humanize(state);
