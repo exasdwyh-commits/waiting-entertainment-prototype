@@ -19,6 +19,8 @@ type View = {
   name: string;
   bot: boolean;
   joinPulseUntil: number;
+  spawnProtected: boolean;
+  tint: number;
   state: PlayerState;
 };
 
@@ -596,6 +598,8 @@ export class NetworkGame {
       name: player.name,
       bot: player.bot,
       joinPulseUntil: player.bot ? 0 : performance.now() + 900,
+      spawnProtected: player.spawnProtectionLeftMs > 0,
+      tint,
       state: player.state,
     };
 
@@ -706,6 +710,7 @@ export class NetworkGame {
         view.targetQuaternion.set(...player.rotation);
       }
       view.state = player.state;
+      view.spawnProtected = player.spawnProtectionLeftMs > 0;
       view.visual?.setState(player.state);
       view.root.visible = !player.eliminated;
       view.label.visible = !player.eliminated;
@@ -826,18 +831,24 @@ export class NetworkGame {
 
       const ringMaterial = view.ring.material as THREE.MeshBasicMaterial;
       const joining = now < view.joinPulseUntil;
-      const pulse = joining
-        ? 1.12 + Math.sin(now * 0.024) * 0.16
-        : view.bot
-          ? 0.82
-          : 1 + Math.sin(now * 0.008) * 0.035;
+      const protectedSpawn = view.spawnProtected;
+      const pulse = protectedSpawn
+        ? 1.08 + Math.sin(now * 0.02) * 0.13
+        : joining
+          ? 1.12 + Math.sin(now * 0.024) * 0.16
+          : view.bot
+            ? 0.82
+            : 1 + Math.sin(now * 0.008) * 0.035;
 
       view.ring.scale.setScalar(pulse);
-      ringMaterial.opacity = joining
-        ? 0.96
-        : view.bot
-          ? 0.16
-          : 0.78;
+      ringMaterial.color.setHex(protectedSpawn ? 0x67e8f9 : view.tint);
+      ringMaterial.opacity = protectedSpawn
+        ? 0.88
+        : joining
+          ? 0.96
+          : view.bot
+            ? 0.16
+            : 0.78;
     }
 
     const cameraSnapshot = this.displaySnapshot ?? this.latest;
