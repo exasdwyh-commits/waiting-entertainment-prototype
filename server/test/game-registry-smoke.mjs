@@ -89,6 +89,15 @@ assert.equal(racer?.settings?.find((setting) => setting.key === "seconds")?.defa
 
 {
   const manifests = clone(BUILTIN_GAME_MANIFESTS);
+  manifests[2].runtime.kind = "unknown";
+  assert.throws(
+    () => validateGameManifests(manifests),
+    /manifest-invalid:sea-battle:runtime-kind/,
+  );
+}
+
+{
+  const manifests = clone(BUILTIN_GAME_MANIFESTS);
   manifests[2].commercial.entitlements = ["updates:pro"];
   assert.throws(
     () => validateGameManifests(manifests),
