@@ -18,7 +18,7 @@ root.innerHTML = `
     <div class="timer"><span id="timer">3:00</span></div>
   </section>
   <ol class="ranking" id="ranking" aria-label="实时排名"></ol>
-  <aside class="join-panel" id="join-panel">
+  <aside class="join-panel" id="join-panel" hidden>
     <canvas id="qr" width="144" height="144"></canvas>
     <div>
       <strong>扫码加入</strong>
@@ -26,6 +26,14 @@ root.innerHTML = `
     </div>
   </aside>
   <div class="tip">${localMode ? "WASD / 方向键移动　SPACE 攻击　R 重开" : "外圈冲刺 · 出拳/重击 · 抓取/甩飞 · AI自动补位"}</div>
+  ${localMode ? `
+  <aside class="join-panel" id="local-join-panel">
+    <canvas id="local-qr" width="144" height="144"></canvas>
+    <div>
+      <strong>本地调试 · 扫码入局</strong>
+      <span id="local-join-text">:5174</span>
+    </div>
+  </aside>` : ""}
   <div class="broadcast-bug" id="broadcast-bug" data-mode="live">
     <span id="director-mode">LIVE</span>
     <strong id="director-label">全场主机位</strong>
@@ -109,7 +117,15 @@ if (hubMode) {
 }
 
 if (localMode) {
-  document.querySelector<HTMLElement>("#join-panel")!.hidden = true;
+  void import("qrcode")
+    .then((QRCode) =>
+      QRCode.default.toCanvas(
+        document.querySelector<HTMLCanvasElement>("#local-qr")!,
+        `${location.protocol}//${location.hostname}:5174`,
+        { width: 144, margin: 1, errorCorrectionLevel: "M" },
+      ),
+    )
+    .catch((error) => console.error("local QR failed", error));
   import("./game/LocalPrototype")
     .then(({ LocalPrototype }) => new LocalPrototype(common).start())
     .catch((error) => {

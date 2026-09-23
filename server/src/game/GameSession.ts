@@ -528,19 +528,22 @@ export class GameSession {
       8,
       Math.round(GAME_TUNING.match.respawnCandidateCount),
     );
-
-    let bestPoint = {
-      x: Math.cos(baseAngle) * TABLE_PUSH_GEOMETRY.spawnRadius,
-      z: Math.sin(baseAngle) * TABLE_PUSH_GEOMETRY.spawnRadius,
+    // 设计规则：复活从场中心区域开始，而不是回到桌沿。
+    const centerSpawn = {
+      x: Math.cos(baseAngle) * TABLE_PUSH_GEOMETRY.arenaRadius * 0.22,
+      z: Math.sin(baseAngle) * TABLE_PUSH_GEOMETRY.arenaRadius * 0.22,
     };
+
+    let bestPoint = centerSpawn;
     let bestClearance = -1;
 
     for (let offset = 0; offset < candidateCount; offset += 1) {
       const angle =
         baseAngle + (offset / candidateCount) * Math.PI * 2;
+      // 复活候选点分布在中心区域（半径不超过 38% 场半径），避开后向边缘靠拢。
       const radius =
-        TABLE_PUSH_GEOMETRY.spawnRadius +
-        (offset % 2 === 0 ? -0.15 : 0.7);
+        TABLE_PUSH_GEOMETRY.arenaRadius *
+        (0.22 + (offset % 2 === 0 ? 0 : 0.16));
       const point = {
         x: Math.cos(angle) * radius,
         z: Math.sin(angle) * radius,
@@ -2270,6 +2273,10 @@ export class GameSession {
       slot.alive = false;
       slot.state = "eliminated";
       slot.body.setEnabled(false);
+
+      // 设计规则：掉出桌沿属于清积分死亡——本轮累计积分清零（击坠者仍得 1 分），
+      // 决胜阶段之外可从场中心区域复活重新攒分。
+      slot.score = 0;
 
       const permanentElimination = this.matchStage(now) === "final";
       slot.respawnAt = permanentElimination
