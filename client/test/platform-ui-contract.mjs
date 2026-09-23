@@ -9,6 +9,8 @@ const client = readFileSync(new URL("../../client/src/main.ts", import.meta.url)
 const preview = readFileSync(new URL("../../scripts/capture-preview.mjs", import.meta.url), "utf8");
 
 assert.match(host, /data-view="games"/);
+assert.match(host, /data-rescan-games/);
+assert.match(host, /\/games\/rescan/);
 assert.match(host, /游戏管理中心/);
 assert.match(host, /snapshot\.allGames/);
 assert.match(host, /data-runtime-start/);

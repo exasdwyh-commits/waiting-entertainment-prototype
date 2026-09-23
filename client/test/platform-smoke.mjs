@@ -31,6 +31,17 @@ const pilotRuntime = games.runtimes.find((runtime) => runtime.gameId === "pilot-
 assert.equal(pilotRuntime.state, "not-configured");
 assert.equal(pilotRuntime.configured, false);
 
+const rescanned = await api("/api/platform/games/rescan", {
+  method: "POST",
+  body: "{}",
+});
+assert.equal(rescanned.ok, true);
+assert.equal(rescanned.count, 3);
+assert.deepEqual(
+  rescanned.allGames.map((game) => game.id).sort(),
+  ["pilot-racer", "sea-battle", "table-push-king"],
+);
+
 const embeddedCheck = await api("/api/platform/runtimes/table-push-king/check", {
   method: "POST",
   body: "{}",

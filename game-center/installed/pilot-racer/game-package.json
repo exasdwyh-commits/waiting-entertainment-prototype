@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "id": "pilot-racer",
+  "name": "极速等位赛",
+  "version": "0.1.0",
+  "category": "racing",
+  "summary": "1-8 人手机驾驶、大屏导播、服务端权威判定的卡丁车竞速。",
+  "players": {
+    "min": 1,
+    "max": 8
+  },
+  "runtime": {
+    "kind": "process",
+    "healthPath": "/info",
+    "healthProtocol": "pilot-racer/1",
+    "command": [
+      "node",
+      "server.mjs"
+    ],
+    "workingDirectoryEnv": "PILOT_RACER_DIR",
+    "port": 9010,
+    "startPath": "/api/start"
+  },
+  "entrypoints": {
+    "display": "http://{host}:9010/display",
+    "player": "http://{host}:9010/"
+  },
+  "capabilities": {
+    "aiFill": true,
+    "hotJoin": true,
+    "reconnect": true,
+    "highlights": true,
+    "replay": false
+  },
+  "round": {
+    "joinPolicy": "ephemeral-code",
+    "codeTtlSeconds": 300,
+    "lateJoin": false
+  },
+  "settings": [
+    {
+      "key": "trackId",
+      "label": "默认赛道",
+      "type": "enum",
+      "env": "TRACK",
+      "wired": true,
+      "default": "bay",
+      "options": [
+        {
+          "value": "bay",
+          "label": "海湾大奖赛"
+        },
+        {
+          "value": "ridge",
+          "label": "山脊赛道"
+        }
+      ]
+    },
+    {
+      "key": "laps",
+      "label": "单局圈数",
+      "type": "number",
+      "env": "LAPS",
+      "wired": true,
+      "default": 3,
+      "min": 1,
+      "max": 10,
+      "step": 1
+    },
+    {
+      "key": "seconds",
+      "label": "时长上限",
+      "type": "number",
+      "env": "RACE_SECONDS",
+      "wired": true,
+      "default": 150,
+      "min": 30,
+      "max": 300,
+      "step": 10
+    }
+  ],
+  "commercial": {
+    "tier": "base",
+    "entitlements": [
+      "game:pilot-racer"
+    ]
+  }
+}

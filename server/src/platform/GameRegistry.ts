@@ -197,6 +197,39 @@ export function validateGameManifests(
     if (!manifest.category?.trim()) manifestError(id, "category-empty");
     if (!manifest.summary?.trim()) manifestError(id, "summary-empty");
 
+    if (
+      !manifest.runtime ||
+      !["embedded", "process"].includes(manifest.runtime.kind)
+    ) {
+      manifestError(id, "runtime-kind");
+    }
+    if (!manifest.entrypoints) manifestError(id, "entrypoints");
+    if (!manifest.capabilities) manifestError(id, "capabilities");
+    if (
+      typeof manifest.capabilities.aiFill !== "boolean" ||
+      typeof manifest.capabilities.hotJoin !== "boolean" ||
+      typeof manifest.capabilities.reconnect !== "boolean" ||
+      typeof manifest.capabilities.highlights !== "boolean" ||
+      typeof manifest.capabilities.replay !== "boolean"
+    ) {
+      manifestError(id, "capabilities-shape");
+    }
+    if (
+      !manifest.round ||
+      manifest.round.joinPolicy !== "ephemeral-code" ||
+      !Number.isInteger(manifest.round.codeTtlSeconds) ||
+      manifest.round.codeTtlSeconds < 30 ||
+      typeof manifest.round.lateJoin !== "boolean"
+    ) {
+      manifestError(id, "round-contract");
+    }
+    if (
+      !manifest.commercial ||
+      !["base", "pro", "custom"].includes(manifest.commercial.tier)
+    ) {
+      manifestError(id, "commercial-contract");
+    }
+
     const minPlayers = manifest.players?.min;
     const maxPlayers = manifest.players?.max;
     if (
@@ -300,11 +333,19 @@ export function validateGameManifests(
 }
 
 export class GameRegistry {
+  private manifests: GameManifestV1[];
+
   constructor(
     private readonly license: StoreLicense,
-    private readonly manifests: readonly GameManifestV1[] = BUILTIN_GAME_MANIFESTS,
+    manifests: readonly GameManifestV1[] = BUILTIN_GAME_MANIFESTS,
   ) {
     validateGameManifests(manifests);
+    this.manifests = manifests.map((manifest) => structuredClone(manifest));
+  }
+
+  replace(manifests: readonly GameManifestV1[]): void {
+    validateGameManifests(manifests);
+    this.manifests = manifests.map((manifest) => structuredClone(manifest));
   }
 
   listAll(): GameManifestV1[] {

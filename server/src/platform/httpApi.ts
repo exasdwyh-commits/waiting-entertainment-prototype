@@ -63,7 +63,8 @@ function errorStatus(message: string): number {
   if (
     message === "round-full" ||
     message === "active-round-exists" ||
-    message === "runtime-active-round"
+    message === "runtime-active-round" ||
+    message === "game-registry-active-round"
   ) return 409;
   if (
     message.startsWith("invalid-round-transition") ||
@@ -113,6 +114,20 @@ export async function handlePlatformRequest(
         games,
         runtimes: hub.runtime.list(games),
         allGames: hub.registry.listAll(),
+      });
+      return true;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/platform/games/rescan") {
+      const allGames = hub.reloadGamePackages();
+      const games = hub.registry.listAuthorized();
+      await hub.runtime.refreshAll(games);
+      json(res, 200, {
+        ok: true,
+        count: allGames.length,
+        games,
+        allGames,
+        runtimes: hub.runtime.list(games),
       });
       return true;
     }

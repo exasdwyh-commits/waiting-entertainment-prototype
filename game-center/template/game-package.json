@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "replace-me",
+  "name": "新游戏",
+  "version": "0.1.0",
+  "category": "party",
+  "summary": "替换为游戏简介。",
+  "players": {
+    "min": 1,
+    "max": 8
+  },
+  "runtime": {
+    "kind": "process",
+    "healthPath": "/info",
+    "healthProtocol": "replace-me/1",
+    "command": [
+      "node",
+      "server.mjs"
+    ],
+    "bundledPath": "game-center/installed/replace-me",
+    "port": 9030,
+    "startPath": "/api/start"
+  },
+  "entrypoints": {
+    "display": "http://{host}:9030/display",
+    "player": "http://{host}:9030/"
+  },
+  "capabilities": {
+    "aiFill": true,
+    "hotJoin": true,
+    "reconnect": true,
+    "highlights": true,
+    "replay": false
+  },
+  "round": {
+    "joinPolicy": "ephemeral-code",
+    "codeTtlSeconds": 300,
+    "lateJoin": false
+  },
+  "commercial": {
+    "tier": "base",
+    "entitlements": [
+      "game:replace-me"
+    ]
+  }
+}

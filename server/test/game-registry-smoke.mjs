@@ -4,10 +4,22 @@ import {
   GameRegistry,
   validateGameManifests,
 } from "../dist/platform/GameRegistry.js";
+import { GameRegistryManager } from "../dist/platform/GameRegistryManager.js";
 
 const clone = (value) => structuredClone(value);
 
 assert.doesNotThrow(() => validateGameManifests(BUILTIN_GAME_MANIFESTS));
+
+const pluginManager = new GameRegistryManager();
+const installed = pluginManager.load();
+assert.deepEqual(
+  installed.map((game) => game.id).sort(),
+  ["pilot-racer", "sea-battle", "table-push-king"],
+);
+assert.equal(pluginManager.listInstalled().length, 3);
+assert.equal(pluginManager.get("table-push-king")?.runtime.kind, "embedded");
+assert.equal(pluginManager.get("pilot-racer")?.runtime.port, 9010);
+assert.equal(pluginManager.get("sea-battle")?.runtime.port, 9020);
 
 const license = {
   storeId: "validator-test",
@@ -77,6 +89,15 @@ assert.equal(racer?.settings?.find((setting) => setting.key === "seconds")?.defa
 
 {
   const manifests = clone(BUILTIN_GAME_MANIFESTS);
+  manifests[2].runtime.kind = "unknown";
+  assert.throws(
+    () => validateGameManifests(manifests),
+    /manifest-invalid:sea-battle:runtime-kind/,
+  );
+}
+
+{
+  const manifests = clone(BUILTIN_GAME_MANIFESTS);
   manifests[2].commercial.entitlements = ["updates:pro"];
   assert.throws(
     () => validateGameManifests(manifests),
@@ -93,7 +114,7 @@ assert.equal(racer?.settings?.find((setting) => setting.key === "seconds")?.defa
   );
 }
 
-console.log("GameRegistry smoke passed: ids, ports, LAN entrypoints, player ranges, entitlement identity, and runtime contracts are validated.");
+console.log("GameRegistry smoke passed: plugin discovery, ids, ports, LAN entrypoints, player ranges, entitlement identity, and runtime contracts are validated.");
 
 
 {
