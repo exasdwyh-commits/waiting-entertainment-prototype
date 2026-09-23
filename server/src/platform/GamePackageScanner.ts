@@ -1,49 +1,71 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { GameManifestV1 } from "@waiting/shared";
 
-export type GamePackage = {
-  id: string;
-  name: string;
-  version: string;
-  category?: string;
-  runtime?: {
-    type?: string;
-    port?: number;
-  };
-  players?: {
-    min?: number;
-    max?: number;
-  };
-};
+const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+
+export interface DiscoveredGamePackage {
+  directory: string;
+  manifestPath: string;
+  manifest: GameManifestV1;
+}
 
 export class GamePackageScanner {
-  constructor(private readonly root = path.resolve(process.cwd(), 'game-center/installed')) {}
+  readonly root: string;
 
-  async scan(): Promise<GamePackage[]> {
-    const result: GamePackage[] = [];
+  constructor(
+    root = process.env.WAITING_GAME_CENTER_DIR?.trim() ||
+      resolve(PROJECT_ROOT, "game-center/installed"),
+  ) {
+    this.root = resolve(root);
+  }
 
+  scan(): DiscoveredGamePackage[] {
     let entries;
     try {
-      entries = await fs.readdir(this.root, { withFileTypes: true });
-    } catch {
-      return result;
+      entries = readdirSync(this.root, { withFileTypes: true });
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") return [];
+      throw error;
     }
 
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
+    const packages: DiscoveredGamePackage[] = [];
 
-      const manifest = path.join(this.root, entry.name, 'game-package.json');
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+
+      const directory = resolve(this.root, entry.name);
+      const manifestPath = resolve(directory, "game-package.json");
+
+      let raw: string;
       try {
-        const raw = await fs.readFile(manifest, 'utf8');
-        const pkg = JSON.parse(raw) as GamePackage;
-        if (pkg.id && pkg.name && pkg.version) {
-          result.push(pkg);
-        }
-      } catch {
-        // Invalid packages are ignored during discovery.
+        raw = readFileSync(manifestPath, "utf8");
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === "ENOENT") continue;
+        throw error;
       }
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        throw new Error(`game-package-invalid-json:${entry.name}`);
+      }
+
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error(`game-package-invalid-manifest:${entry.name}`);
+      }
+
+      packages.push({
+        directory,
+        manifestPath,
+        manifest: parsed as GameManifestV1,
+      });
     }
 
-    return result;
+    return packages;
   }
 }
