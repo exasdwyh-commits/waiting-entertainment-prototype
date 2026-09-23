@@ -1,0 +1,24 @@
+{
+  "id": "table-push-king",
+  "name": "餐桌推推王",
+  "version": "0.1.0",
+  "category": "party-battle",
+  "players": {
+    "min": 2,
+    "max": 10
+  },
+  "runtime": {
+    "type": "embedded",
+    "port": 9030
+  },
+  "control": {
+    "mobile": true
+  },
+  "display": {
+    "broadcast": true,
+    "spectator": true
+  },
+  "ai": {
+    "fill": true
+  }
+}
