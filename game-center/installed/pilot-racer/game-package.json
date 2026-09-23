@@ -1,0 +1,21 @@
+{
+  "id": "pilot-racer",
+  "name": "Pilot Racer",
+  "version": "1.0.0",
+  "category": "racing",
+  "players": {
+    "min": 1,
+    "max": 8
+  },
+  "runtime": {
+    "type": "process",
+    "port": 9010
+  },
+  "control": {
+    "mobile": true
+  },
+  "display": {
+    "broadcast": true,
+    "spectator": true
+  }
+}
