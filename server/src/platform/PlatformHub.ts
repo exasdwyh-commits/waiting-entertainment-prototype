@@ -53,7 +53,7 @@ export class PlatformHub {
 
   constructor(
     readonly license: StoreLicense = createStoreLicenseFromEnv(),
-    registryManager = new GameRegistryManager(),
+    private readonly registryManager = new GameRegistryManager(),
   ) {
     let manifests;
     try {
@@ -93,6 +93,19 @@ export class PlatformHub {
       queue: this.queue.list(),
       broadcast: this.broadcastState(),
     };
+  }
+
+  reloadGamePackages() {
+    const hasActiveRound = this.rounds
+      .list()
+      .some((round) => ["recruiting", "locked", "running"].includes(round.status));
+    if (hasActiveRound) {
+      throw new Error("game-registry-active-round");
+    }
+
+    const manifests = this.registryManager.refresh();
+    this.registry.replace(manifests);
+    return this.registry.listAll();
   }
 
   createRound(gameId: string, playerLimit?: number): EntertainmentRound {
