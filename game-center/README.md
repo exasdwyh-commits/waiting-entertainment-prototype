@@ -1,34 +1,30 @@
 # Game Center
 
-This directory is the future plugin installation root.
+Local Game Package installation root.
 
-## Planned structure
+## Install a game
 
-```
-game-center/
-├── installed/
-│   ├── pilot-racer/
-│   ├── sea-battle/
-│   └── table-push-king/
-│
-├── import/
-│   └── incoming game packages
-│
-└── registry/
-    └── generated game index
+Create:
+
+```text
+game-center/installed/<game-id>/game-package.json
 ```
 
-## Rules
+The manifest must implement the Game Package V1 contract documented in:
 
-A game package must provide:
+```text
+docs/GAME_CENTER_PLUGIN_ARCHITECTURE_V1.md
+```
 
-- game-package.json
-- runtime information
-- supported controllers
-- display capability
-- player limits
-- version information
+The Hub scans this directory on startup. In Host Console → 游戏管理, **重新扫描游戏目录** reloads packages without editing Hub source code.
 
-The Hub should discover packages automatically.
+Current packages:
 
-Do not manually edit game lists after Game Registry Manager is implemented.
+```text
+installed/
+├── pilot-racer/
+├── sea-battle/
+└── table-push-king/
+```
+
+A future official installer/downloader will write packages into this same installation layer after signature and license verification.
