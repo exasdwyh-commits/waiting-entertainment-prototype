@@ -300,11 +300,19 @@ export function validateGameManifests(
 }
 
 export class GameRegistry {
+  private manifests: GameManifestV1[];
+
   constructor(
     private readonly license: StoreLicense,
-    private readonly manifests: readonly GameManifestV1[] = BUILTIN_GAME_MANIFESTS,
+    manifests: readonly GameManifestV1[] = BUILTIN_GAME_MANIFESTS,
   ) {
     validateGameManifests(manifests);
+    this.manifests = manifests.map((manifest) => structuredClone(manifest));
+  }
+
+  replace(manifests: readonly GameManifestV1[]): void {
+    validateGameManifests(manifests);
+    this.manifests = manifests.map((manifest) => structuredClone(manifest));
   }
 
   listAll(): GameManifestV1[] {
