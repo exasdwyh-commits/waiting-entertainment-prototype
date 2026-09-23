@@ -7,7 +7,8 @@ import type {
   RoundStatus,
   StoreLicense,
 } from "@waiting/shared";
-import { GameRegistry } from "./GameRegistry.js";
+import { BUILTIN_GAME_MANIFESTS, GameRegistry } from "./GameRegistry.js";
+import { GameRegistryManager } from "./GameRegistryManager.js";
 import { GameSettingsStore } from "./GameSettingsStore.js";
 import { QueueService } from "./QueueService.js";
 import { RoundManager } from "./RoundManager.js";
@@ -50,8 +51,21 @@ export class PlatformHub {
   readonly settings = new GameSettingsStore();
   readonly runtime = new RuntimeManager(this.settings);
 
-  constructor(readonly license: StoreLicense = createStoreLicenseFromEnv()) {
-    this.registry = new GameRegistry(license);
+  constructor(
+    readonly license: StoreLicense = createStoreLicenseFromEnv(),
+    registryManager = new GameRegistryManager(),
+  ) {
+    let manifests;
+    try {
+      manifests = registryManager.load();
+    } catch (error) {
+      console.warn(
+        "[GameCenter] Installed package discovery failed; using built-in safe baseline.",
+        error,
+      );
+      manifests = BUILTIN_GAME_MANIFESTS;
+    }
+    this.registry = new GameRegistry(license, manifests);
   }
 
   snapshot(): PlatformSnapshot {
