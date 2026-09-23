@@ -7,6 +7,7 @@ import type {
   GameManifestV1,
   GameRuntimeStatus,
 } from "@waiting/shared";
+import type { GameSettingsStore } from "./GameSettingsStore.js";
 
 type RuntimeEntry = {
   child?: ChildProcess;
@@ -49,6 +50,8 @@ function appendLog(entry: RuntimeEntry, chunk: unknown) {
 
 export class RuntimeManager {
   private readonly entries = new Map<string, RuntimeEntry>();
+
+  constructor(private readonly settingsStore?: GameSettingsStore) {}
 
   status(manifest: GameManifestV1): GameRuntimeStatus {
     if (manifest.runtime.kind === "embedded") {
@@ -256,11 +259,29 @@ export class RuntimeManager {
     this.entries.set(manifest.id, entry);
 
     const [command, ...args] = config.command;
+
+    // P1-3：spawn 前解析 Game Settings Store 的 resolved 值并映射为 env。
+    // 合并顺序：process.env → settings env → Hub 固定运行时 env。
+    // Hub 固定变量（PORT/HOST/ROOM_CODE/WAITING_HUB_RUNTIME）放在最后，
+    // 结构上保证 settings 永远无法覆盖它们；store 侧另有保留字过滤。
+    // settings 文件损坏时记录日志并按默认值启动，保证门店可用性。
+    let settingsEnv: Record<string, string> = {};
+    try {
+      settingsEnv = this.settingsStore?.resolveEnv(manifest) ?? {};
+    } catch (error) {
+      appendLog(
+        entry,
+        "game settings ignored · " +
+          (error instanceof Error ? error.message : String(error)),
+      );
+    }
+
     try {
       const child = spawn(command, args, {
         cwd: config.cwd,
         env: {
           ...process.env,
+          ...settingsEnv,
           PORT: String(config.port),
           HOST: "0.0.0.0",
           ...(roomCode ? { ROOM_CODE: roomCode } : {}),

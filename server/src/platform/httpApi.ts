@@ -10,7 +10,7 @@ export interface PlatformHttpHooks {
 
 const CORS_HEADERS = {
   "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-methods": "GET, POST, PUT, OPTIONS",
   "access-control-allow-headers": "content-type",
 } as const;
 
@@ -119,6 +119,48 @@ export async function handlePlatformRequest(
 
     if (req.method === "GET" && url.pathname === "/api/platform/rounds") {
       json(res, 200, { rounds: hub.rounds.list() });
+      return true;
+    }
+
+    // P1-2：Game settings 读写。GET 返回 resolved 值与已修改清单；
+    // PUT 只接受 setting values 平铺对象；正在运行的 runtime 不热改，
+    // 只返回 restartRequired: true。
+    const settingsMatch = url.pathname.match(
+      /^\/api\/platform\/games\/([^/]+)\/settings$/,
+    );
+    if (settingsMatch && (req.method === "GET" || req.method === "PUT")) {
+      const manifest = hub.registry.get(settingsMatch[1]);
+      if (!manifest) throw new Error("unknown-game");
+
+      if (req.method === "GET") {
+        json(res, 200, { gameId: manifest.id, ...hub.settings.state(manifest) });
+        return true;
+      }
+
+      const body = await readJson(req);
+      const state = hub.settings.update(manifest, body);
+      const runtime = await hub.runtime.refresh(manifest, true);
+      json(res, 200, {
+        gameId: manifest.id,
+        ...state,
+        restartRequired: runtime.state === "running",
+      });
+      return true;
+    }
+
+    const settingsResetMatch = url.pathname.match(
+      /^\/api\/platform\/games\/([^/]+)\/settings\/reset$/,
+    );
+    if (settingsResetMatch && req.method === "POST") {
+      const manifest = hub.registry.get(settingsResetMatch[1]);
+      if (!manifest) throw new Error("unknown-game");
+      const state = hub.settings.reset(manifest);
+      const runtime = await hub.runtime.refresh(manifest, true);
+      json(res, 200, {
+        gameId: manifest.id,
+        ...state,
+        restartRequired: runtime.state === "running",
+      });
       return true;
     }
 

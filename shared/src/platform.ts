@@ -45,6 +45,16 @@ export interface GameSettingV1 {
   options?: GameSettingOptionV1[];
 }
 
+export interface GameSettingsStateV1 {
+  values: Record<string, string | number | boolean>;
+  overrides: Record<string, string | number | boolean>;
+}
+
+export interface GameSettingsResponse extends GameSettingsStateV1 {
+  gameId: string;
+  restartRequired?: boolean;
+}
+
 export interface GameManifestV1 {
   schemaVersion: 1;
   id: string;

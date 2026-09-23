@@ -71,6 +71,8 @@ export async function createSeaBattle({
           join: advertised,
           capacity: CAPACITY,
           protocol: "sea-battle/1",
+          // 只读观测字段：让 Hub 注入的 RACE_SECONDS 在重启后可被验收。
+          seconds,
         });
         return;
       }

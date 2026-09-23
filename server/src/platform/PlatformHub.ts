@@ -8,6 +8,7 @@ import type {
   StoreLicense,
 } from "@waiting/shared";
 import { GameRegistry } from "./GameRegistry.js";
+import { GameSettingsStore } from "./GameSettingsStore.js";
 import { QueueService } from "./QueueService.js";
 import { RoundManager } from "./RoundManager.js";
 import { RuntimeManager } from "./RuntimeManager.js";
@@ -46,7 +47,8 @@ export class PlatformHub {
   readonly registry: GameRegistry;
   readonly rounds = new RoundManager();
   readonly queue = new QueueService();
-  readonly runtime = new RuntimeManager();
+  readonly settings = new GameSettingsStore();
+  readonly runtime = new RuntimeManager(this.settings);
 
   constructor(readonly license: StoreLicense = createStoreLicenseFromEnv()) {
     this.registry = new GameRegistry(license);
