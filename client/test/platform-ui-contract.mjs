@@ -26,12 +26,17 @@ assert.match(host, /restartRequired/);
 assert.match(host, /已修改/);
 assert.match(host, /settingsDrafts/);
 assert.match(host, /round-card--degraded/);
+assert.match(host, /const runtimeDegraded =/);
+assert.match(host, /round\.status === "running"/);
+assert.match(host, /RUNTIME DEGRADED/);
 assert.match(hostCss, /\.manage-grid/);
 assert.match(hostCss, /\.round-runtime-alert/);
 
 assert.match(screen, /id="runtime-alert"/);
 assert.match(screen, /state\.mode === "LIVE_GAME"/);
 assert.match(screen, /runtime\?\.state !== "running"/);
+assert.match(screen, /game\?\.runtime\.kind === "process"/);
+assert.match(screen, /运行中断/);
 assert.match(screen, /game-frame--degraded/);
 assert.match(screenCss, /\.runtime-alert \{/);
 assert.match(screenCss, /z-index: 16/);
