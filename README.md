@@ -36,6 +36,20 @@ Waiting Entertainment 是面向餐厅等位场景的本地多人娱乐系统：�
 
 本地模型收尾时请先修 `.github/workflows/visual-preview.yml` 的 screenshot auto-commit 策略，不要因为这条红灯重写游戏代码。
 
+## Game Center plugin model
+
+游戏管理已切换到本地插件发现模式：
+
+- 安装目录：`game-center/installed/<game-id>/game-package.json`
+- Hub 启动时自动扫描并生成实际 Game Registry
+- Host Console → **游戏管理** 可点击 **重新扫描游戏目录**
+- 新游戏无需再修改 Host Console 的硬编码游戏列表
+- 餐桌推推王、极速等位赛、海战竞技均已通过同一 Game Package 注册层进入管理中心
+- 当前稳定游戏代码位置保持不动，插件 manifest 负责注册；后续新游戏可直接把 runtime 放入自己的插件目录
+- 无活动场次时允许热重扫；有报名/锁定/运行场次时拒绝重扫，避免现场状态漂移
+
+完整契约见 `docs/GAME_CENTER_PLUGIN_ARCHITECTURE_V1.md`。
+
 ## Architecture
 
 平台按 Game Package 管理多个游戏：
