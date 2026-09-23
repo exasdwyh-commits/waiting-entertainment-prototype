@@ -401,7 +401,8 @@ function render() {
   ).length;
   const managementWorkspace =
     '<section class="management"><div class="management-hero"><div><span class="eyebrow">GAME MANAGEMENT</span>' +
-      '<h2>游戏管理中心</h2><p>统一管理 Game Package、授权、运行时、端口健康与本地进程。</p></div>' +
+      '<h2>游戏管理中心</h2><p>统一管理 Game Package、授权、运行时、端口健康与本地进程。</p>' +
+      '<button class="secondary" data-rescan-games>重新扫描游戏目录</button></div>' +
       '<div class="management-summary"><div><strong>' + allGames.length + '</strong><span>游戏包</span></div>' +
       '<div><strong>' + snapshot.games.length + '</strong><span>已授权</span></div>' +
       '<div><strong>' + onlineCount + '</strong><span>在线运行时</span></div></div></div>' +
@@ -477,6 +478,26 @@ async function showRuntimeLogs(gameId: string) {
     render();
   } catch (error) {
     toast(error instanceof Error ? error.message : "读取运行日志失败", true);
+  }
+}
+
+async function rescanGames() {
+  if (busy) return;
+  busy = true;
+  try {
+    const body = await api("/games/rescan", {
+      method: "POST",
+      body: "{}",
+    }) as { count: number };
+    settingsRequested.clear();
+    settingsState.clear();
+    settingsDrafts.clear();
+    await refresh(true);
+    toast("游戏目录扫描完成 · 已识别 " + body.count + " 个游戏包");
+  } catch (error) {
+    toast(error instanceof Error ? error.message : "游戏目录扫描失败", true);
+  } finally {
+    busy = false;
   }
 }
 
@@ -600,6 +621,9 @@ async function mutate(path: string, body?: unknown) {
 }
 
 function bindEvents() {
+  document.querySelector<HTMLButtonElement>("[data-rescan-games]")?.addEventListener("click", () => {
+    void rescanGames();
+  });
   document.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
       const view = button.dataset.view === "games" ? "games" : "live";
