@@ -1,24 +1,61 @@
 {
+  "schemaVersion": 1,
   "id": "sea-battle",
-  "name": "Sea Battle",
+  "name": "海战竞技",
   "version": "0.2.0",
-  "category": "naval-action",
+  "category": "naval-survival",
+  "summary": "1-8 人海上成长乱斗：物资升级、侧舷自动炮、悬赏旗舰、连沉奖励、海怪事件与积分排名。",
   "players": {
     "min": 1,
     "max": 8
   },
   "runtime": {
-    "type": "process",
-    "port": 9020
+    "kind": "process",
+    "healthPath": "/info",
+    "healthProtocol": "sea-battle/1",
+    "command": [
+      "node",
+      "server.mjs"
+    ],
+    "workingDirectoryEnv": "SEA_BATTLE_DIR",
+    "bundledPath": "games/sea-battle",
+    "port": 9020,
+    "startPath": "/api/start"
   },
-  "control": {
-    "mobile": true
+  "entrypoints": {
+    "display": "http://{host}:9020/display",
+    "player": "http://{host}:9020/"
   },
-  "display": {
-    "broadcast": true,
-    "spectator": true
+  "capabilities": {
+    "aiFill": true,
+    "hotJoin": true,
+    "reconnect": true,
+    "highlights": true,
+    "replay": false
   },
-  "ai": {
-    "fill": true
+  "round": {
+    "joinPolicy": "ephemeral-code",
+    "codeTtlSeconds": 300,
+    "lateJoin": false
+  },
+  "settings": [
+    {
+      "key": "seconds",
+      "label": "单局时长",
+      "type": "number",
+      "env": "RACE_SECONDS",
+      "wired": true,
+      "default": 180,
+      "min": 60,
+      "max": 300,
+      "step": 10,
+      "description": "三阶段海战节奏的总时长，修改后在下次启动进程时生效。"
+    }
+  ],
+  "commercial": {
+    "tier": "pro",
+    "entitlements": [
+      "game:sea-battle"
+    ]
   }
 }
