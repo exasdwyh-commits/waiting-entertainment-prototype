@@ -1,24 +1,38 @@
 {
+  "schemaVersion": 1,
   "id": "table-push-king",
   "name": "餐桌推推王",
   "version": "0.1.0",
-  "category": "party-battle",
+  "category": "physics-party",
+  "summary": "手机个人视角 + 大屏自动导播的 1-10 人物理派对乱斗。",
   "players": {
-    "min": 2,
+    "min": 1,
     "max": 10
   },
   "runtime": {
-    "type": "embedded",
-    "port": 9030
+    "kind": "embedded",
+    "healthPath": "/health"
   },
-  "control": {
-    "mobile": true
+  "entrypoints": {
+    "display": "http://{host}:5173/",
+    "player": "http://{host}:5174/"
   },
-  "display": {
-    "broadcast": true,
-    "spectator": true
+  "capabilities": {
+    "aiFill": true,
+    "hotJoin": true,
+    "reconnect": true,
+    "highlights": true,
+    "replay": true
   },
-  "ai": {
-    "fill": true
+  "round": {
+    "joinPolicy": "ephemeral-code",
+    "codeTtlSeconds": 300,
+    "lateJoin": false
+  },
+  "commercial": {
+    "tier": "base",
+    "entitlements": [
+      "game:table-push-king"
+    ]
   }
 }
