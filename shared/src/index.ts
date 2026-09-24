@@ -1,9 +1,11 @@
 export const TABLE_PUSH_GEOMETRY = {
-  arenaRadius: 8.2,
-  spawnRadius: 4.7,
-  rimRadius: 8.08,
-  dangerStartRadius: 6.35,
-  lazySusanRadius: 3.35,
+  // V1.1 venue tuning: roughly +37% playable surface area versus the
+  // original 8.2m radius table, giving ten players more recovery room.
+  arenaRadius: 9.6,
+  spawnRadius: 5.4,
+  rimRadius: 9.48,
+  dangerStartRadius: 7.65,
+  lazySusanRadius: 3.6,
 } as const;
 
 export type PlayerId = string;

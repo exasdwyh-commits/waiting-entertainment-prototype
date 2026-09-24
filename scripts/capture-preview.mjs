@@ -104,14 +104,19 @@ try {
 
   await guest.locator('input[name="name"]').fill("Preview Guest");
   await guest.locator("#join-form button").click();
-  await guest.locator(".joined-wait").waitFor({ timeout: 10_000 });
 
-  if (!guest.url().includes(":5177/")) {
-    throw new Error(
-      "Embedded-game signup should remain on the Hub waiting page before host start. url=" +
-        guest.url(),
-    );
-  }
+  // Embedded Table Push King should hand off to its controller immediately
+  // after Hub admission. The controller remains disconnected until the host
+  // actually starts the round, so players can scan once and keep the phone
+  // ready without a second navigation step.
+  await guest.waitForURL(/:5174\//, { timeout: 12_000 });
+  await guest.waitForFunction(
+    () => {
+      const text = document.querySelector("#status")?.textContent ?? "";
+      return text.includes("等待主持人开局") || text.includes("报名成功");
+    },
+    { timeout: 12_000 },
+  );
 
   await host.waitForFunction(
     () =>
@@ -123,7 +128,6 @@ try {
   await host.locator('[data-round-action="start"]').waitFor({ timeout: 8_000 });
   await host.locator('[data-round-action="start"]').click();
 
-  await guest.waitForURL(/:5174\//, { timeout: 12_000 });
   await guest.waitForFunction(
     () => {
       const text = document.querySelector("#status")?.textContent ?? "";
@@ -221,8 +225,13 @@ try {
     fullPage: true,
   });
 
+  // The phone screenshot can leave the venue display as a background page.
+  // Headless Chromium throttles requestAnimationFrame there, so foreground the
+  // display before starting the deterministic replay assertion.
+  await big.bringToFront();
   await big.waitForFunction(
     () => typeof window.__waitingVisualReplay === "function",
+    undefined,
     { timeout: 10_000 },
   );
   const replayStarted = await big.evaluate(() =>
@@ -243,6 +252,7 @@ try {
         caption.includes("视觉回放验收")
       );
     },
+    undefined,
     { timeout: 10_000 },
   );
 

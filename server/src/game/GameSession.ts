@@ -528,19 +528,22 @@ export class GameSession {
       8,
       Math.round(GAME_TUNING.match.respawnCandidateCount),
     );
-
-    let bestPoint = {
-      x: Math.cos(baseAngle) * TABLE_PUSH_GEOMETRY.spawnRadius,
-      z: Math.sin(baseAngle) * TABLE_PUSH_GEOMETRY.spawnRadius,
+    // 设计规则：复活从场中心区域开始，而不是回到桌沿。
+    const centerSpawn = {
+      x: Math.cos(baseAngle) * TABLE_PUSH_GEOMETRY.arenaRadius * 0.22,
+      z: Math.sin(baseAngle) * TABLE_PUSH_GEOMETRY.arenaRadius * 0.22,
     };
+
+    let bestPoint = centerSpawn;
     let bestClearance = -1;
 
     for (let offset = 0; offset < candidateCount; offset += 1) {
       const angle =
         baseAngle + (offset / candidateCount) * Math.PI * 2;
+      // 复活候选点分布在中心区域（半径不超过 38% 场半径），避开后向边缘靠拢。
       const radius =
-        TABLE_PUSH_GEOMETRY.spawnRadius +
-        (offset % 2 === 0 ? -0.15 : 0.7);
+        TABLE_PUSH_GEOMETRY.arenaRadius *
+        (0.22 + (offset % 2 === 0 ? 0 : 0.16));
       const point = {
         x: Math.cos(angle) * radius,
         z: Math.sin(angle) * radius,

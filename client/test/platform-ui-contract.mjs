@@ -6,6 +6,8 @@ const hostCss = readFileSync(new URL("../../host/src/style.css", import.meta.url
 const screen = readFileSync(new URL("../../screen/src/main.ts", import.meta.url), "utf8");
 const screenCss = readFileSync(new URL("../../screen/src/style.css", import.meta.url), "utf8");
 const client = readFileSync(new URL("../../client/src/main.ts", import.meta.url), "utf8");
+const guest = readFileSync(new URL("../../guest/src/main.ts", import.meta.url), "utf8");
+const player = readFileSync(new URL("../../player/src/main.ts", import.meta.url), "utf8");
 const preview = readFileSync(new URL("../../scripts/capture-preview.mjs", import.meta.url), "utf8");
 
 assert.match(host, /data-view="games"/);
@@ -45,6 +47,10 @@ assert.match(client, /shellOwnsQueue/);
 assert.match(preview, /#queue-overlay/);
 assert.match(preview, /broadcast\.queueOverlay\?\.ticketId/);
 assert.match(client, /visualPreview/);
+assert.match(guest, /embeddedControllerReady/);
+assert.match(guest, /game\?\.runtime\.kind === "embedded"/);
+assert.match(player, /autoConnect: !ROUND_CODE/);
+assert.match(player, /round\.status === "running"/);
 assert.match(preview, /__waitingVisualReplay/);
 
 console.log("Platform UI contract passed: game management controls and runtime-degradation fallbacks are present.");
