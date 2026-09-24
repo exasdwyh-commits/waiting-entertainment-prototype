@@ -2274,10 +2274,6 @@ export class GameSession {
       slot.state = "eliminated";
       slot.body.setEnabled(false);
 
-      // 设计规则：掉出桌沿属于清积分死亡——本轮累计积分清零（击坠者仍得 1 分），
-      // 决胜阶段之外可从场中心区域复活重新攒分。
-      slot.score = 0;
-
       const permanentElimination = this.matchStage(now) === "final";
       slot.respawnAt = permanentElimination
         ? 0
