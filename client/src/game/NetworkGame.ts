@@ -574,11 +574,12 @@ export class NetworkGame {
 
     const actor = frames[frames.length - 1]?.players[0];
     const target = frames[frames.length - 1]?.players[1];
+    const previewLabel = actor && target
+      ? `视觉回放验收 · ${actor.name} → ${target.name} · 反打机位`
+      : "视觉回放验收 · 反打机位";
     this.replayQueue = [{
       frames,
-      label: actor && target
-        ? `视觉回放验收 · ${actor.name} → ${target.name} · 反打机位`
-        : "视觉回放验收 · 反打机位",
+      label: previewLabel,
       loops: 1,
       actorId: actor?.id,
       targetId: target?.id,
@@ -588,10 +589,10 @@ export class NetworkGame {
     // previewReplay is exposed only through the ?visualPreview=1 regression
     // hook. Mark the replay UI synchronously so headless browsers cannot miss
     // the short 1.4–1.9s replay window while recovering a background tab.
-    if (started && this.replay) {
+    if (started) {
       this.options.message.classList.add("replay-caption");
       this.options.message.textContent =
-        `${this.replay.label} · ${REPLAY_SPEED.toFixed(2)}×`;
+        `${previewLabel} · ${REPLAY_SPEED.toFixed(2)}×`;
       this.updateBroadcastBug("视觉回放验收", true);
     }
     return started;
