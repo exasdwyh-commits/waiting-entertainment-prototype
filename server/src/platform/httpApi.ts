@@ -285,7 +285,7 @@ export async function handlePlatformRequest(
             seat: "seated",
             cancel: "cancelled",
           }[action] as QueueTicketStatus);
-      json(res, 200, { ticket, ...hub.queue.status(ticket.id) });
+      json(res, 200, hub.queue.status(ticket.id));
       return true;
     }
 
