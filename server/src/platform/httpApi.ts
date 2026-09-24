@@ -258,24 +258,34 @@ export async function handlePlatformRequest(
         throw new Error("partySize-required");
       }
       const label = typeof body.label === "string" ? body.label : undefined;
-      json(res, 201, { ticket: hub.queue.add(partySize, label) });
+      const ticket = hub.queue.add(partySize, label);
+      json(res, 201, { ...hub.queue.status(ticket.id) });
+      return true;
+    }
+
+    const queueTicketMatch = url.pathname.match(
+      /^\/api\/platform\/queue\/([^/]+)$/,
+    );
+    if (req.method === "GET" && queueTicketMatch) {
+      json(res, 200, hub.queue.status(queueTicketMatch[1]));
       return true;
     }
 
     const queueMatch = url.pathname.match(
-      /^\/api\/platform\/queue\/([^/]+)\/(call|return|pass|seat|cancel)$/,
+      /^\/api\/platform\/queue\/([^/]+)\/(call|recall|return|pass|seat|cancel)$/,
     );
     if (req.method === "POST" && queueMatch) {
-      const transitions: Record<string, QueueTicketStatus> = {
-        call: "called",
-        return: "waiting",
-        pass: "passed",
-        seat: "seated",
-        cancel: "cancelled",
-      };
-      json(res, 200, {
-        ticket: hub.transitionQueue(queueMatch[1], transitions[queueMatch[2]]),
-      });
+      const action = queueMatch[2];
+      const ticket = action === "recall"
+        ? hub.queue.recall(queueMatch[1])
+        : hub.transitionQueue(queueMatch[1], {
+            call: "called",
+            return: "waiting",
+            pass: "passed",
+            seat: "seated",
+            cancel: "cancelled",
+          }[action] as QueueTicketStatus);
+      json(res, 200, { ticket, ...hub.queue.status(ticket.id) });
       return true;
     }
 

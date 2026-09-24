@@ -9,7 +9,7 @@ root.innerHTML =
   '<main class="broadcast-shell">' +
     '<iframe id="game-frame" class="game-frame" title="游戏导播画面"></iframe>' +
     '<section id="idle" class="scene scene--idle"><div class="brand-lockup"><span>WAITING</span><strong>ENTERTAINMENT</strong></div>' +
-      '<h1>现场互动正在准备</h1><p>留意主持人和大屏，下一轮很快开始</p></section>' +
+      '<h1>现场互动正在准备</h1><p>等位顾客可先扫码取号，手机会持续显示前方桌数。</p></section>' +
     '<section id="recruit" class="scene scene--recruit" hidden><div class="recruit-copy"><span class="eyebrow">OPEN REGISTRATION</span>' +
       '<h1 id="game-name">现场互动</h1><p id="game-summary"></p><div class="seat-progress"><strong id="seat-count">0 / 0</strong><span>已报名</span></div>' +
       '<div id="player-names" class="player-names"></div></div><div class="qr-card"><canvas id="qr" width="280" height="280"></canvas>' +
@@ -21,6 +21,8 @@ root.innerHTML =
     '<div class="corner-brand"><span>WE</span><strong id="mode-label">IDLE_MEDIA</strong></div>' +
     '<section id="runtime-alert" class="runtime-alert" hidden><span class="runtime-alert__eyebrow">GAME RUNTIME INTERRUPTED</span>' +
       '<strong id="runtime-alert-title">游戏运行中断</strong><p id="runtime-alert-copy">请联系主持人检查游戏进程。</p></section>' +
+    '<aside id="queue-entry" class="queue-entry"><canvas id="queue-join-qr" width="156" height="156"></canvas>' +
+      '<div><small>RESTAURANT QUEUE</small><strong>扫码取号</strong><span id="queue-waiting-count">0 桌等待 · 叫号手机提醒</span></div></aside>' +
     '<aside id="queue-overlay" class="queue-overlay" hidden><span class="bell">●</span><div><small>请准备入座</small>' +
       '<strong id="queue-number">A000</strong><span id="queue-party">2 人桌 · 请前往前台</span></div></aside>' +
     '<div id="offline" class="offline" hidden>Hub 离线 · 正在重连</div>' +
@@ -40,6 +42,9 @@ const readyPlayers = document.querySelector<HTMLElement>("#ready-players")!;
 const roundCode = document.querySelector<HTMLElement>("#round-code")!;
 const modeLabel = document.querySelector<HTMLElement>("#mode-label")!;
 const qrCanvas = document.querySelector<HTMLCanvasElement>("#qr")!;
+const queueEntry = document.querySelector<HTMLElement>("#queue-entry")!;
+const queueJoinQr = document.querySelector<HTMLCanvasElement>("#queue-join-qr")!;
+const queueWaitingCount = document.querySelector<HTMLElement>("#queue-waiting-count")!;
 const queueOverlay = document.querySelector<HTMLElement>("#queue-overlay")!;
 const queueNumber = document.querySelector<HTMLElement>("#queue-number")!;
 const queueParty = document.querySelector<HTMLElement>("#queue-party")!;
@@ -91,7 +96,19 @@ function setScene(mode: PlatformSnapshot["broadcast"]["mode"]) {
   ready.hidden = mode !== "READY" && mode !== "COUNTDOWN";
   result.hidden = mode !== "RESULT" && mode !== "HIGHLIGHT";
   gameFrame.classList.toggle("game-frame--active", mode === "LIVE_GAME");
+  queueEntry.hidden = mode === "RECRUITING" || mode === "READY" || mode === "COUNTDOWN";
+  queueEntry.classList.toggle("queue-entry--idle", mode === "IDLE_MEDIA");
   modeLabel.textContent = mode;
+}
+
+async function renderQueueJoinQr() {
+  const queueUrl = location.protocol + "//" + location.hostname + ":5177/queue";
+  await QRCode.toCanvas(queueJoinQr, queueUrl, {
+    width: 156,
+    margin: 1,
+    errorCorrectionLevel: "M",
+    color: { dark: "#07100d", light: "#f4fff9" },
+  });
 }
 
 async function renderQr(code: string) {
@@ -132,6 +149,8 @@ async function refresh() {
     offline.hidden = true;
 
     const state = snapshot.broadcast;
+    const waitingCount = snapshot.queue.filter((ticket) => ticket.status === "waiting").length;
+    queueWaitingCount.textContent = waitingCount + " 桌等待 · 叫号手机提醒";
     const round = state.round;
     const game = round ? snapshot.games.find((item) => item.id === round.gameId) : undefined;
     const runtime = game
@@ -194,6 +213,7 @@ async function refresh() {
   }
 }
 
+void renderQueueJoinQr();
 void refresh();
 window.setInterval(() => void refresh(), 450);
 window.addEventListener("focus", () => void refresh());

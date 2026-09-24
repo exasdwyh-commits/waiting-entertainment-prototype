@@ -232,3 +232,18 @@ button:disabled { cursor: not-allowed; opacity: .38; }
 .manage-setting-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding-top:9px;margin-top:3px;border-top:1px solid #ffffff08}
 .manage-setting-actions button{padding:7px 12px;font-size:10px}
 .manage-settings__hint{color:#6f7c8d;font-size:9px}
+
+.queue-self-service {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: -4px 0 14px; padding: 12px 13px;
+  border: 1px solid rgba(121,168,255,.16); border-radius: 13px; background: rgba(121,168,255,.055);
+}
+.queue-self-service div { display: grid; gap: 3px; }
+.queue-self-service strong { color: #dfe8ff; font-size: 11px; }
+.queue-self-service span { color: #758397; font-size: 9px; line-height: 1.4; }
+.queue-self-service a {
+  flex: 0 0 auto; color: #a8c1ff; text-decoration: none; font-size: 10px; font-weight: 800;
+}
+.queue-row--called {
+  box-shadow: inset 3px 0 0 #8df7cb;
+}

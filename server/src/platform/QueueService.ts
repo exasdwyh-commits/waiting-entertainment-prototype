@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
 import type { QueueTicket, QueueTicketStatus } from "@waiting/shared";
 
+export interface QueueTicketView {
+  ticket: QueueTicket;
+  ahead: number;
+  position: number | null;
+  waitingCount: number;
+}
+
 function cloneTicket(ticket: QueueTicket): QueueTicket {
   return structuredClone(ticket);
 }
@@ -30,6 +37,30 @@ export class QueueService {
     return cloneTicket(ticket);
   }
 
+  get(ticketId: string): QueueTicket | undefined {
+    const ticket = this.tickets.get(ticketId);
+    return ticket ? cloneTicket(ticket) : undefined;
+  }
+
+  status(ticketId: string): QueueTicketView {
+    const ticket = this.tickets.get(ticketId);
+    if (!ticket) throw new Error("queue-ticket-not-found");
+
+    const waiting = [...this.tickets.values()]
+      .filter((item) => item.status === "waiting")
+      .sort((a, b) => a.createdAt - b.createdAt);
+    const ahead = ticket.status === "waiting"
+      ? waiting.filter((item) => item.createdAt < ticket.createdAt).length
+      : 0;
+
+    return {
+      ticket: cloneTicket(ticket),
+      ahead,
+      position: ticket.status === "waiting" ? ahead + 1 : null,
+      waitingCount: waiting.length,
+    };
+  }
+
   transition(ticketId: string, next: QueueTicketStatus): QueueTicket {
     const ticket = this.tickets.get(ticketId);
     if (!ticket) {
@@ -55,6 +86,16 @@ export class QueueService {
     if (next === "seated") {
       ticket.seatedAt = Date.now();
     }
+    return cloneTicket(ticket);
+  }
+
+  recall(ticketId: string): QueueTicket {
+    const ticket = this.tickets.get(ticketId);
+    if (!ticket) throw new Error("queue-ticket-not-found");
+    if (ticket.status !== "called") {
+      throw new Error(`invalid-queue-transition:${ticket.status}->called`);
+    }
+    ticket.calledAt = Math.max(Date.now(), (ticket.calledAt ?? 0) + 1);
     return cloneTicket(ticket);
   }
 
