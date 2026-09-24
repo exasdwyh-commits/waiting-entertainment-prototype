@@ -23,6 +23,11 @@ assert.equal(cors.status, 204);
 assert.equal(cors.headers.get("access-control-allow-origin"), "*");
 assert.match(cors.headers.get("access-control-allow-methods") ?? "", /POST/);
 
+const network = await api("/api/platform/network");
+assert.equal(typeof network.host, "string");
+assert.ok(network.host.length > 0);
+assert.match(network.source, /^(env|lan|fallback)$/);
+
 const games = await api("/api/platform/games");
 assert.equal(games.license.plan, "BASE");
 assert.ok(games.games.some((game) => game.id === "table-push-king"));
@@ -174,6 +179,31 @@ assert.equal(broadcast.mode, "LIVE_GAME");
 assert.equal(broadcast.round.id, created.round.id);
 assert.equal(broadcast.queueOverlay.ticketId, queue.ticket.id);
 assert.equal(broadcast.queueOverlay.calledAt, recalled.ticket.calledAt);
+
+// A newer call owns the broadcast event. When that newer ticket leaves the
+// called state, an older still-called ticket must not resurface automatically.
+const secondCalled = await api(`/api/platform/queue/${queueSecond.ticket.id}/call`, {
+  method: "POST",
+});
+assert.equal(secondCalled.ticket.status, "called");
+const broadcastSecond = await api("/api/platform/broadcast");
+assert.equal(broadcastSecond.queueOverlay.ticketId, queueSecond.ticket.id);
+
+await api(`/api/platform/queue/${queueSecond.ticket.id}/seat`, {
+  method: "POST",
+});
+const broadcastAfterSeat = await api("/api/platform/broadcast");
+assert.equal(broadcastAfterSeat.queueOverlay, undefined);
+
+const firstRecalledAgain = await api(`/api/platform/queue/${queue.ticket.id}/recall`, {
+  method: "POST",
+});
+const broadcastAfterExplicitRecall = await api("/api/platform/broadcast");
+assert.equal(broadcastAfterExplicitRecall.queueOverlay.ticketId, queue.ticket.id);
+assert.equal(
+  broadcastAfterExplicitRecall.queueOverlay.calledAt,
+  firstRecalledAgain.ticket.calledAt,
+);
 
 const finished = await api(`/api/platform/rounds/${created.round.id}/finish`, {
   method: "POST",

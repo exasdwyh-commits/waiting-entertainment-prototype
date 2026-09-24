@@ -4,6 +4,21 @@ import "./style.css";
 const API = location.protocol + "//" + location.hostname + ":3001/api/platform";
 const root = document.querySelector<HTMLDivElement>("#app")!;
 let snapshot: PlatformSnapshot | null = null;
+let venueHost = location.hostname;
+
+function isLoopbackHost(host: string): boolean {
+  return host === "127.0.0.1" || host === "localhost" || host === "::1" || host === "[::1]";
+}
+
+async function resolveVenueHost() {
+  if (!isLoopbackHost(venueHost)) return;
+  try {
+    const body = await api("/network") as { host?: string };
+    if (body.host?.trim()) venueHost = body.host.trim();
+  } catch {
+    // Keep loopback for local administration if LAN detection is unavailable.
+  }
+}
 let busy = false;
 let activeView: "live" | "games" = location.hash === "#games" ? "games" : "live";
 const runtimeLogText = new Map<string, string>();
@@ -373,7 +388,7 @@ function render() {
   const queue = snapshot.queue.filter((ticket) => ticket.status !== "cancelled");
   const waitingCount = queue.filter((ticket) => ticket.status === "waiting").length;
   const screenUrl = location.protocol + "//" + location.hostname + ":5176";
-  const queueJoinUrl = location.protocol + "//" + location.hostname + ":5177/queue";
+  const queueJoinUrl = location.protocol + "//" + venueHost + ":5177/queue";
   const liveWorkspace =
     '<div class="workspace"><section class="main-column">' + renderRound(active, snapshot.games) +
     '<section class="section-block"><div class="section-title"><div><span class="eyebrow">GAME LIBRARY</span><h2>互动游戏库</h2></div>' +
@@ -730,6 +745,11 @@ async function refresh(force = false) {
   }
 }
 
-render();
-void refresh(true);
-window.setInterval(() => void refresh(), 800);
+async function startHostConsole() {
+  await resolveVenueHost();
+  render();
+  await refresh(true);
+  window.setInterval(() => void refresh(), 800);
+}
+
+void startHostConsole();

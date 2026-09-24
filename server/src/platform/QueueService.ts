@@ -101,9 +101,14 @@ export class QueueService {
   }
 
   latestCalled(): QueueTicket | undefined {
-    const called = [...this.tickets.values()]
-      .filter((ticket) => ticket.status === "called" && ticket.calledAt)
+    // Treat calledAt as an event stream, not as "find any ticket still called".
+    // Otherwise an older called ticket can resurface on the big screen after a
+    // newer ticket is seated/passed. Only the most recent call event may own
+    // the broadcast overlay; staff can explicitly recall an older ticket.
+    const latestCall = [...this.tickets.values()]
+      .filter((ticket) => ticket.calledAt)
       .sort((a, b) => (b.calledAt ?? 0) - (a.calledAt ?? 0))[0];
-    return called ? cloneTicket(called) : undefined;
+
+    return latestCall?.status === "called" ? cloneTicket(latestCall) : undefined;
   }
 }
