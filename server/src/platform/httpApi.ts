@@ -1,8 +1,32 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { networkInterfaces } from "node:os";
 import type { EntertainmentRound, QueueTicketStatus, RoundStatus } from "@waiting/shared";
 import { PlatformHub } from "./PlatformHub.js";
 
 const MAX_BODY_BYTES = 16 * 1024;
+
+function isPrivateIpv4(address: string): boolean {
+  const parts = address.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part))) return false;
+  if (parts[0] === 10) return true;
+  if (parts[0] === 192 && parts[1] === 168) return true;
+  return parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31;
+}
+
+function venueNetworkHost(): { host: string; source: "env" | "lan" | "fallback" } {
+  const explicit = process.env.WAITING_PUBLIC_HOST?.trim();
+  if (explicit) return { host: explicit, source: "env" };
+
+  const ipv4 = Object.values(networkInterfaces())
+    .flatMap((entries) => entries ?? [])
+    .filter((entry) => entry.family === "IPv4" && !entry.internal)
+    .map((entry) => entry.address);
+
+  const preferred = ipv4.find(isPrivateIpv4) ?? ipv4[0];
+  return preferred
+    ? { host: preferred, source: "lan" }
+    : { host: "127.0.0.1", source: "fallback" };
+}
 
 export interface PlatformHttpHooks {
   onRoundStarted?: (round: EntertainmentRound) => void | Promise<void>;
@@ -103,6 +127,11 @@ export async function handlePlatformRequest(
   try {
     if (req.method === "GET" && url.pathname === "/api/platform") {
       json(res, 200, await hub.snapshotFresh());
+      return true;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/platform/network") {
+      json(res, 200, venueNetworkHost());
       return true;
     }
 
