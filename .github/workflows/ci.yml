@@ -14,6 +14,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Validate local deployment launchers
+        run: node --check scripts/setup-local.mjs && node --check scripts/start-local.mjs
       - run: npm install
       - run: npm run build
       - name: Smoke, platform, and ten-client combat stress
@@ -53,3 +55,59 @@ jobs:
 
           start_server /tmp/waiting-server-stress.log env WAITING_ROUND_MS=60000 WAITING_STRESS_MODE=1 node server/dist/index.js
           node client/test/socket-stress.mjs
+
+
+  deploy-smoke:
+    name: clone-and-run deployment smoke
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fresh local setup
+        run: npm run setup
+      - name: Start demo and verify all bundled games
+        run: |
+          npm start > /tmp/waiting-demo.log 2>&1 &
+          DEMO_PID=$!
+          cleanup () {
+            kill "$DEMO_PID" 2>/dev/null || true
+            pkill -P "$DEMO_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:3001/health | grep -q '"ok":true'; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              cat /tmp/waiting-demo.log
+              exit 1
+            fi
+            sleep 0.5
+          done
+
+          curl --fail --silent http://127.0.0.1:5175/ > /dev/null
+          curl --fail --silent http://127.0.0.1:5176/ > /dev/null
+
+          node --input-type=module -e '
+            const response = await fetch("http://127.0.0.1:3001/api/platform/games");
+            if (!response.ok) throw new Error("game list unavailable");
+            const payload = await response.json();
+            const ids = payload.games.map((game) => game.id).sort();
+            const expected = ["pilot-racer", "sea-battle", "table-push-king"];
+            if (JSON.stringify(ids) !== JSON.stringify(expected)) {
+              throw new Error("unexpected authorized games: " + ids.join(","));
+            }
+          '
+
+          curl --fail --silent -X POST http://127.0.0.1:3001/api/platform/runtimes/pilot-racer/start > /tmp/pilot-runtime.json
+          curl --fail --silent http://127.0.0.1:9010/info | grep -q '"protocol":"pilot-racer/1"'
+          curl --fail --silent -X POST http://127.0.0.1:3001/api/platform/runtimes/pilot-racer/stop > /dev/null
+
+          curl --fail --silent -X POST http://127.0.0.1:3001/api/platform/runtimes/sea-battle/start > /tmp/sea-runtime.json
+          curl --fail --silent http://127.0.0.1:9020/info | grep -q '"protocol":"sea-battle/1"'
+          curl --fail --silent -X POST http://127.0.0.1:3001/api/platform/runtimes/sea-battle/stop > /dev/null

@@ -18,6 +18,7 @@
       "server.mjs"
     ],
     "workingDirectoryEnv": "PILOT_RACER_DIR",
+    "bundledPath": "games/pilot-racer",
     "port": 9010,
     "startPath": "/api/start"
   },
@@ -46,14 +47,8 @@
       "wired": true,
       "default": "bay",
       "options": [
-        {
-          "value": "bay",
-          "label": "海湾大奖赛"
-        },
-        {
-          "value": "ridge",
-          "label": "山脊赛道"
-        }
+        { "value": "bay", "label": "海湾大奖赛" },
+        { "value": "ridge", "label": "山脊赛道" }
       ]
     },
     {
@@ -81,8 +76,6 @@
   ],
   "commercial": {
     "tier": "base",
-    "entitlements": [
-      "game:pilot-racer"
-    ]
+    "entitlements": ["game:pilot-racer"]
   }
 }

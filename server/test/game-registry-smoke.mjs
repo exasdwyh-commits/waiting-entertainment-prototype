@@ -36,6 +36,7 @@ assert.equal(sea?.version, "0.2.0");
 assert.equal(sea?.runtime.bundledPath, "games/sea-battle");
 assert.equal(sea?.settings?.find((setting) => setting.key === "seconds")?.default, 180);
 const racer = BUILTIN_GAME_MANIFESTS.find((manifest) => manifest.id === "pilot-racer");
+assert.equal(racer?.runtime.bundledPath, "games/pilot-racer");
 assert.equal(racer?.settings?.find((setting) => setting.key === "seconds")?.default, 150);
 
 {
