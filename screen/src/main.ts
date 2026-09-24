@@ -4,6 +4,24 @@ import "./style.css";
 
 const API = location.protocol + "//" + location.hostname + ":3001/api/platform";
 const root = document.querySelector<HTMLDivElement>("#app")!;
+let venueHost = location.hostname;
+
+function isLoopbackHost(host: string): boolean {
+  return host === "127.0.0.1" || host === "localhost" || host === "::1" || host === "[::1]";
+}
+
+async function resolveVenueHost() {
+  if (!isLoopbackHost(venueHost)) return;
+  try {
+    const response = await fetch(API + "/network", { cache: "no-store" });
+    if (!response.ok) return;
+    const body = await response.json() as { host?: string };
+    if (body.host?.trim()) venueHost = body.host.trim();
+  } catch {
+    // Keep loopback as a safe local fallback. The Host Console shows the same
+    // resolved venue address so operators can override WAITING_PUBLIC_HOST.
+  }
+}
 
 root.innerHTML =
   '<main class="broadcast-shell">' +
@@ -102,7 +120,7 @@ function setScene(mode: PlatformSnapshot["broadcast"]["mode"]) {
 }
 
 async function renderQueueJoinQr() {
-  const queueUrl = location.protocol + "//" + location.hostname + ":5177/queue";
+  const queueUrl = location.protocol + "//" + venueHost + ":5177/queue";
   await QRCode.toCanvas(queueJoinQr, queueUrl, {
     width: 156,
     margin: 1,
@@ -114,7 +132,7 @@ async function renderQueueJoinQr() {
 async function renderQr(code: string) {
   if (!code || code === lastQrCode) return;
   lastQrCode = code;
-  const joinUrl = location.protocol + "//" + location.hostname + ":5177/join/" + encodeURIComponent(code);
+  const joinUrl = location.protocol + "//" + venueHost + ":5177/join/" + encodeURIComponent(code);
   await QRCode.toCanvas(qrCanvas, joinUrl, {
     width: 280,
     margin: 1,
@@ -213,10 +231,15 @@ async function refresh() {
   }
 }
 
-void renderQueueJoinQr();
-void refresh();
-window.setInterval(() => void refresh(), 450);
-window.addEventListener("focus", () => void refresh());
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) void refresh();
-});
+async function startBroadcastShell() {
+  await resolveVenueHost();
+  await renderQueueJoinQr();
+  await refresh();
+  window.setInterval(() => void refresh(), 450);
+  window.addEventListener("focus", () => void refresh());
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) void refresh();
+  });
+}
+
+void startBroadcastShell();
