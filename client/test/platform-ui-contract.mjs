@@ -32,6 +32,8 @@ assert.match(hostCss, /\.manage-grid/);
 assert.match(hostCss, /\.round-runtime-alert/);
 assert.match(host, /queue-self-service/);
 assert.match(host, /data-queue-action="recall"/);
+assert.match(host, /venueHost/);
+assert.match(host, /\/network/);
 assert.match(hostCss, /\.queue-self-service/);
 
 assert.match(screen, /id="runtime-alert"/);
@@ -47,6 +49,8 @@ assert.match(screen, /refreshId < refreshApplied/);
 assert.match(screen, /addEventListener\("focus"/);
 assert.match(screen, /visibilitychange/);
 assert.match(screen, /id="queue-join-qr"/);
+assert.match(screen, /venueHost/);
+assert.match(screen, /\/network/);
 assert.match(screen, /5177\/queue/);
 assert.match(screenCss, /\.queue-entry/);
 assert.match(client, /shellOwnsQueue/);
