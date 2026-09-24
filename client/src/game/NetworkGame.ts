@@ -564,7 +564,14 @@ export class NetworkGame {
 
   previewReplay(): boolean {
     const latest = this.latest;
-    if (!latest || this.history.length < 4 || this.replay) return false;
+    if (!latest || this.history.length < 4) return false;
+
+    // This method is only exposed behind ?visualPreview=1. Take ownership from
+    // any short automatic highlight that may already be playing so the visual
+    // regression hook is deterministic regardless of where the live match
+    // cycle happened to be when the page opened.
+    this.replay = undefined;
+    this.replayQueue = [];
 
     const sameMatch = this.history.filter(
       (frame) => frame.matchId === latest.matchId,
