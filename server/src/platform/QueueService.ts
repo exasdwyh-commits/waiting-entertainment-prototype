@@ -49,8 +49,9 @@ export class QueueService {
     const waiting = [...this.tickets.values()]
       .filter((item) => item.status === "waiting")
       .sort((a, b) => a.createdAt - b.createdAt);
+    const waitingIndex = waiting.findIndex((item) => item.id === ticket.id);
     const ahead = ticket.status === "waiting"
-      ? waiting.filter((item) => item.createdAt < ticket.createdAt).length
+      ? Math.max(0, waitingIndex)
       : 0;
 
     return {
