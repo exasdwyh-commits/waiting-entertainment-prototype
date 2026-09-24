@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { networkInterfaces } from "node:os";
 import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { resolve, dirname } from "node:path";
+import { resolve, dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
 import { Server as SocketIOServer } from "socket.io";
@@ -19,6 +19,8 @@ import {
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const THREE_MODULE = fileURLToPath(import.meta.resolve("three"));
 const THREE_CORE = resolve(dirname(THREE_MODULE), "three.core.js");
+const THREE_ADDONS = resolve(dirname(THREE_MODULE), "../examples/jsm");
+const ASSET_ROOT = resolve(ROOT, "public/assets");
 
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -26,7 +28,13 @@ const TYPES = {
   ".mjs": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
   ".svg": "image/svg+xml",
+  ".gltf": "model/gltf+json",
+  ".glb": "model/gltf-binary",
+  ".bin": "application/octet-stream",
 };
 
 const staticFiles = new Map([
@@ -35,6 +43,34 @@ const staticFiles = new Map([
   ["/app.mjs", ["public/app.mjs", "text/javascript; charset=utf-8"]],
   ["/style.css", ["public/style.css", "text/css; charset=utf-8"]],
 ]);
+
+function safeStaticTarget(root, prefix, pathname) {
+  let relative;
+  try {
+    relative = decodeURIComponent(pathname.slice(prefix.length));
+  } catch {
+    return null;
+  }
+  if (!relative || relative.includes("\0")) return null;
+  const target = resolve(root, relative);
+  if (target !== root && !target.startsWith(root + "/")) return null;
+  return target;
+}
+
+async function sendStatic(res, target, cache = "public, max-age=3600") {
+  try {
+    const body = await readFile(target);
+    res.writeHead(200, {
+      "content-type": TYPES[extname(target).toLowerCase()] ?? "application/octet-stream",
+      "cache-control": cache,
+    });
+    res.end(body);
+    return true;
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.code === "EISDIR") return false;
+    throw error;
+  }
+}
 
 function sendJson(res, body, status = 200) {
   res.writeHead(status, {
@@ -97,6 +133,27 @@ export async function createSeaBattle({
         res.end(await readFile(
           url.pathname.endsWith("three.core.js") ? THREE_CORE : THREE_MODULE,
         ));
+        return;
+      }
+      if (url.pathname.startsWith("/three/addons/")) {
+        const target = safeStaticTarget(
+          THREE_ADDONS,
+          "/three/addons/",
+          url.pathname,
+        );
+        if (target && await sendStatic(res, target)) return;
+        res.writeHead(404);
+        res.end("Three addon not found");
+        return;
+      }
+      if (url.pathname.startsWith("/assets/")) {
+        const target = safeStaticTarget(ASSET_ROOT, "/assets/", url.pathname);
+        const cache = url.pathname.endsWith(".json")
+          ? "no-store"
+          : "public, max-age=300";
+        if (target && await sendStatic(res, target, cache)) return;
+        res.writeHead(404);
+        res.end("Asset not found");
         return;
       }
       const entry = staticFiles.get(url.pathname);

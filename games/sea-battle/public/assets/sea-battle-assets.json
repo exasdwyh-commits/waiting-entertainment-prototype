@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "ship": {
+    "url": null,
+    "scale": 1,
+    "rotationY": 0,
+    "offsetY": 0,
+    "note": "Optional generic ship GLB/GLTF. One loaded scene is cloned for all boats; gameplay collision remains authoritative."
+  },
+  "monster": {
+    "url": null,
+    "scale": 1,
+    "rotationY": 0,
+    "offsetY": 0,
+    "note": "Optional sea-monster GLB/GLTF. Leave null to use the procedural fallback."
+  },
+  "islands": [],
+  "guidance": {
+    "coordinateSystem": "+Y up, ship forward +Z",
+    "recommendedShipBounds": "about 2.5m wide x 5m long before manifest scale",
+    "recommendedFormats": [
+      ".glb",
+      ".gltf"
+    ],
+    "exampleIsland": {
+      "url": "/assets/islands/rock-island.glb",
+      "x": 62,
+      "z": 0,
+      "y": 0,
+      "scale": 1,
+      "rotationY": 0
+    }
+  }
+}

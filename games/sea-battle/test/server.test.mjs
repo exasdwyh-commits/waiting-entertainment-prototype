@@ -28,6 +28,28 @@ test("Sea Battle runtime exposes Hub health protocol and start action", async ()
     assert.equal(threeCore.status, 200);
     assert.match(threeCore.headers.get("content-type") || "", /javascript/);
     assert.ok((await threeCore.text()).length > 100_000);
+
+    const gltfLoader = await fetch(
+      `http://127.0.0.1:${runtime.port}/three/addons/loaders/GLTFLoader.js`,
+    );
+    assert.equal(gltfLoader.status, 200);
+    assert.match(gltfLoader.headers.get("content-type") || "", /javascript/);
+    assert.match(await gltfLoader.text(), /class GLTFLoader/);
+
+    const assets = await fetch(
+      `http://127.0.0.1:${runtime.port}/assets/sea-battle-assets.json`,
+    );
+    assert.equal(assets.status, 200);
+    assert.match(assets.headers.get("cache-control") || "", /no-store/);
+    const assetManifest = await assets.json();
+    assert.equal(assetManifest.schemaVersion, 1);
+    assert.equal(assetManifest.ship.url, null);
+    assert.deepEqual(assetManifest.islands, []);
+
+    const missingAsset = await fetch(
+      `http://127.0.0.1:${runtime.port}/assets/ships/not-installed.glb`,
+    );
+    assert.equal(missingAsset.status, 404);
   } finally {
     await runtime.close();
   }
