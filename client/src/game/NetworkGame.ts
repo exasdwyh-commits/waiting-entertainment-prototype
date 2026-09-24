@@ -583,7 +583,18 @@ export class NetworkGame {
       actorId: actor?.id,
       targetId: target?.id,
     }];
-    return this.startNextReplay();
+
+    const started = this.startNextReplay();
+    // previewReplay is exposed only through the ?visualPreview=1 regression
+    // hook. Mark the replay UI synchronously so headless browsers cannot miss
+    // the short 1.4–1.9s replay window while recovering a background tab.
+    if (started && this.replay) {
+      this.options.message.classList.add("replay-caption");
+      this.options.message.textContent =
+        `${this.replay.label} · ${REPLAY_SPEED.toFixed(2)}×`;
+      this.updateBroadcastBug("视觉回放验收", true);
+    }
+    return started;
   }
 
   private startNextReplay(now = performance.now()) {
