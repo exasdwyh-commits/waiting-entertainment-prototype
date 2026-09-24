@@ -91,6 +91,29 @@ export class AudioFx {
       return;
     }
 
+    if (type === "weapon_pickup") {
+      this.tone(420, 690, 0.1, 0, 0.035);
+      return;
+    }
+
+    if (type === "weapon_throw") {
+      this.tone(620, 190, 0.12, 0, 0.03);
+      this.noiseBurst(0.07, 0, 0.012, 2_600);
+      return;
+    }
+
+    if (type === "weapon_hit") {
+      this.tone(170, 48, 0.18, 0, 0.072);
+      this.tone(410, 96, 0.1, 0.012, 0.035);
+      this.noiseBurst(0.2, 0, 0.04, 1_600);
+      return;
+    }
+
+    if (type === "weapon_drop") {
+      this.tone(240, 160, 0.07, 0, 0.018);
+      return;
+    }
+
     if (type === "punch_hit" || type === "push_hit") {
       this.tone(250, 110, 0.085, 0, 0.035);
       this.noiseBurst(0.075, 0, 0.012, 2_200);

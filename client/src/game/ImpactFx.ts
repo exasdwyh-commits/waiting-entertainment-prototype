@@ -31,7 +31,10 @@ export class ImpactFx {
     const isKick = type === "kick_hit";
     const isKo = type === "ko";
     const isStruggle = type === "struggle_break";
-    const isHeavy = type === "heavy_hit" || isHeadbutt;
+    const isWeaponHit = type === "weapon_hit";
+    const isWeaponThrow = type === "weapon_throw";
+    const isWeaponPickup = type === "weapon_pickup";
+    const isHeavy = type === "heavy_hit" || isHeadbutt || isWeaponHit;
     const isPunch = type === "punch_hit" || type === "push_hit" || isKick;
     const isGrab = type === "grab";
     const isSave = type === "edge_save";
@@ -56,6 +59,9 @@ export class ImpactFx {
       isSave ? 0x7dd3fc :
       isDropkick ? 0xfef08a :
       isKo ? 0xfca5a5 :
+      isWeaponHit ? 0xfbbf24 :
+      isWeaponThrow ? 0x93c5fd :
+      isWeaponPickup ? 0x86efac :
       isStruggle ? 0x86efac :
       isToss ? 0xffa94d :
       isHeavy ? 0xfff1a8 :
@@ -123,7 +129,16 @@ export class ImpactFx {
       spin: 0,
     });
 
-    if (isPunch || isHeavy || isToss || isDropkick || isKo || isStruggle) {
+    if (
+      isPunch ||
+      isHeavy ||
+      isToss ||
+      isDropkick ||
+      isKo ||
+      isStruggle ||
+      isWeaponThrow ||
+      isWeaponPickup
+    ) {
       this.spawnHitShards(
         position,
         color,

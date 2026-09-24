@@ -84,6 +84,21 @@ io.on("connection", (socket) => {
         ack?.({ ok: session.debugForceFall(socket.id) });
       },
     );
+    socket.on(
+      "stress:spawn-weapon",
+      (
+        payload: { kind?: "pan" | "spatula" | "plate" },
+        ack?: (value: { ok: boolean }) => void,
+      ) => {
+        const kind = payload?.kind;
+        ack?.({
+          ok:
+            kind === "pan" || kind === "spatula" || kind === "plate"
+              ? session.debugSpawnWeapon(socket.id, kind)
+              : false,
+        });
+      },
+    );
   }
 
   socket.on(

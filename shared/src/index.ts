@@ -7,6 +7,16 @@ export const TABLE_PUSH_GEOMETRY = {
 } as const;
 
 export type PlayerId = string;
+export type WeaponKind = "pan" | "spatula" | "plate";
+
+export interface WeaponSnapshot {
+  id: string;
+  kind: WeaponKind;
+  position: [number, number, number];
+  velocity: [number, number, number];
+  heldBy?: PlayerId;
+  active: boolean;
+}
 
 export type PlayerState =
   | "idle"
@@ -39,6 +49,10 @@ export type GameEventType =
   | "ko"
   | "wake"
   | "struggle_break"
+  | "weapon_pickup"
+  | "weapon_hit"
+  | "weapon_throw"
+  | "weapon_drop"
   | "grab"
   | "toss"
   | "big_fall"
@@ -69,6 +83,7 @@ export interface PlayerSnapshot {
   stamina: number;
   koResistance: number;
   struggleProgress: number;
+  heldWeapon?: WeaponKind;
   sprinting: boolean;
   velocity: [number, number, number];
   score: number;
@@ -87,6 +102,7 @@ export interface GameEvent {
   actorId?: PlayerId;
   targetId?: PlayerId;
   importance: number;
+  weapon?: WeaponKind;
 }
 
 export interface MatchSnapshot {
@@ -102,6 +118,7 @@ export interface MatchSnapshot {
     centerSpinRadians: number;
     centerSpinSpeed: number;
   };
+  weapons?: WeaponSnapshot[];
   winnerId?: PlayerId;
 }
 

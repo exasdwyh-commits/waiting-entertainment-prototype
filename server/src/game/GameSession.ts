@@ -1,7 +1,15 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import type { Server } from "socket.io";
 import { TABLE_PUSH_GEOMETRY } from "@waiting/shared";
-import type { GameEvent, MatchSnapshot, PlayerInput, PlayerSnapshot, PlayerState } from "@waiting/shared";
+import type {
+  GameEvent,
+  MatchSnapshot,
+  PlayerInput,
+  PlayerSnapshot,
+  PlayerState,
+  WeaponKind,
+  WeaponSnapshot,
+} from "@waiting/shared";
 import { GAME_TUNING, validateGameTuning } from "./tuning.js";
 
 const PLAYER_COUNT = 10;
@@ -12,6 +20,20 @@ const ROUND_MS = positiveEnvMs("WAITING_ROUND_MS") ?? GAME_TUNING.match.roundMs;
 const COUNTDOWN_MS = 3_000;
 const RESULT_MS = GAME_TUNING.match.resultMs;
 const SESSION_RECOVERY_MS = 90_000;
+
+type WeaponEntity = {
+  id: string;
+  kind: WeaponKind;
+  spawn: { x: number; z: number };
+  position: { x: number; y: number; z: number };
+  velocity: { x: number; y: number; z: number };
+  heldBy?: string;
+  thrownBy?: string;
+  thrownAt: number;
+  thrownUntil: number;
+  respawnAt: number;
+  active: boolean;
+};
 
 type Slot = {
   id: string;
@@ -47,6 +69,7 @@ type Slot = {
   tossReleaseAt: number;
   tossDirection?: { x: number; z: number };
   tossMomentum: number;
+  heldWeaponId?: string;
   grabNeedsRelease: boolean;
   knockedUntil: number;
   recoverUntil: number;
@@ -86,6 +109,7 @@ export class GameSession {
   private timer: NodeJS.Timeout | undefined;
   private tickCounter = 0;
   private centerSpinRadians = 0;
+  private weapons: WeaponEntity[] = [];
 
   constructor(private readonly io: Server) {}
 
@@ -151,6 +175,40 @@ export class GameSession {
     };
   }
 
+  debugSpawnWeapon(socketId: string, kind: WeaponKind) {
+    const slot = this.slots.find(
+      (candidate) => candidate.socketId === socketId && candidate.alive,
+    );
+    if (!slot) return false;
+
+    const weapon = this.weapons.find((candidate) => candidate.kind === kind);
+    if (!weapon) return false;
+
+    if (weapon.heldBy) {
+      const holder = this.slots.find((candidate) => candidate.id === weapon.heldBy);
+      if (holder?.heldWeaponId === weapon.id) holder.heldWeaponId = undefined;
+    }
+
+    const p = slot.body.translation();
+    const dir = {
+      x: Math.sin(slot.facingYaw),
+      z: Math.cos(slot.facingYaw),
+    };
+    weapon.active = true;
+    weapon.heldBy = undefined;
+    weapon.thrownBy = undefined;
+    weapon.thrownAt = 0;
+    weapon.thrownUntil = 0;
+    weapon.respawnAt = 0;
+    weapon.position = {
+      x: p.x + dir.x * 0.78,
+      y: kind === "plate" ? 0.18 : 0.3,
+      z: p.z + dir.z * 0.78,
+    };
+    weapon.velocity = { x: 0, y: 0, z: 0 };
+    return true;
+  }
+
   debugForceFall(socketId: string) {
     const slot = this.slots.find(
       (candidate) => candidate.socketId === socketId && candidate.alive,
@@ -168,6 +226,7 @@ export class GameSession {
     }
 
     const p = slot.body.translation();
+    if (slot.heldWeaponId) this.dropHeldWeapon(slot, Date.now(), 0.4);
     slot.edgeHanging = false;
     slot.state = "ragdoll";
     slot.body.setGravityScale(1, true);
@@ -283,6 +342,7 @@ export class GameSession {
         tossStartedAt: 0,
         tossReleaseAt: 0,
         tossMomentum: 0,
+        heldWeaponId: undefined,
         grabNeedsRelease: false,
         knockedUntil: 0,
         recoverUntil: 0,
@@ -377,6 +437,7 @@ export class GameSession {
       slot.tossReleaseAt = 0;
       slot.tossDirection = undefined;
       slot.tossMomentum = 0;
+      slot.heldWeaponId = undefined;
       slot.grabNeedsRelease = false;
       slot.score = 0;
       slot.lastHitBy = undefined;
@@ -385,6 +446,8 @@ export class GameSession {
       slot.botRetargetAt = 0;
       slot.input = this.emptyInput();
     });
+
+    this.resetWeapons();
   }
 
   private tick() {
@@ -408,6 +471,7 @@ export class GameSession {
     }
 
     this.processRespawns(now);
+    this.updateWeapons(now);
 
     for (const slot of this.slots) {
       if (!slot.alive) continue;
@@ -457,6 +521,7 @@ export class GameSession {
 
       if (wantsAttack) {
         if (slot.tossTargetId) this.throwCarried(slot, direction, now);
+        else if (slot.heldWeaponId) this.weaponAttack(slot, direction, now);
         else this.attack(slot, direction, now);
       }
 
@@ -618,6 +683,7 @@ export class GameSession {
     slot.tossReleaseAt = 0;
     slot.tossDirection = undefined;
     slot.tossMomentum = 0;
+    slot.heldWeaponId = undefined;
     slot.grabNeedsRelease = false;
     slot.lastHitBy = undefined;
     slot.lastHitAt = 0;
@@ -840,6 +906,12 @@ export class GameSession {
       return false;
     }
 
+    if (slot.heldWeaponId) {
+      this.dropHeldWeapon(slot, now, 0.25);
+      slot.grabNeedsRelease = true;
+      return true;
+    }
+
     const origin = slot.body.translation();
     let best: Slot | undefined;
     let bestScore = Number.POSITIVE_INFINITY;
@@ -888,7 +960,7 @@ export class GameSession {
       }
     }
 
-    if (!best) return false;
+    if (!best) return this.tryPickupWeapon(slot, dir, now);
 
     slot.tossTargetId = best.id;
     slot.tossStartedAt = now;
@@ -904,6 +976,7 @@ export class GameSession {
     slot.state = "grabbing";
     slot.facingYaw = Math.atan2(dir.x, dir.z);
 
+    if (best.heldWeaponId) this.dropHeldWeapon(best, now, 0.5);
     best.carriedBy = slot.id;
     best.struggleProgress = 0;
     best.lastStruggleAt = 0;
@@ -1399,6 +1472,401 @@ export class GameSession {
   }
 
 
+  private resetWeapons() {
+    const delay = GAME_TUNING.weapons.firstSpawnDelayMs;
+    const starts = [
+      { id: "W-PAN", kind: "pan" as const, x: -3.25, z: 2.1, extra: 0 },
+      { id: "W-PLATE-A", kind: "plate" as const, x: 2.7, z: 3.15, extra: 8_000 },
+      { id: "W-SPATULA", kind: "spatula" as const, x: 3.45, z: -2.15, extra: 16_000 },
+      { id: "W-PLATE-B", kind: "plate" as const, x: -2.25, z: -3.4, extra: 24_000 },
+    ];
+
+    this.weapons = starts.map((entry) => ({
+      id: entry.id,
+      kind: entry.kind,
+      spawn: { x: entry.x, z: entry.z },
+      position: { x: entry.x, y: -8, z: entry.z },
+      velocity: { x: 0, y: 0, z: 0 },
+      thrownAt: 0,
+      thrownUntil: 0,
+      respawnAt: this.countdownUntil + delay + entry.extra,
+      active: false,
+    }));
+  }
+
+  private respawnWeapon(weapon: WeaponEntity) {
+    weapon.active = true;
+    weapon.heldBy = undefined;
+    weapon.thrownBy = undefined;
+    weapon.thrownAt = 0;
+    weapon.thrownUntil = 0;
+    weapon.respawnAt = 0;
+    weapon.position = {
+      x: weapon.spawn.x,
+      y: weapon.kind === "plate" ? 0.18 : 0.3,
+      z: weapon.spawn.z,
+    };
+    weapon.velocity = { x: 0, y: 0, z: 0 };
+  }
+
+  private scheduleWeaponRespawn(weapon: WeaponEntity, now: number) {
+    const holder = weapon.heldBy
+      ? this.slots.find((candidate) => candidate.id === weapon.heldBy)
+      : undefined;
+    if (holder?.heldWeaponId === weapon.id) holder.heldWeaponId = undefined;
+
+    weapon.active = false;
+    weapon.heldBy = undefined;
+    weapon.thrownBy = undefined;
+    weapon.thrownAt = 0;
+    weapon.thrownUntil = 0;
+    weapon.respawnAt = now + GAME_TUNING.weapons.respawnMs;
+    weapon.position = { x: weapon.spawn.x, y: -8, z: weapon.spawn.z };
+    weapon.velocity = { x: 0, y: 0, z: 0 };
+  }
+
+  private updateWeapons(now: number) {
+    for (const weapon of this.weapons) {
+      if (!weapon.active) {
+        if (weapon.respawnAt > 0 && now >= weapon.respawnAt) {
+          this.respawnWeapon(weapon);
+        }
+        continue;
+      }
+
+      if (weapon.heldBy) {
+        const holder = this.slots.find(
+          (candidate) =>
+            candidate.id === weapon.heldBy &&
+            candidate.alive &&
+            candidate.heldWeaponId === weapon.id,
+        );
+        if (!holder) {
+          weapon.heldBy = undefined;
+          continue;
+        }
+
+        const hp = holder.body.translation();
+        const dir = {
+          x: Math.sin(holder.facingYaw),
+          z: Math.cos(holder.facingYaw),
+        };
+        weapon.position = {
+          x: hp.x + dir.x * 0.58,
+          y: hp.y + (weapon.kind === "spatula" ? 0.92 : 0.76),
+          z: hp.z + dir.z * 0.58,
+        };
+        weapon.velocity = { x: 0, y: 0, z: 0 };
+        continue;
+      }
+
+      if (weapon.thrownUntil <= 0) continue;
+
+      weapon.position.x += weapon.velocity.x / PHYSICS_HZ;
+      weapon.position.y += weapon.velocity.y / PHYSICS_HZ;
+      weapon.position.z += weapon.velocity.z / PHYSICS_HZ;
+      weapon.velocity.y += (GAME_TUNING.world.gravityY * 0.28) / PHYSICS_HZ;
+      weapon.velocity.x *= 0.994;
+      weapon.velocity.z *= 0.994;
+
+      if (weapon.position.y < 0.16) {
+        weapon.position.y = 0.16;
+        weapon.velocity.y = Math.max(0, weapon.velocity.y * -0.18);
+      }
+
+      const hit = this.slots.find((target) => {
+        if (
+          !target.alive ||
+          target.carriedBy ||
+          now < target.invulnerableUntil ||
+          (target.id === weapon.thrownBy && now - weapon.thrownAt < 420)
+        ) {
+          return false;
+        }
+        const p = target.body.translation();
+        return (
+          Math.hypot(
+            p.x - weapon.position.x,
+            p.z - weapon.position.z,
+          ) <= GAME_TUNING.weapons.plate.hitRadius
+        );
+      });
+
+      if (hit) {
+        const direction = normalize(weapon.velocity.x, weapon.velocity.z);
+        hit.body.applyImpulseAtPoint(
+          {
+            x: direction.x * GAME_TUNING.weapons.plate.strength,
+            y: 0.38,
+            z: direction.z * GAME_TUNING.weapons.plate.strength,
+          },
+          {
+            x: weapon.position.x,
+            y: Math.max(0.35, weapon.position.y),
+            z: weapon.position.z,
+          },
+          true,
+        );
+        hit.balance = clamp(
+          hit.balance - GAME_TUNING.weapons.plate.balanceLoss,
+          GAME_TUNING.balance.minimumAfterHit,
+          1,
+        );
+        hit.state = "hit";
+        hit.knockedUntil = Math.max(hit.knockedUntil, now + 380);
+        hit.lastHitBy = weapon.thrownBy;
+        hit.lastHitAt = now;
+        this.applyKoDamage(
+          hit,
+          GAME_TUNING.weapons.plate.koDamage,
+          now,
+          weapon.thrownBy,
+        );
+        this.emitEvent(
+          "weapon_hit",
+          now,
+          weapon.thrownBy,
+          hit.id,
+          0.82,
+          weapon.kind,
+        );
+        this.scheduleWeaponRespawn(weapon, now);
+        continue;
+      }
+
+      if (
+        now >= weapon.thrownUntil ||
+        Math.hypot(weapon.position.x, weapon.position.z) >
+          TABLE_PUSH_GEOMETRY.arenaRadius + 2
+      ) {
+        this.scheduleWeaponRespawn(weapon, now);
+      }
+    }
+  }
+
+  private tryPickupWeapon(
+    slot: Slot,
+    direction: { x: number; z: number },
+    now: number,
+  ) {
+    if (slot.heldWeaponId || slot.carriedBy) return false;
+
+    const p = slot.body.translation();
+    let best: WeaponEntity | undefined;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const weapon of this.weapons) {
+      if (
+        !weapon.active ||
+        weapon.heldBy ||
+        weapon.thrownUntil > 0
+      ) {
+        continue;
+      }
+
+      const dx = weapon.position.x - p.x;
+      const dz = weapon.position.z - p.z;
+      const distance = Math.hypot(dx, dz);
+      if (distance > GAME_TUNING.weapons.pickupRange || distance < 0.001) {
+        continue;
+      }
+      const radial = normalize(dx, dz);
+      const facing = direction.x * radial.x + direction.z * radial.z;
+      if (facing < GAME_TUNING.weapons.pickupFacingDot) continue;
+
+      if (distance < bestDistance) {
+        best = weapon;
+        bestDistance = distance;
+      }
+    }
+
+    if (!best) return false;
+
+    best.heldBy = slot.id;
+    best.thrownBy = undefined;
+    best.thrownUntil = 0;
+    slot.heldWeaponId = best.id;
+    slot.grabNeedsRelease = true;
+    this.emitEvent("weapon_pickup", now, slot.id, undefined, 0.36, best.kind);
+    return true;
+  }
+
+  private dropHeldWeapon(slot: Slot, now: number, outward = 0) {
+    if (!slot.heldWeaponId) return false;
+    const weapon = this.weapons.find(
+      (candidate) => candidate.id === slot.heldWeaponId,
+    );
+    slot.heldWeaponId = undefined;
+    if (!weapon) return false;
+
+    const p = slot.body.translation();
+    const dir = {
+      x: Math.sin(slot.facingYaw),
+      z: Math.cos(slot.facingYaw),
+    };
+    weapon.heldBy = undefined;
+    weapon.thrownBy = undefined;
+    weapon.thrownAt = 0;
+    weapon.thrownUntil = 0;
+    weapon.active = true;
+    weapon.position = {
+      x: p.x + dir.x * 0.72,
+      y: 0.24,
+      z: p.z + dir.z * 0.72,
+    };
+    weapon.velocity = {
+      x: dir.x * outward,
+      y: outward > 0 ? 0.18 : 0,
+      z: dir.z * outward,
+    };
+    this.emitEvent("weapon_drop", now, slot.id, undefined, 0.24, weapon.kind);
+    return true;
+  }
+
+  private weaponAttack(
+    slot: Slot,
+    direction: { x: number; z: number },
+    now: number,
+  ) {
+    const weapon = this.weapons.find(
+      (candidate) =>
+        candidate.id === slot.heldWeaponId &&
+        candidate.heldBy === slot.id &&
+        candidate.active,
+    );
+    if (!weapon) {
+      slot.heldWeaponId = undefined;
+      return false;
+    }
+    if (now < slot.pushReadyAt) return false;
+
+    let dx = direction.x;
+    let dz = direction.z;
+    if (Math.hypot(dx, dz) < 0.05) {
+      dx = Math.sin(slot.facingYaw);
+      dz = Math.cos(slot.facingYaw);
+    }
+    const dir = normalize(dx, dz);
+    slot.facingYaw = Math.atan2(dir.x, dir.z);
+
+    if (weapon.kind === "plate") {
+      if (!this.spendStamina(slot, GAME_TUNING.weapons.plate.staminaCost, now)) {
+        return false;
+      }
+      const p = slot.body.translation();
+      const velocity = slot.body.linvel();
+      slot.heldWeaponId = undefined;
+      weapon.heldBy = undefined;
+      weapon.thrownBy = slot.id;
+      weapon.thrownAt = now;
+      weapon.thrownUntil = now + GAME_TUNING.weapons.plate.lifetimeMs;
+      weapon.position = {
+        x: p.x + dir.x * 0.72,
+        y: p.y + 0.62,
+        z: p.z + dir.z * 0.72,
+      };
+      weapon.velocity = {
+        x: dir.x * GAME_TUNING.weapons.plate.throwSpeed + velocity.x * 0.28,
+        y: GAME_TUNING.weapons.plate.throwLift,
+        z: dir.z * GAME_TUNING.weapons.plate.throwSpeed + velocity.z * 0.28,
+      };
+      slot.pushReadyAt = now + 480;
+      slot.pushStateUntil = now + 260;
+      slot.state = "throwing";
+      this.emitEvent("weapon_throw", now, slot.id, undefined, 0.7, weapon.kind);
+      return true;
+    }
+
+    const config =
+      weapon.kind === "spatula"
+        ? GAME_TUNING.weapons.spatula
+        : GAME_TUNING.weapons.pan;
+    if (!this.spendStamina(slot, config.staminaCost, now)) return false;
+
+    slot.sprinting = false;
+    slot.pushReadyAt =
+      now + config.cooldownMs * (slot.bot ? slot.botCooldownScale : 1);
+    slot.pushStateUntil = now + config.animationHoldMs;
+    slot.state = "pushing";
+    slot.body.applyImpulse(
+      { x: dir.x * 0.48, y: 0, z: dir.z * 0.48 },
+      true,
+    );
+
+    const origin = slot.body.translation();
+    let bestTarget: Slot | undefined;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const target of this.slots) {
+      if (
+        target === slot ||
+        !target.alive ||
+        target.carriedBy ||
+        now < target.invulnerableUntil
+      ) {
+        continue;
+      }
+      const tp = target.body.translation();
+      const rx = tp.x - origin.x;
+      const rz = tp.z - origin.z;
+      const distance = Math.hypot(rx, rz);
+      if (distance > config.hitRange || distance < 0.001) continue;
+      const radial = normalize(rx, rz);
+      if (dir.x * radial.x + dir.z * radial.z < -0.05) continue;
+      if (distance < bestDistance) {
+        bestTarget = target;
+        bestDistance = distance;
+      }
+    }
+
+    if (!bestTarget) return true;
+
+    const tp = bestTarget.body.translation();
+    const radial = normalize(tp.x - origin.x, tp.z - origin.z);
+    bestTarget.body.applyImpulseAtPoint(
+      {
+        x: radial.x * config.strength,
+        y: config.verticalHitImpulse,
+        z: radial.z * config.strength,
+      },
+      { x: tp.x, y: tp.y + 0.48, z: tp.z },
+      true,
+    );
+    bestTarget.body.applyTorqueImpulse(
+      {
+        x: radial.z * (weapon.kind === "spatula" ? 0.3 : 0.18),
+        y: 0.08,
+        z: -radial.x * (weapon.kind === "spatula" ? 0.3 : 0.18),
+      },
+      true,
+    );
+    bestTarget.balance = clamp(
+      bestTarget.balance - config.balanceLoss,
+      GAME_TUNING.balance.minimumAfterHit,
+      1,
+    );
+    bestTarget.state = weapon.kind === "spatula" ? "ragdoll" : "hit";
+    bestTarget.knockedUntil = Math.max(
+      bestTarget.knockedUntil,
+      now + (weapon.kind === "spatula" ? 720 : 430),
+    );
+    bestTarget.lastHitBy = slot.id;
+    bestTarget.lastHitAt = now;
+    this.applyKoDamage(bestTarget, config.koDamage, now, slot.id);
+    if (weapon.kind === "spatula" && bestTarget.heldWeaponId) {
+      this.dropHeldWeapon(bestTarget, now, 0.8);
+    }
+    this.emitEvent(
+      "weapon_hit",
+      now,
+      slot.id,
+      bestTarget.id,
+      weapon.kind === "spatula" ? 0.94 : 0.76,
+      weapon.kind,
+    );
+    return true;
+  }
+
   private recoverKoResistance(slot: Slot, now: number) {
     if (
       slot.state === "ko" ||
@@ -1449,6 +1917,8 @@ export class GameSession {
 
   private enterKo(slot: Slot, now: number, actorId?: string) {
     if (slot.state === "ko" || slot.state === "waking") return;
+
+    if (slot.heldWeaponId) this.dropHeldWeapon(slot, now, 0.55);
 
     if (slot.tossTargetId) {
       const carried = this.slots.find(
@@ -1865,6 +2335,7 @@ export class GameSession {
   private shouldBotGrab(slot: Slot, now: number) {
     if (
       slot.tossTargetId ||
+      slot.heldWeaponId ||
       now < slot.pushReadyAt ||
       slot.stamina <= 0.24
     ) {
@@ -1879,14 +2350,38 @@ export class GameSession {
         now >= candidate.invulnerableUntil &&
         !candidate.carriedBy,
     );
-    if (!target) return false;
+    if (!target) {
+      const p = slot.body.translation();
+      return this.weapons.some(
+        (weapon) =>
+          weapon.active &&
+          !weapon.heldBy &&
+          weapon.thrownUntil <= 0 &&
+          Math.hypot(
+            weapon.position.x - p.x,
+            weapon.position.z - p.z,
+          ) <= GAME_TUNING.weapons.pickupRange,
+      );
+    }
 
     const vulnerable =
       target.balance <= 0.5 ||
       target.state === "hit" ||
       target.state === "ragdoll" ||
       target.state === "recovering";
-    if (!vulnerable) return false;
+    if (!vulnerable) {
+      const p = slot.body.translation();
+      return this.weapons.some(
+        (weapon) =>
+          weapon.active &&
+          !weapon.heldBy &&
+          weapon.thrownUntil <= 0 &&
+          Math.hypot(
+            weapon.position.x - p.x,
+            weapon.position.z - p.z,
+          ) <= GAME_TUNING.weapons.pickupRange,
+      );
+    }
 
     const p = slot.body.translation();
     const t = target.body.translation();
@@ -2201,6 +2696,7 @@ export class GameSession {
       radius > TABLE_PUSH_GEOMETRY.arenaRadius - 0.5 &&
       radius < TABLE_PUSH_GEOMETRY.arenaRadius + 1.2
     ) {
+      if (slot.heldWeaponId) this.dropHeldWeapon(slot, now, 0.45);
       slot.edgeHanging = true;
       slot.edgeHangUntil = now + GAME_TUNING.ledge.hangWindowMs;
       slot.balance = Math.min(slot.balance, GAME_TUNING.ledge.hangBalanceCap);
@@ -2257,6 +2753,8 @@ export class GameSession {
     }
 
     if (p.y < -2.6) {
+      if (slot.heldWeaponId) this.dropHeldWeapon(slot, now, 0.7);
+
       if (slot.tossTargetId) {
         const carried = this.slots.find(
           (candidate) =>
@@ -2305,6 +2803,7 @@ export class GameSession {
     actorId?: string,
     targetId?: string,
     importance = 0.5,
+    weapon?: WeaponKind,
   ) {
     const event: GameEvent = {
       id: `E-${++this.eventSeq}`,
@@ -2313,6 +2812,7 @@ export class GameSession {
       actorId,
       targetId,
       importance,
+      weapon,
     };
 
     this.pendingEvents.push(event);
@@ -2341,6 +2841,24 @@ export class GameSession {
         centerSpinRadians: this.centerSpinRadians,
         centerSpinSpeed: this.currentLazySusanSpeed(now),
       },
+      weapons: this.weapons.map(
+        (weapon): WeaponSnapshot => ({
+          id: weapon.id,
+          kind: weapon.kind,
+          position: [
+            weapon.position.x,
+            weapon.position.y,
+            weapon.position.z,
+          ],
+          velocity: [
+            weapon.velocity.x,
+            weapon.velocity.y,
+            weapon.velocity.z,
+          ],
+          heldBy: weapon.heldBy,
+          active: weapon.active,
+        }),
+      ),
       players: this.slots.map((slot): PlayerSnapshot => {
         const p = slot.body.translation();
         const q = slot.body.rotation();
@@ -2367,6 +2885,9 @@ export class GameSession {
             0,
             1,
           ),
+          heldWeapon: this.weapons.find(
+            (weapon) => weapon.id === slot.heldWeaponId,
+          )?.kind,
           sprinting: slot.sprinting,
           velocity: [v.x, v.y, v.z],
           score: slot.score,
