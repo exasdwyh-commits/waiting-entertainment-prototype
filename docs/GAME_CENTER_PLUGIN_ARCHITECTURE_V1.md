@@ -123,13 +123,13 @@ It remains an embedded runtime for now, so existing gameplay/server code does no
 
 ### Pilot Racer
 
-Registered through the Game Center manifest and continues to use `PILOT_RACER_DIR` for its external repository/runtime.
+Registered through the Game Center manifest. `npm run setup` prepares a pinned sparse checkout at `games/pilot-racer`, and the manifest uses that bundled path by default. `PILOT_RACER_DIR` remains only as an optional override.
 
 ### Sea Battle
 
 Registered through the Game Center manifest and continues to use its bundled runtime at `games/sea-battle`.
 
-This deliberately separates **package registration** from **physical source relocation**. Existing stable games do not need risky file moves just to become plugins.
+Package registration remains separate from runtime implementation. Stable games keep their own runtime boundaries while the deployable repository provides a deterministic local path for each installed game.
 
 ## Adding a new local game
 

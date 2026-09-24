@@ -1,203 +1,103 @@
-# Waiting Entertainment
+# Waiting Entertainment · 等位娱乐系统
 
-Waiting Entertainment 是面向餐厅等位场景的本地多人娱乐系统：一台门店主机负责权威游戏状态与大屏输出，顾客扫码后用手机加入；Hub 负责等位、场次、游戏包、运行时和大屏播控。
+这是可以直接交给本地 Agent 部署的主仓库。目标是 **一台门店电脑 + 一个大屏 + 顾客手机扫码**，不依赖云端权威服务器。
 
-> 当前阶段：**平台基础结构已成型，进入本地收尾与真机验收阶段。**
->
-> 不建议继续扩架构或大量增加玩法。下一步请优先完成 `docs/LOCAL_FINISH_HANDOFF.md` 中的 P0/P1 收尾任务。
+当前交付包含：
 
-## Current baseline
+- **餐桌推推王**：1–10 人物理派对乱斗，内置运行时。
+- **海战竞技**：1–8 人成长海战，内置运行时。
+- **极速等位赛**：1–8 人卡丁车竞速；首次 setup 会自动拉取固定版本的精简运行时。
+- **Host Console / 游戏管理中心**：开局、锁定、结束、游戏参数、运行时状态、日志。
+- **Broadcast Shell**：统一大屏、报名二维码、叫号 Overlay。
+- **Guest Join**：统一扫码报名与手机控制跳转。
+- **Game Center**：插件发现、运行时管理、授权与参数配置。
 
-截至 2026-09-22，主分支已合并：
+## 最短部署路径
 
-- **Table Push King / 餐桌推推王**：内置 1-10 人物理乱斗，AI 补位、断线接管、个人手机视角、大屏自动导播与回放。
-- **Pilot Racer / 极速等位赛**：作为外部 Game Package 接入 Hub，使用 `PILOT_RACER_DIR` 指向本地赛车仓库，默认端口 `:9010`。
-- **Sea Battle V3 / 海战竞技**：仓库内置 process Game Package，默认端口 `:9020`，已完成物资成长、自动侧舷炮、三阶段节奏、复活、海怪、风暴缩圈、悬赏旗舰与连沉奖励。
-- **Host Game Management Center**：已经合并，可查看全部 Game Package、授权、版本、端口、PID、运行目录、健康状态和日志，并对可管理的外部进程执行启动 / 预热 / 停止 / 健康检查。
-- **Broadcast Shell**：统一承载游戏大屏、叫号 Overlay 与外部游戏运行中断提示。叫号不再由每个游戏重复实现。
-- **Runtime safety**：支持仓库内置运行目录、环境变量覆盖、错误端口 / 错误协议预检；不会误杀占用目标端口的未知进程。
+要求：
 
-相关合并：
-- PR #49 — Sea Battle V3 bounty + sink streak
-- PR #52 — Sea Battle bounty impact lock
-- PR #51 — Host game management center + runtime safety
+- Node.js 22+
+- npm 10+
+- Git
+- 电脑、大屏和手机位于同一局域网 / Wi-Fi
 
-## Important current status
-
-当前功能主线不是“持续坏掉”。
-
-最近主分支验证结果：
-
-- **CI：通过**
-- **Sea Battle Visual Preview：通过**
-- **Hub Visual Preview：功能截图流程已完成并成功上传 artifact，但 workflow 最后自动提交截图回 `main` 时遇到并发提交，`git push` non-fast-forward，因此整条 Action 被标记为 failure。**
-
-也就是说，当前最新 Visual Preview 红灯的根因是 **GitHub Actions 自己写回主分支的竞态**，不是游戏逻辑、Hub、管理界面或截图捕获失败。
-
-本地模型收尾时请先修 `.github/workflows/visual-preview.yml` 的 screenshot auto-commit 策略，不要因为这条红灯重写游戏代码。
-
-## Game Center plugin model
-
-游戏管理已切换到本地插件发现模式：
-
-- 安装目录：`game-center/installed/<game-id>/game-package.json`
-- Hub 启动时自动扫描并生成实际 Game Registry
-- Host Console → **游戏管理** 可点击 **重新扫描游戏目录**
-- 新游戏无需再修改 Host Console 的硬编码游戏列表
-- 餐桌推推王、极速等位赛、海战竞技均已通过同一 Game Package 注册层进入管理中心
-- 当前稳定游戏代码位置保持不动，插件 manifest 负责注册；后续新游戏可直接把 runtime 放入自己的插件目录
-- 无活动场次时允许热重扫；有报名/锁定/运行场次时拒绝重扫，避免现场状态漂移
-
-完整契约见 `docs/GAME_CENTER_PLUGIN_ARCHITECTURE_V1.md`。
-
-## Architecture
-
-平台按 Game Package 管理多个游戏：
-
-| Game | Runtime | Players | Port | Status |
-| --- | --- | ---: | ---: | --- |
-| 餐桌推推王 | embedded | 1-10 | 5173 / 5174 | 基础样板 |
-| 极速等位赛 | external process | 1-8 | 9010 | 已接 Hub，独立仓库维护 |
-| 海战竞技 | bundled process | 1-8 | 9020 | V3 已完成，待本地视觉 / 真机收尾 |
-
-Hub 公共能力：
-
-- Game Registry / entitlement
-- Round lifecycle
-- QR / guest join
-- AI fill contract
-- RuntimeManager
-- Host Console
-- Game Management Center
-- Broadcast Shell
-- Queue overlay
-- Runtime health / logs / port preflight
-- CI / browser visual regression
-
-原则：**共享平台能力放 Hub；玩法、simulation、render 留在各 Game Package。**
-
-## Services
-
-运行：
+执行：
 
 ```bash
-npm install
-npm run dev
+git clone https://github.com/exasdwyh-commits/waiting-entertainment-prototype.git
+cd waiting-entertainment-prototype
+npm run setup
+npm start
 ```
 
-要求 Node.js 22+、npm 10+。
+`npm run setup` 会完成依赖安装、准备 Pilot Racer 精简运行时并构建全部工作区。可重复执行。
 
-| Service | Port |
-| --- | ---: |
-| Table Push King big screen | 5173 |
-| Table Push King phone | 5174 |
-| Host Console / 游戏管理 | 5175 |
-| Broadcast Shell | 5176 |
-| Guest join | 5177 |
-| Hub authoritative server | 3001 |
-| Pilot Racer | 9010 |
-| Sea Battle | 9020 |
+`npm start` 是本地演示入口，默认以 **PRO demo** 启动，因此三个游戏都会出现在游戏中心。若显式设置了 `WAITING_PLAN`，则尊重该值。
 
-主机健康检查：
+## 启动后的入口
 
-```text
-http://127.0.0.1:3001/health
-```
+| 功能 | 地址 |
+| --- | --- |
+| Host Console / 游戏管理 | `http://127.0.0.1:5175` |
+| Broadcast Shell / 大屏 | `http://127.0.0.1:5176` |
+| Hub 健康检查 | `http://127.0.0.1:3001/health` |
+| 餐桌推推王大屏 | `http://127.0.0.1:5173` |
+| 餐桌推推王手机端 | `http://127.0.0.1:5174` |
+| 极速等位赛运行时 | `:9010`，由 Hub 按需启动 |
+| 海战竞技运行时 | `:9020`，由 Hub 按需启动 |
 
-Host Console：
+手机扫码必须使用主机的 **局域网 IP**，不要使用手机自己的 `localhost`。
 
-```text
-http://127.0.0.1:5175
-```
+## 推荐现场流程
 
-游戏管理页可以在 Host Console 顶部切换到 **游戏管理**。
+1. 主机打开 `:5175` Host Console。
+2. 大屏全屏打开 `:5176` Broadcast Shell。
+3. 在 Host Console 选择游戏并开放报名。
+4. 顾客扫码，输入昵称，进入对应控制界面 / 等待状态。
+5. 主持人锁定报名并开局。
+6. Hub 自动启动需要的游戏进程并切换大屏。
+7. 结束本轮后可直接创建下一轮。
 
-如果要接本地 Pilot Racer：
+## Pilot Racer 的处理
+
+仓库不再要求人工设置 `PILOT_RACER_DIR`。
+
+首次 `npm run setup` 会从：
+
+`exasdwyh-commits/pilot-racer@112bfe18dff7065fc98f12ae85c9679f1527b216`
+
+以 sparse checkout 方式准备到：
+
+`games/pilot-racer/`
+
+该目录被主仓 `.gitignore` 忽略，因此不会把另一个仓库的开发历史、生成素材和实验文件污染主仓。Hub 默认通过 `runtime.bundledPath` 使用它；`PILOT_RACER_DIR` 只保留为高级覆盖选项。
+
+## 验证
+
+代码级验证：
 
 ```bash
-export PILOT_RACER_DIR=/absolute/path/to/pilot-racer
-npm run dev
+npm run verify
 ```
 
-Sea Battle 已支持仓库内置路径，正常情况下无需设置 `SEA_BATTLE_DIR`；该环境变量仍可用于覆盖运行目录。
+现场最低验收：
 
-## Validation
+- `:3001/health` 返回 `ok: true`
+- Host Console 能看到 3 个游戏
+- 大屏能显示当前报名二维码
+- 同 Wi-Fi 手机扫码能进入
+- 至少完成一局餐桌推推王、一局赛车、一局海战
 
-基础构建：
+Windows 第一次运行时，如果系统弹出防火墙提示，请允许 Node.js 在当前专用网络通信。
 
-```bash
-npm run build
-```
+## 给本地 Agent
 
-关键平台 smoke：
+仓库根目录的 [AGENTS.md](AGENTS.md) 是部署执行单。部署 Agent 应优先执行，不要先重构项目。
 
-```bash
-node server/test/runtime-manager-smoke.mjs
-node server/test/game-registry-smoke.mjs
-node server/test/game-settings-store.mjs
-node client/test/platform-ui-contract.mjs
-```
+开发和运行细节见：
 
-Sea Battle 单独验证：
-
-```bash
-npm run build -w @waiting/sea-battle
-```
-
-最终交付前仍必须做真实门店环境验证：Windows 主机、大屏、门店 Wi-Fi、至少 8 台真实手机混合 iOS / Android。
-
-## What is intentionally not finished
-
-以下不是架构缺失，而是明确留给最后本地收尾：
-
-1. 修复 Visual Preview workflow 自动回写截图导致的并发 push 竞态。（已完成：截图 workflow 改为 artifact-only，不再写回 main）
-2. ~~游戏管理页的 settings 配置闭环~~（已完成：Game Settings Store 支持可编辑 → 校验 → 本地持久化 → 下次启动注入 env，运行中只提示 restart required）
-3. Sea Battle 的船体 / 海域 / 海怪仍需更正式的 Blender / Hyper3D 资产与真机视觉调优；不要再靠大量程序几何硬堆。
-4. Pilot Racer 继续在独立仓库完成 Bay GP V3 美术与 8 真机验收。
-5. 所有游戏需要一次真实餐厅网络压力测试和长时间 soak。
-
-完整收尾说明见：
-
-**[docs/LOCAL_FINISH_HANDOFF.md](docs/LOCAL_FINISH_HANDOFF.md)**
-
-## Product principle
-
-这不是传统手机游戏，也不是云 SaaS 优先产品。当前优先级保持：
-
-1. Game feel
-2. Big-screen spectacle
-3. Three-second learnability
-4. LAN multiplayer stability
-5. Personal phone-screen experience
-6. AI fill
-7. Fast creation of additional Game Packages
-8. Venue / commercial management
-
-当前产品边界仍是 **单门店 / 单主机 / 单活动游戏场次**。不要在本轮收尾扩展公网匹配、云权威服务器、多门店编排或复杂账号系统。
-
-## Visual previews
-
-真实运行构建的截图位于 `docs/screenshots/`，包括：
-
-- `big-screen.png`
-- `phone-player.png`
-- `broadcast-replay.png`
-- `hub-host.png`
-- `hub-game-management.png`
-- `hub-broadcast-recruiting.png`
-- `hub-broadcast-queue.png`
-- `sea-battle-live.png`
-- `sea-battle-monster.png`
-
-截图应作为验收 artifact，而不是让 GitHub Action 高频并发修改 `main`。具体整改见收尾文档。
-
-## More docs
-
-- `docs/GAME_PACKAGE_V1.md`
-- `docs/HUB_ARCHITECTURE.md`
-- `docs/ARCHITECTURE.md`
-- `docs/BROADCAST_DIRECTOR.md`
-- `docs/TUNING.md`
-- `docs/ROADMAP.md`
-- `docs/CORE_RECOMMENDATIONS.md`
-- `docs/LOCAL_FINISH_HANDOFF.md`
+- [docs/RUNNING.md](docs/RUNNING.md)
+- [docs/GAME_CENTER_PLUGIN_ARCHITECTURE_V1.md](docs/GAME_CENTER_PLUGIN_ARCHITECTURE_V1.md)
+- [docs/GAME_PACKAGE_V1.md](docs/GAME_PACKAGE_V1.md)
+- [docs/TUNING.md](docs/TUNING.md)
+- [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md)

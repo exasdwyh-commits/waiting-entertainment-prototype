@@ -14,6 +14,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Validate local deployment launchers
+        run: node --check scripts/setup-local.mjs && node --check scripts/start-local.mjs
       - run: npm install
       - run: npm run build
       - name: Smoke, platform, and ten-client combat stress
