@@ -139,16 +139,41 @@ const queue = await api("/api/platform/queue", {
   body: JSON.stringify({ partySize: 4, label: "测试等位" }),
 });
 assert.equal(queue.ticket.status, "waiting");
+assert.equal(queue.ahead, 0);
+assert.equal(queue.position, 1);
+
+const queueSecond = await api("/api/platform/queue", {
+  method: "POST",
+  body: JSON.stringify({ partySize: 2, label: "第二桌" }),
+});
+assert.equal(queueSecond.ahead, 1);
+assert.equal(queueSecond.position, 2);
+
+const queueSecondStatus = await api(`/api/platform/queue/${queueSecond.ticket.id}`);
+assert.equal(queueSecondStatus.ahead, 1);
+assert.equal(queueSecondStatus.position, 2);
 
 const called = await api(`/api/platform/queue/${queue.ticket.id}/call`, {
   method: "POST",
 });
 assert.equal(called.ticket.status, "called");
 
+const queueSecondAfterCall = await api(`/api/platform/queue/${queueSecond.ticket.id}`);
+assert.equal(queueSecondAfterCall.ahead, 0);
+assert.equal(queueSecondAfterCall.position, 1);
+
+const firstCalledAt = called.ticket.calledAt;
+const recalled = await api(`/api/platform/queue/${queue.ticket.id}/recall`, {
+  method: "POST",
+});
+assert.equal(recalled.ticket.status, "called");
+assert.ok(recalled.ticket.calledAt > firstCalledAt);
+
 const broadcast = await api("/api/platform/broadcast");
 assert.equal(broadcast.mode, "LIVE_GAME");
 assert.equal(broadcast.round.id, created.round.id);
 assert.equal(broadcast.queueOverlay.ticketId, queue.ticket.id);
+assert.equal(broadcast.queueOverlay.calledAt, recalled.ticket.calledAt);
 
 const finished = await api(`/api/platform/rounds/${created.round.id}/finish`, {
   method: "POST",

@@ -150,9 +150,39 @@ try {
     method: "POST",
     body: JSON.stringify({ partySize: 4, label: "Preview Table" }),
   });
+
+  // Validate the real guest-facing queue page before calling the table.
+  const queueGuest = await browser.newPage({
+    viewport: { width: 430, height: 860 },
+    deviceScaleFactor: 1,
+    isMobile: true,
+    hasTouch: true,
+  });
+  await queueGuest.goto(
+    "http://127.0.0.1:5177/queue/" + encodeURIComponent(ticket.ticket.id),
+    { waitUntil: "networkidle" },
+  );
+  await queueGuest.waitForFunction(
+    (expectedNumber) => document.body.innerText.includes(expectedNumber),
+    ticket.ticket.number,
+    { timeout: 10_000 },
+  );
+
   await platform("/queue/" + ticket.ticket.id + "/call", {
     method: "POST",
     body: "{}",
+  });
+  await queueGuest.waitForFunction(
+    () =>
+      document.querySelector(".queue-card--called") &&
+      document.body.innerText.includes("到号啦") &&
+      document.body.innerText.includes("请现在前往前台"),
+    undefined,
+    { timeout: 10_000 },
+  );
+  await queueGuest.screenshot({
+    path: "docs/screenshots/hub-queue-phone-called.png",
+    fullPage: true,
   });
 
   const queueDeadline = Date.now() + 10_000;
@@ -194,6 +224,7 @@ try {
     body: "{}",
   });
 
+  await queueGuest.close();
   await guest.close();
   await host.close();
   await screen.close();

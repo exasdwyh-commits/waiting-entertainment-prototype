@@ -564,7 +564,14 @@ export class NetworkGame {
 
   previewReplay(): boolean {
     const latest = this.latest;
-    if (!latest || this.history.length < 4 || this.replay) return false;
+    if (!latest || this.history.length < 4) return false;
+
+    // This method is only exposed behind ?visualPreview=1. Take ownership from
+    // any short automatic highlight that may already be playing so the visual
+    // regression hook is deterministic regardless of where the live match
+    // cycle happened to be when the page opened.
+    this.replay = undefined;
+    this.replayQueue = [];
 
     const sameMatch = this.history.filter(
       (frame) => frame.matchId === latest.matchId,
@@ -574,16 +581,28 @@ export class NetworkGame {
 
     const actor = frames[frames.length - 1]?.players[0];
     const target = frames[frames.length - 1]?.players[1];
+    const previewLabel = actor && target
+      ? `视觉回放验收 · ${actor.name} → ${target.name} · 反打机位`
+      : "视觉回放验收 · 反打机位";
     this.replayQueue = [{
       frames,
-      label: actor && target
-        ? `视觉回放验收 · ${actor.name} → ${target.name} · 反打机位`
-        : "视觉回放验收 · 反打机位",
+      label: previewLabel,
       loops: 1,
       actorId: actor?.id,
       targetId: target?.id,
     }];
-    return this.startNextReplay();
+
+    const started = this.startNextReplay();
+    // previewReplay is exposed only through the ?visualPreview=1 regression
+    // hook. Mark the replay UI synchronously so headless browsers cannot miss
+    // the short 1.4–1.9s replay window while recovering a background tab.
+    if (started) {
+      this.options.message.classList.add("replay-caption");
+      this.options.message.textContent =
+        `${previewLabel} · ${REPLAY_SPEED.toFixed(2)}×`;
+      this.updateBroadcastBug("视觉回放验收", true);
+    }
+    return started;
   }
 
   private startNextReplay(now = performance.now()) {

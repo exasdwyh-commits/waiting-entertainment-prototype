@@ -348,6 +348,7 @@ function queueRow(ticket: QueueTicket): string {
       '<button class="ghost" data-queue-action="cancel" data-ticket-id="' + ticket.id + '">取消</button>';
   } else if (ticket.status === "called") {
     actions = '<button data-queue-action="seat" data-ticket-id="' + ticket.id + '">入座</button>' +
+      '<button class="secondary" data-queue-action="recall" data-ticket-id="' + ticket.id + '">再次叫号</button>' +
       '<button class="secondary" data-queue-action="pass" data-ticket-id="' + ticket.id + '">过号</button>' +
       '<button class="ghost" data-queue-action="return" data-ticket-id="' + ticket.id + '">撤回</button>';
   } else if (ticket.status === "passed") {
@@ -358,7 +359,8 @@ function queueRow(ticket: QueueTicket): string {
   return '<div class="queue-row queue-row--' + ticket.status + '">' +
     '<div class="ticket-no">' + esc(ticket.number) + '</div>' +
     '<div class="ticket-info"><strong>' + ticket.partySize + ' 人' + (ticket.label ? " · " + esc(ticket.label) : "") + '</strong>' +
-    '<span>' + queueLabel(ticket.status) + '</span></div><div class="queue-actions">' + actions + '</div></div>';
+    '<span>' + queueLabel(ticket.status) + ' · ' + Math.max(0, Math.floor((Date.now() - ticket.createdAt) / 60000)) + ' 分钟</span></div>' +
+    '<div class="queue-actions">' + actions + '</div></div>';
 }
 
 function render() {
@@ -371,6 +373,7 @@ function render() {
   const queue = snapshot.queue.filter((ticket) => ticket.status !== "cancelled");
   const waitingCount = queue.filter((ticket) => ticket.status === "waiting").length;
   const screenUrl = location.protocol + "//" + location.hostname + ":5176";
+  const queueJoinUrl = location.protocol + "//" + location.hostname + ":5177/queue";
   const liveWorkspace =
     '<div class="workspace"><section class="main-column">' + renderRound(active, snapshot.games) +
     '<section class="section-block"><div class="section-title"><div><span class="eyebrow">GAME LIBRARY</span><h2>互动游戏库</h2></div>' +
@@ -384,9 +387,11 @@ function render() {
     ).join("") + '</div></section></section>' +
     '<aside class="side-column"><section class="queue-panel"><div class="section-title compact"><div>' +
     '<span class="eyebrow">RESTAURANT QUEUE</span><h2>等位叫号</h2></div><span class="queue-count">' + waitingCount + ' 桌等待</span></div>' +
+    '<div class="queue-self-service"><div><strong>顾客自助取号</strong><span>让顾客扫描大屏二维码，填写人数后手机等待叫号。</span></div>' +
+    '<a href="' + esc(queueJoinUrl) + '" target="_blank">打开手机取号页 ↗</a></div>' +
     '<form id="queue-form" class="queue-form"><label><span>人数</span><input name="partySize" type="number" min="1" max="30" value="2" required /></label>' +
-    '<label class="grow"><span>备注</span><input name="label" maxlength="40" placeholder="如：靠窗 / 王先生" /></label>' +
-    '<button class="primary" type="submit">新增等位</button></form><div class="queue-list">' +
+    '<label class="grow"><span>称呼 / 备注</span><input name="label" maxlength="40" placeholder="如：王先生 / 靠窗" /></label>' +
+    '<button class="primary" type="submit">前台代取号</button></form><div class="queue-list">' +
     (queue.length ? queue.map(queueRow).join("") : '<div class="queue-empty">暂无等位客人</div>') +
     '</div></section><section class="broadcast-status"><span class="eyebrow">BROADCAST</span>' +
     '<div class="broadcast-mode">' + esc(snapshot.broadcast.mode) + '</div><p>' +
