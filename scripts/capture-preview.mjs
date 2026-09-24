@@ -225,8 +225,13 @@ try {
     fullPage: true,
   });
 
+  // The phone screenshot can leave the venue display as a background page.
+  // Headless Chromium throttles requestAnimationFrame there, so foreground the
+  // display before starting the deterministic replay assertion.
+  await big.bringToFront();
   await big.waitForFunction(
     () => typeof window.__waitingVisualReplay === "function",
+    undefined,
     { timeout: 10_000 },
   );
   const replayStarted = await big.evaluate(() =>
@@ -247,6 +252,7 @@ try {
         caption.includes("视觉回放验收")
       );
     },
+    undefined,
     { timeout: 10_000 },
   );
 
