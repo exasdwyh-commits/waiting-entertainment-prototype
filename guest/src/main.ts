@@ -152,11 +152,20 @@ async function join(name: string) {
 }
 
 function launchGameIfReady() {
+  // Embedded games do not need a child runtime warm-up. Once the guest has
+  // registered, send them straight to the controller so the scan -> control
+  // flow matches the mature game packages. The controller itself waits for
+  // the hosted round to start before opening its socket.
+  const embeddedControllerReady =
+    game?.runtime.kind === "embedded" &&
+    round?.status === "recruiting";
   const processLobbyReady =
     game?.runtime.kind === "process" &&
     round?.status === "locked";
   const gameReady =
-    round?.status === "running" || processLobbyReady;
+    round?.status === "running" ||
+    processLobbyReady ||
+    embeddedControllerReady;
 
   if (
     redirecting ||
