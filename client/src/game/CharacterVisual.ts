@@ -1,18 +1,8 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
-import type { PlayerState } from "@waiting/shared";
-
-const MODEL_URLS = [
-  "/assets/characters/character-female-a.glb",
-  "/assets/characters/character-male-a.glb",
-  "/assets/characters/character-female-b.glb",
-  "/assets/characters/character-male-b.glb",
-  "/assets/characters/character-female-c.glb",
-  "/assets/characters/character-male-c.glb",
-  "/assets/characters/character-female-d.glb",
-  "/assets/characters/character-male-d.glb",
-] as const;
+import { characterForSeat, type PlayerState } from "@waiting/shared";
+import { createPlushCharacter } from "./PlushCharacter";
 
 type LoadedCharacter = {
   scene: THREE.Group;
@@ -29,11 +19,25 @@ export type CharacterVisual = {
 
 const characterPromises = new Map<string, Promise<LoadedCharacter>>();
 
-function loadCharacter(variantIndex: number) {
-  const url = MODEL_URLS[
-    Math.abs(Math.trunc(variantIndex)) % MODEL_URLS.length
-  ];
+const plushBump = (() => {
+  const size = 96;
+  const pixels = new Uint8Array(size * size * 4);
+  let seed = 72391;
+  for (let i = 0; i < size * size; i++) {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    const grain = 94 + ((seed >>> 24) % 118);
+    pixels.set([grain, grain, grain, 255], i * 4);
+  }
+  const texture = new THREE.DataTexture(pixels, size, size);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(9, 9);
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+})();
 
+function loadCharacter(url: string) {
   const existing = characterPromises.get(url);
   if (existing) return existing;
 
@@ -50,7 +54,7 @@ function loadCharacter(variantIndex: number) {
   return promise;
 }
 
-function tintCharacter(root: THREE.Object3D, tint: number) {
+function styleCharacter(root: THREE.Object3D, tint: number) {
   const tintColor = new THREE.Color(tint);
 
   root.traverse((object) => {
@@ -62,9 +66,31 @@ function tintCharacter(root: THREE.Object3D, tint: number) {
     const materials = source.map((material) => {
       const cloned = material.clone();
       if ("color" in cloned && cloned.color instanceof THREE.Color) {
-        cloned.color.lerp(tintColor, 0.38);
+        if (!(cloned instanceof THREE.MeshStandardMaterial && cloned.map)) {
+          cloned.color.lerp(tintColor, 0.12);
+        }
       }
-      return cloned;
+      if (!(cloned instanceof THREE.MeshStandardMaterial)) return cloned;
+      const plush = new THREE.MeshPhysicalMaterial({
+        color: cloned.color,
+        map: cloned.map,
+        normalMap: cloned.normalMap ?? undefined,
+        normalScale: cloned.normalScale,
+        aoMap: cloned.aoMap,
+        bumpMap: cloned.normalMap ? undefined : plushBump,
+        bumpScale: cloned.normalMap ? 0 : 0.016,
+        roughness: 0.9,
+        metalness: 0,
+        envMapIntensity: 0.36,
+        sheen: 0.58,
+        sheenRoughness: 0.72,
+        sheenColor: new THREE.Color(tint).lerp(new THREE.Color(0xffffff), 0.42),
+        side: cloned.side,
+        transparent: cloned.transparent,
+        alphaTest: cloned.alphaTest,
+      });
+      cloned.dispose();
+      return plush;
     });
 
     object.material = Array.isArray(object.material) ? materials : materials[0];
@@ -123,33 +149,18 @@ function chooseClip(clips: THREE.AnimationClip[], state: PlayerState) {
     : clips.find((clip) => /idle/i.test(clip.name));
 }
 
-function fallbackCharacter(tint: number, targetHeight: number): CharacterVisual {
-  const root = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.36, 0.96, 5, 8),
-    new THREE.MeshStandardMaterial({ color: tint, roughness: 0.62 }),
-  );
-  body.position.y = targetHeight * 0.5;
-  root.add(body);
-
-  return {
-    root,
-    setState: () => undefined,
-    addImpact: () => undefined,
-    update: () => undefined,
-  };
-}
-
 export async function createCharacterVisual(
   tint: number,
   targetHeight = 1.75,
   variantIndex = 0,
 ): Promise<CharacterVisual> {
+  const character = characterForSeat(variantIndex);
+  if (!character.modelUrl) return createPlushCharacter(character, targetHeight);
   try {
-    const loaded = await loadCharacter(variantIndex);
+    const loaded = await loadCharacter(character.modelUrl);
     const root = new THREE.Group();
     const model = cloneSkeleton(loaded.scene) as THREE.Group;
-    tintCharacter(model, tint);
+    styleCharacter(model, tint);
     fitCharacter(model, targetHeight);
     root.add(model);
 
@@ -161,10 +172,13 @@ export async function createCharacterVisual(
     let currentState: PlayerState | undefined;
     let impactStrength = 0;
     let impactReceived = true;
+    let phase = 0;
+    const restingY = model.position.y;
 
     const setState = (state: PlayerState) => {
-      if (!mixer || state === currentState) return;
+      if (state === currentState && mixer) return;
       currentState = state;
+      if (!mixer) return;
 
       const clip = chooseClip(loaded.animations, state);
       if (!clip) return;
@@ -192,6 +206,14 @@ export async function createCharacterVisual(
       },
       update: (delta) => {
         mixer?.update(delta);
+        if (!mixer) {
+          const moving = currentState === "moving";
+          const attacking = ["pushing", "throwing", "kicking", "headbutting", "dropkicking"].includes(currentState ?? "idle");
+          phase += delta * (moving ? 9 : attacking ? 7 : 2.5);
+          model.position.y = restingY + (moving ? Math.abs(Math.sin(phase)) * 0.07 : Math.sin(phase) * 0.012);
+          model.rotation.z += ((moving ? Math.sin(phase) * 0.055 : attacking ? -0.09 : 0) - model.rotation.z) * Math.min(1, delta * 9);
+          model.rotation.x += ((currentState === "hit" ? 0.12 : 0) - model.rotation.x) * Math.min(1, delta * 9);
+        }
 
         if (impactStrength > 0.001) {
           const amount = impactStrength;
@@ -214,7 +236,7 @@ export async function createCharacterVisual(
       },
     };
   } catch (error) {
-    console.warn("Character model failed to load; using capsule fallback.", error);
-    return fallbackCharacter(tint, targetHeight);
+    console.warn(`Character ${character.id} model failed to load; using plush preview.`, error);
+    return createPlushCharacter(character, targetHeight);
   }
 }

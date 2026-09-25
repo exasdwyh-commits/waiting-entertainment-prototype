@@ -44,7 +44,7 @@ Target budget for the first production pass:
 - preferably 1 material; maximum 2 for the base character
 - avoid alpha cards, strand fur and layered transparent cloth
 
-The current game can show eight fighters simultaneously, including on phones, so silhouette and animation matter more than tiny surface detail.
+The current game can show ten fighters simultaneously, including on phones, so silhouette and animation matter more than tiny surface detail.
 
 ## 4. Rig
 
@@ -139,7 +139,7 @@ Before replacing a production character, validate:
 
 ## 8. Integration strategy
 
-Do not replace all eight fighters at once.
+Do not replace all ten fighters at once.
 
 Recommended sequence:
 
@@ -150,3 +150,18 @@ Recommended sequence:
 5. remaining roster
 
 Once these four archetypes work with the shared skeleton and animation adapter, the rest are lower-risk.
+
+## 9. Current runtime handoff
+
+`shared/src/characters.ts` is the seat-to-IP roster. CH01–CH08 use the canonical concepts in `IP_CHARACTER_REFERENCE_PACK.md`. CH09–CH10 are visual candidates only; their names and species require approved reference sheets before final modeling.
+
+The client and personal phone view currently use lightweight, original soft-plush preview meshes for all ten slots. These previews make each seat recognizable while the production Hyper3D/Rodin assets are prepared. They are not final 3D deliverables.
+
+To integrate an approved character:
+
+1. Export a rigged GLB with animation clips and textures that pass the budgets and checks above.
+2. Put the same GLB at `client/public/characters/CHxx.glb` and `player/public/characters/CHxx.glb`. Both apps resolve the runtime path `/characters/CHxx.glb` from their own origin.
+3. Set that character's `modelUrl` in `shared/src/characters.ts` to `/characters/CHxx.glb` and rebuild shared, client and player.
+4. Inspect idle, movement, hit and elimination on both the spectator screen and a phone-sized viewport. If the GLB fails to load, the slot falls back to its plush preview.
+
+Character selection and gameplay stats are separate product decisions. The current match maps one identity to each seat and keeps the existing physics unchanged.

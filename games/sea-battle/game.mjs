@@ -2,6 +2,7 @@ export const CAPACITY = 8;
 export const ROUND_SECONDS = 180;
 export const WORLD_RADIUS = 58;
 export const CRATE_COUNT = 22;
+export const CRATE_MAGNET_RADIUS = 8;
 export const PROJECTILE_SPEED = 31;
 export const RESPAWN_SECONDS = 3;
 export const RESPAWN_INVULN = 1.6;
@@ -196,6 +197,7 @@ function updateBattleStage(state) {
 
 export function startGame(state) {
   state.round += 1;
+  state.time = 0;
   state.phase = "countdown";
   state.countdown = 4;
   state.remaining = state.seconds;
@@ -400,11 +402,12 @@ function fireBroadside(state, boat) {
   for (let i = 0; i < count; i++) {
     const spread = (i - (count - 1) / 2) * 0.075;
     const angle = baseAngle + spread;
+    const barrelOffset = (i - (count - 1) / 2) * Math.min(0.72, boat.radius * 0.4);
     state.projectiles.push({
       id: ++state.projectileId,
       ownerId: boat.id,
-      x: boat.x + Math.sin(angle) * (boat.radius + 0.5),
-      z: boat.z + Math.cos(angle) * (boat.radius + 0.5),
+      x: boat.x + right.x * rightSign * (boat.radius + 0.5) + forward.x * barrelOffset,
+      z: boat.z + right.z * rightSign * (boat.radius + 0.5) + forward.z * barrelOffset,
       vx: Math.sin(angle) * PROJECTILE_SPEED,
       vz: Math.cos(angle) * PROJECTILE_SPEED,
       damage: boat.damage,
@@ -613,26 +616,56 @@ function stepProjectiles(state, dt) {
   state.projectiles = state.projectiles.filter((projectile) => projectile.alive);
 }
 
+function collectCrate(state, boat, crate) {
+  crate.active = false;
+  crate.respawnAt = state.time + 7;
+  boat.score += 2;
+  grantXp(state, boat, 1);
+  boat.hp = Math.min(boat.maxHp, boat.hp + 6);
+  boat.energy = Math.min(boat.maxEnergy, boat.energy + 12);
+  emit(state, "crate", boat.id, `${boat.name} 获得海上物资`, 1, { crateId: crate.id });
+}
+
 function collectCrates(state, boat) {
   for (const crate of state.crates) {
-    if (!crate.active || dist2(boat, crate) > (boat.radius + 1.0) ** 2) continue;
-    crate.active = false;
-    crate.respawnAt = state.time + 7;
-    boat.score += 2;
-    grantXp(state, boat, 1);
-    boat.hp = Math.min(boat.maxHp, boat.hp + 6);
-    boat.energy = Math.min(boat.maxEnergy, boat.energy + 12);
-    emit(state, "crate", boat.id, `${boat.name} 获得海上物资`, 1);
+    if (crate.active && dist2(boat, crate) <= (boat.radius + 1.0) ** 2) {
+      collectCrate(state, boat, crate);
+    }
   }
 }
 
-function stepCrates(state) {
+function stepCrates(state, dt) {
   for (const crate of state.crates) {
-    if (crate.active || state.time < crate.respawnAt) continue;
-    const p = randomPoint(state, 6, Math.max(18, safeRadius(state) - 6));
-    crate.x = p.x;
-    crate.z = p.z;
-    crate.active = true;
+    if (!crate.active) {
+      if (state.time < crate.respawnAt) continue;
+      const p = randomPoint(state, 6, Math.max(18, safeRadius(state) - 6));
+      crate.x = p.x;
+      crate.z = p.z;
+      crate.active = true;
+      continue;
+    }
+
+    let nearest = null;
+    let nearestDistance = CRATE_MAGNET_RADIUS;
+    for (const boat of state.boats) {
+      if (!boat.alive) continue;
+      const distance = Math.hypot(boat.x - crate.x, boat.z - crate.z);
+      if (distance < nearestDistance) {
+        nearest = boat;
+        nearestDistance = distance;
+      }
+    }
+    if (!nearest) continue;
+    const pickupDistance = nearest.radius + 1.0;
+    if (nearestDistance <= pickupDistance) {
+      collectCrate(state, nearest, crate);
+      continue;
+    }
+    const pull = Math.min(nearestDistance - pickupDistance,
+      dt * (4 + (CRATE_MAGNET_RADIUS - nearestDistance) * 2.2));
+    crate.x += (nearest.x - crate.x) / nearestDistance * pull;
+    crate.z += (nearest.z - crate.z) / nearestDistance * pull;
+    if (nearestDistance - pull <= pickupDistance) collectCrate(state, nearest, crate);
   }
 }
 
@@ -784,7 +817,7 @@ export function stepGame(state, dt) {
       stepBoat(state, boat, dt);
     }
     stepProjectiles(state, dt);
-    stepCrates(state);
+    stepCrates(state, dt);
     return;
   }
 
@@ -797,7 +830,7 @@ export function stepGame(state, dt) {
   resolveBoatCollisions(state);
   stepProjectiles(state, dt);
   stepMonster(state, dt);
-  stepCrates(state);
+  stepCrates(state, dt);
 
   if (state.remaining <= 0) {
     const order = ranking(state);

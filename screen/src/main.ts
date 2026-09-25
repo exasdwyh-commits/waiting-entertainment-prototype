@@ -9,7 +9,8 @@ root.innerHTML =
   '<main class="broadcast-shell">' +
     '<iframe id="game-frame" class="game-frame" title="游戏导播画面"></iframe>' +
     '<section id="idle" class="scene scene--idle"><div class="brand-lockup"><span>WAITING</span><strong>ENTERTAINMENT</strong></div>' +
-      '<h1>现场互动正在准备</h1><p>留意主持人和大屏，下一轮很快开始</p></section>' +
+      '<span class="eyebrow idle-mode">等待模式 · WAITING LOBBY</span><h1>下一轮即将开始</h1>' +
+      '<p>请留意主持人开放报名；报名开始后，扫描大屏二维码加入游戏</p></section>' +
     '<section id="recruit" class="scene scene--recruit" hidden><div class="recruit-copy"><span class="eyebrow">OPEN REGISTRATION</span>' +
       '<h1 id="game-name">现场互动</h1><p id="game-summary"></p><div class="seat-progress"><strong id="seat-count">0 / 0</strong><span>已报名</span></div>' +
       '<div id="player-names" class="player-names"></div></div><div class="qr-card"><canvas id="qr" width="280" height="280"></canvas>' +

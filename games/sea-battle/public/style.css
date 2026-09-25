@@ -22,6 +22,9 @@ ol{list-style:none;padding:0;margin:10px 0 0}
 #display-tools{position:fixed;right:28px;bottom:28px;width:205px;padding:14px;text-align:center;border-radius:14px}
 #display-tools img{display:block;width:142px;height:142px;margin:10px auto;background:#fff;border-radius:10px}
 #display-tools small{display:block;color:var(--muted);font-size:9px;line-height:1.4}
+body.display.battle-live #display-tools{right:18px;bottom:18px;width:138px;padding:9px}
+body.display.battle-live #display-tools img{width:112px;height:112px;margin:6px auto 2px}
+body.display.battle-live #display-tools small,body.display.battle-live #display-tools .primary{display:none}
 .join-title{font-size:11px;letter-spacing:2px;color:var(--cyan)}
 .primary{border:0;border-radius:9px;background:var(--cyan);color:#073033;font-weight:800;padding:12px 16px;cursor:pointer}
 #display-tools .primary{width:100%;margin-top:10px}
@@ -84,3 +87,35 @@ body[data-stage="maelstrom"] #timer{color:#ffd7de;text-shadow:0 0 18px #ff5d7366
 #ranks li.bounty{border-color:#ffe36e55;background:#ffe36e0d}
 #ranks li.bounty>b{color:#ffe36e;text-shadow:0 0 10px #ffe36e66;font-size:14px}
 #ranks li.bounty small{color:#ffe8a8}
+
+@media (max-height:500px) and (max-width:1000px){
+  header{top:calc(6px + env(safe-area-inset-top));left:calc(14px + env(safe-area-inset-left));right:calc(14px + env(safe-area-inset-right))}
+  .brand b{font-size:16px;letter-spacing:2px}.brand span{font-size:8px;letter-spacing:.8px}
+  .clock strong{font-size:25px}.clock small{font-size:8px}
+  #stage-chip{font-size:8px;padding:3px 7px}
+  body:not(.display) #leaderboard{display:none}
+  #join-card{left:50%;right:auto;top:52%;transform:translate(-50%,-50%);width:min(400px,calc(100vw - 180px));max-height:calc(100dvh - 24px);overflow:auto;padding:16px 20px}
+  #join-card h1{font-size:25px;margin:7px 0}
+  #join-card p{font-size:10px;margin:6px 0}
+  #join-form{margin-top:10px}
+  .player-card{top:calc(54px + env(safe-area-inset-top));left:calc(14px + env(safe-area-inset-left));width:190px;padding:8px 11px;gap:1px 7px}
+  .player-card small{font-size:9px}.player-card strong{font-size:18px}.player-card span{font-size:10px}
+  #combat-bonus,#broadside-status{grid-column:1/-1;margin:0;font-size:8px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #broadside-status{padding-top:3px}
+  .bars{top:calc(54px + env(safe-area-inset-top));right:calc(14px + env(safe-area-inset-right));width:190px;padding:8px 10px}
+  .bars label{font-size:8px}.bars i{margin-bottom:4px;height:5px}
+  #steer-pad{left:calc(14px + env(safe-area-inset-left));bottom:calc(14px + env(safe-area-inset-bottom));width:138px;height:98px;touch-action:none}
+  #throttle{right:calc(14px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));width:98px;height:98px;touch-action:none}
+  #throttle b{font-size:18px}
+  #upgrade-card{width:min(680px,calc(100vw - 220px));max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow:auto;padding:12px;z-index:20}
+  #upgrade-card h2{font-size:18px;margin:3px 0 8px}
+  #upgrade-options{gap:6px}
+  .upgrade-option{min-height:58px;padding:8px}
+  .upgrade-option b{font-size:12px;margin-bottom:3px}.upgrade-option span{font-size:9px}
+  body.upgrading #controls{display:none}
+  #monster-boss{top:calc(8px + env(safe-area-inset-top));width:250px;padding:5px 10px}
+  #monster-warning{top:32%;font-size:12px;white-space:nowrap}
+  #storm-warning{top:calc(32% + 40px);font-size:11px;white-space:nowrap}
+  #battle-call{top:42%;font-size:clamp(28px,6vw,48px)}
+  #respawn{top:36%;white-space:nowrap}
+}

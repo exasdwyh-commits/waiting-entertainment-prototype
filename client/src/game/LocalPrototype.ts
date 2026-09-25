@@ -1,11 +1,14 @@
 import * as THREE from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
-import { TABLE_PUSH_GEOMETRY } from "@waiting/shared";
+import { TABLE_PUSH_GEOMETRY, characterForSeat } from "@waiting/shared";
 import { ReplayBuffer } from "./ReplayBuffer";
+import { createPlushCharacter } from "./PlushCharacter";
+import { createCharacterVisual, type CharacterVisual } from "./CharacterVisual";
 
 type Actor = {
   id: string;
-  mesh: THREE.Mesh;
+  mesh: THREE.Group;
+  visual: CharacterVisual;
   body: RAPIER.RigidBody;
   human: boolean;
   alive: boolean;
@@ -74,7 +77,7 @@ export class LocalPrototype {
 
     const resize = () => {
       const { clientWidth, clientHeight } = this.options.container;
-      this.renderer.setSize(clientWidth, clientHeight, false);
+      this.renderer.setSize(clientWidth, clientHeight);
       this.camera.aspect = Math.max(0.1, clientWidth / Math.max(1, clientHeight));
       this.camera.updateProjectionMatrix();
     };
@@ -156,8 +159,8 @@ export class LocalPrototype {
   }
 
   private createActor(index: number): Actor {
-    const palette = [0x38bdf8, 0xfb7185, 0xa78bfa, 0x4ade80, 0xfacc15, 0xf97316, 0x22d3ee, 0xe879f9, 0xf43f5e, 0x84cc16];
-    const color = palette[index % palette.length];
+    const character = characterForSeat(index);
+    const color = character.color;
     const angle = (index / PLAYER_COUNT) * Math.PI * 2;
     const radius = index === 0 ? 0 : TABLE_PUSH_GEOMETRY.spawnRadius;
     const x = Math.cos(angle) * radius;
@@ -179,16 +182,14 @@ export class LocalPrototype {
       body,
     );
 
-    const geometry = new THREE.CapsuleGeometry(0.36, 0.96, 6, 12);
-    const material = new THREE.MeshStandardMaterial({ color, roughness: 0.58 });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    const visual = createPlushCharacter(character, 1.7);
+    const mesh = visual.root;
     this.scene.add(mesh);
 
     return {
       id: index === 0 ? "YOU" : `BOT-${index}`,
       mesh,
+      visual,
       body,
       human: index === 0,
       alive: true,
@@ -204,11 +205,16 @@ export class LocalPrototype {
     for (const actor of this.actors) {
       this.world.removeRigidBody(actor.body);
       this.scene.remove(actor.mesh);
-      actor.mesh.geometry.dispose();
-      (actor.mesh.material as THREE.Material).dispose();
+      actor.mesh.traverse((object) => {
+        if (!(object instanceof THREE.Mesh)) return;
+        object.geometry.dispose();
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        materials.forEach((material) => material.dispose());
+      });
     }
 
     this.actors = Array.from({ length: PLAYER_COUNT }, (_, index) => this.createActor(index));
+    for (const index of [0, 1]) void this.loadActorVisual(this.actors[index], index);
     this.roundStartedAt = performance.now();
     this.centerSpinRadians = 0;
     if (this.lazySusan) this.lazySusan.rotation.y = 0;
@@ -218,6 +224,27 @@ export class LocalPrototype {
     window.setTimeout(() => {
       if (!this.roundEnded) this.options.message.textContent = "";
     }, 950);
+  }
+
+  private async loadActorVisual(actor: Actor, index: number) {
+    const visual = await createCharacterVisual(actor.color, 1.7, index);
+    if (this.actors[index] !== actor) return;
+
+    const previous = actor.mesh;
+    this.scene.remove(previous);
+    previous.traverse((object) => {
+      if (!(object instanceof THREE.Mesh)) return;
+      object.geometry.dispose();
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      materials.forEach((material) => material.dispose());
+    });
+
+    actor.mesh = visual.root;
+    actor.visual = visual;
+    actor.mesh.userData.facingYaw = previous.userData.facingYaw;
+    const position = actor.body.translation();
+    actor.mesh.position.set(position.x, position.y, position.z);
+    this.scene.add(actor.mesh);
   }
 
   private bindControls() {
@@ -333,6 +360,8 @@ export class LocalPrototype {
         { x: p.x, y: p.y + 0.55, z: p.z },
         true,
       );
+      target.visual.addImpact(Math.min(1.2, strength / 2.8), true);
+      actor.visual.addImpact(0.2, false);
       target.knockedUntil = now + 650;
     }
   }
@@ -489,13 +518,17 @@ export class LocalPrototype {
     }, 850);
   }
 
-  private syncVisuals() {
+  private syncVisuals(delta: number, now: number) {
     for (const actor of this.actors) {
       if (!actor.alive) continue;
       const p = actor.body.translation();
       const q = actor.body.rotation();
       actor.mesh.position.set(p.x, p.y, p.z);
       actor.mesh.quaternion.set(q.x, q.y, q.z, q.w);
+      const velocity = actor.body.linvel();
+      actor.visual.setState(now < actor.knockedUntil ? "hit" :
+        Math.hypot(velocity.x, velocity.z) > 0.4 ? "moving" : "idle");
+      actor.visual.update(delta);
     }
   }
 
@@ -537,7 +570,7 @@ export class LocalPrototype {
     this.world.step();
 
     for (const actor of this.actors) this.updateActorState(actor, now);
-    this.syncVisuals();
+    this.syncVisuals(delta, now);
     this.sampleReplay(now);
     this.updateMatch(now);
     this.renderer.render(this.scene, this.camera);

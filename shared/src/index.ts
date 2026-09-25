@@ -108,3 +108,4 @@ export interface MatchSnapshot {
 }
 
 export * from "./platform.js";
+export * from "./characters.js";

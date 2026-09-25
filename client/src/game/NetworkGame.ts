@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { io } from "socket.io-client";
 import QRCode from "qrcode";
-import { TABLE_PUSH_GEOMETRY } from "@waiting/shared";
+import { TABLE_PUSH_GEOMETRY, characterForSeat } from "@waiting/shared";
 import type { GameEvent, MatchSnapshot, PlayerSnapshot, PlayerState } from "@waiting/shared";
 import { createCharacterVisual, type CharacterVisual } from "./CharacterVisual";
 import { ImpactFx } from "./ImpactFx";
@@ -114,7 +114,7 @@ export class NetworkGame {
 
     const resize = () => {
       const { clientWidth, clientHeight } = this.options.container;
-      this.renderer.setSize(clientWidth, clientHeight, false);
+      this.renderer.setSize(clientWidth, clientHeight);
       this.camera.aspect = Math.max(0.1, clientWidth / Math.max(1, clientHeight));
       this.camera.updateProjectionMatrix();
     };
@@ -614,8 +614,8 @@ export class NetworkGame {
 
   private createView(player: PlayerSnapshot) {
     const index = Number(player.id.split("-")[1] ?? 0);
-    const palette = [ 0x38bdf8, 0xfb7185, 0xa78bfa, 0x4ade80, 0xfacc15, 0xf97316, 0x22d3ee, 0xe879f9, 0xf43f5e, 0x84cc16, ];
-    const tint = palette[index % palette.length];
+    const character = characterForSeat(index);
+    const tint = character.color;
 
     const root = new THREE.Group();
     root.position.set(...player.position);
@@ -635,7 +635,7 @@ export class NetworkGame {
     root.add(placeholder);
     this.scene.add(root);
 
-    const label = this.makeLabel(player.name, player.bot);
+    const label = this.makeLabel(`${character.name} · ${player.name}`, player.bot);
     this.scene.add(label);
 
     const ring = new THREE.Mesh(
@@ -719,7 +719,8 @@ export class NetworkGame {
     this.scene.remove(view.label);
     (view.label.material as THREE.SpriteMaterial).map?.dispose();
     (view.label.material as THREE.Material).dispose();
-    view.label = this.makeLabel(player.name, player.bot);
+    const seat = Number(player.id.split("-")[1] ?? 0);
+    view.label = this.makeLabel(`${characterForSeat(seat).name} · ${player.name}`, player.bot);
     view.label.userData.bot = player.bot;
     view.name = player.name;
     view.bot = player.bot;
@@ -812,7 +813,9 @@ export class NetworkGame {
       const rank = document.createElement("b");
       rank.textContent = String(index + 1);
       const name = document.createElement("span");
-      name.textContent = player.bot ? `${player.name} · AI` : player.name;
+      const seat = Number(player.id.split("-")[1] ?? 0);
+      const fighter = characterForSeat(seat);
+      name.textContent = `${fighter.name} · ${player.bot ? "AI" : player.name}`;
       const score = document.createElement("em");
       score.textContent = `+${player.score}`;
       item.append(rank, name, score);

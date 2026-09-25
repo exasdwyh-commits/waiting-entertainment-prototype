@@ -8,3 +8,12 @@ dist/
 !.env.example
 coverage/
 .waiting/
+
+# Credentials — .hyper3d/ holds Hyper3D CLI OAuth tokens. Never commit.
+.hyper3d/
+
+# Generated / oversized binaries. Kept out of git on purpose; the local
+# snapshot archive under ~/Documents/VScode/WTGame-backups/ is the backup.
+artifacts/
+client/public/characters/*.glb
+player/public/characters/*.glb

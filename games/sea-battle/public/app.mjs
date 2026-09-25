@@ -1,4 +1,5 @@
 import * as THREE from "/three/three.module.js";
+import { loadNavalArt, updateShipArt } from "/naval-art.mjs";
 
 const $ = (id) => document.getElementById(id);
 const query = new URLSearchParams(location.search);
@@ -21,8 +22,8 @@ const UPGRADE_COPY = {
 };
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color("#071f29");
-scene.fog = new THREE.Fog("#071f29", 42, 130);
+scene.background = new THREE.Color("#4e94a3");
+scene.fog = new THREE.Fog("#4e94a3", 115, 235);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
 renderer.setPixelRatio(Math.min(devicePixelRatio, isDisplay ? 1.5 : 1.25));
@@ -34,8 +35,12 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 $("scene").append(renderer.domElement);
 
-const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 220);
-camera.position.set(0, 58, 52);
+const phoneSpan = 26;
+const camera = isDisplay
+  ? new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 220)
+  : new THREE.OrthographicCamera(-phoneSpan * innerWidth / innerHeight / 2,
+    phoneSpan * innerWidth / innerHeight / 2, phoneSpan / 2, -phoneSpan / 2, 0.1, 220);
+camera.position.set(0, isDisplay ? 58 : 38, isDisplay ? 52 : 24);
 
 scene.add(new THREE.HemisphereLight("#baf8ff", "#073a43", 2.25));
 const sun = new THREE.DirectionalLight("#fff0ce", 3.2);
@@ -48,18 +53,33 @@ sun.shadow.camera.top = 72;
 sun.shadow.camera.bottom = -72;
 scene.add(sun);
 
-const waterGeo = new THREE.CircleGeometry(108, 128);
-const waterMat = new THREE.MeshPhysicalMaterial({
-  color: "#087f91",
-  roughness: 0.18,
-  metalness: 0.08,
-  clearcoat: 0.9,
-  clearcoatRoughness: 0.15,
+const waterGeo = new THREE.PlaneGeometry(420, 420);
+const waterMat = new THREE.ShaderMaterial({
+  uniforms: { time: { value: 0 }, storm: { value: 0 } },
+  vertexShader: `varying vec2 sea;
+    void main() {
+      sea = (modelMatrix * vec4(position, 1.0)).xz;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: `varying vec2 sea;
+    uniform float time;
+    uniform float storm;
+    void main() {
+      float swell = sin(sea.x * .28 + sea.y * .19 + time * .35) * .5 + .5;
+      float crease = sin(sea.x * 2.2 + sea.y * 1.1 - time * 1.2 + sin(sea.y * .55) * .7);
+      float foam = smoothstep(.93, .99, crease)
+        * smoothstep(.05, .45, sin(sea.y * 1.7 - sea.x + time * .22)) * .024;
+      vec3 day = mix(vec3(.035, .24, .30), vec3(.055, .34, .39), swell);
+      vec3 stormSea = mix(vec3(.025, .075, .14), vec3(.05, .13, .20), swell);
+      vec3 color = mix(day, stormSea, storm) + vec3(.38, .66, .68) * foam;
+      gl_FragColor = vec4(color, 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
 });
 const water = new THREE.Mesh(waterGeo, waterMat);
 water.rotation.x = -Math.PI / 2;
 water.position.y = -0.12;
-water.receiveShadow = true;
 scene.add(water);
 
 const ringMat = new THREE.MeshBasicMaterial({
@@ -90,10 +110,8 @@ safeZoneRing.position.y = 0.045;
 safeZoneRing.visible = false;
 scene.add(safeZoneRing);
 
-const waterNormalColor = new THREE.Color("#087f91");
-const waterStormColor = new THREE.Color("#274d67");
-
 const islandMat = new THREE.MeshStandardMaterial({ color: "#7f6848", roughness: 0.92 });
+const coast = [];
 for (let i = 0; i < 13; i++) {
   const a = i / 13 * Math.PI * 2 + 0.16;
   const r = 62 + (i % 3) * 2.6;
@@ -106,10 +124,57 @@ for (let i = 0; i < 13; i++) {
   rock.castShadow = true;
   rock.receiveShadow = true;
   scene.add(rock);
+  coast.push({ rock, index: i, x: rock.position.x, z: rock.position.z });
+}
+
+const navalArt = {};
+const buoys = [];
+function applyNavalArt(art) {
+  Object.assign(navalArt, art);
+  for (const { rock, index, x, z } of coast) {
+    const kind = index % 4 === 0 ? "reef" : index % 2 === 0 ? "island-palm" : "island-crag";
+    const template = art[kind];
+    if (!template) continue;
+    const island = template.clone(true);
+    island.position.set(x, 0, z);
+    island.rotation.y = index * 1.37;
+    island.scale.setScalar(kind === "reef" ? 2.9 : 1.55 + index % 3 * .28);
+    scene.add(island);
+    rock.visible = false;
+  }
+  if (art.buoy) {
+    for (let i = 0; i < 24; i++) {
+      const angle = i * Math.PI / 12;
+      const buoy = art.buoy.clone(true);
+      buoy.position.set(Math.cos(angle) * 59.5, 0, Math.sin(angle) * 59.5);
+      buoy.scale.setScalar(.78);
+      scene.add(buoy);
+      buoys.push(buoy);
+    }
+  }
+  if (art["supply-crate"]) {
+    for (const group of crateMeshes) {
+      group.userData.fallbackBox.visible = false;
+      const crate = art["supply-crate"].clone(true);
+      crate.scale.setScalar(2.0);
+      group.add(crate);
+    }
+  }
 }
 
 function makeBoat(color) {
   const group = new THREE.Group();
+  const fallbackVisual = new THREE.Group();
+  group.add(fallbackVisual);
+
+  const contactShadow = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 24),
+    new THREE.MeshBasicMaterial({ color: "#07313b", transparent: true, opacity: 0.22, depthWrite: false }),
+  );
+  contactShadow.rotation.x = -Math.PI / 2;
+  contactShadow.scale.set(1.65, 2.65, 1);
+  contactShadow.position.y = -0.1;
+  group.add(contactShadow);
 
   const hullMat = new THREE.MeshPhysicalMaterial({
     color,
@@ -125,7 +190,7 @@ function makeBoat(color) {
   );
   hull.position.y = 0.55;
   hull.castShadow = true;
-  group.add(hull);
+  fallbackVisual.add(hull);
 
   const bow = new THREE.Mesh(
     new THREE.ConeGeometry(1.18, 2.1, 4),
@@ -135,7 +200,7 @@ function makeBoat(color) {
   bow.rotation.z = Math.PI / 4;
   bow.position.set(0, 0.55, 3.25);
   bow.castShadow = true;
-  group.add(bow);
+  fallbackVisual.add(bow);
 
   const deck = new THREE.Mesh(
     new THREE.BoxGeometry(1.35, 0.42, 1.7),
@@ -143,7 +208,7 @@ function makeBoat(color) {
   );
   deck.position.set(0, 1.12, -0.2);
   deck.castShadow = true;
-  group.add(deck);
+  fallbackVisual.add(deck);
 
   const mast = new THREE.Mesh(
     new THREE.CylinderGeometry(0.07, 0.09, 2.9, 8),
@@ -151,7 +216,7 @@ function makeBoat(color) {
   );
   mast.position.set(0, 2.1, -0.45);
   mast.castShadow = true;
-  group.add(mast);
+  fallbackVisual.add(mast);
 
   const sail = new THREE.Mesh(
     new THREE.PlaneGeometry(1.8, 1.7),
@@ -163,7 +228,7 @@ function makeBoat(color) {
   );
   sail.position.set(0.08, 2.25, -0.35);
   sail.rotation.y = Math.PI / 2;
-  group.add(sail);
+  fallbackVisual.add(sail);
 
   const cannonMat = new THREE.MeshStandardMaterial({ color: "#29323b", roughness: 0.35, metalness: 0.7 });
   for (const side of [-1, 1]) {
@@ -172,33 +237,32 @@ function makeBoat(color) {
       cannon.rotation.z = Math.PI / 2;
       cannon.position.set(side * 1.4, 0.86, z);
       cannon.castShadow = true;
-      group.add(cannon);
+      fallbackVisual.add(cannon);
     }
   }
 
-  const wakeGeometry = new THREE.BufferGeometry();
-  wakeGeometry.setAttribute(
-    "position",
-    new THREE.Float32BufferAttribute([
-      -1.15, 0, -1.6,
-       1.15, 0, -1.6,
-       0.0,  0, -7.0,
-    ], 3),
-  );
-  const wake = new THREE.Mesh(
-    wakeGeometry,
-    new THREE.MeshBasicMaterial({
-      color: "#d7ffff",
-      transparent: true,
-      opacity: 0.20,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    }),
-  );
+  const wake = new THREE.Group();
+  const wakeMaterial = new THREE.MeshBasicMaterial({
+    color: "#d7ffff",
+    transparent: true,
+    opacity: 0.18,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const wakeStrip = new THREE.PlaneGeometry(0.15, 4.6);
+  for (const side of [-1, 1]) {
+    const strip = new THREE.Mesh(wakeStrip, wakeMaterial);
+    strip.rotation.x = -Math.PI / 2;
+    strip.rotation.z = side * 0.16;
+    strip.position.set(side * 1.12, 0, -3.6);
+    wake.add(strip);
+  }
   wake.position.y = 0.025;
   group.add(wake);
   group.userData.wake = wake;
+  group.userData.wakeMaterial = wakeMaterial;
   group.userData.hullMat = hullMat;
+  group.userData.fallbackVisual = fallbackVisual;
 
   const flashMat = new THREE.MeshBasicMaterial({
     color: "#ffe7a3",
@@ -206,14 +270,27 @@ function makeBoat(color) {
     opacity: 0.95,
     depthWrite: false,
   });
+  const smokeMat = new THREE.MeshBasicMaterial({
+    color: "#d9e3df",
+    transparent: true,
+    opacity: 0.95,
+    depthWrite: false,
+  });
+  const flashes = [];
   for (const side of [-1, 1]) {
-    const flash = new THREE.Mesh(new THREE.SphereGeometry(0.42, 8, 6), flashMat.clone());
-    flash.position.set(side * 1.85, 0.92, 0);
-    flash.visible = false;
-    group.add(flash);
-    if (side < 0) group.userData.flashLeft = flash;
-    else group.userData.flashRight = flash;
+    for (let index = 0; index < 5; index++) {
+      const point = new THREE.Group();
+      const flash = new THREE.Mesh(new THREE.SphereGeometry(0.33, 8, 6), flashMat);
+      const smoke = new THREE.Mesh(new THREE.SphereGeometry(0.24, 7, 5), smokeMat);
+      smoke.position.x = side * 0.31;
+      point.add(flash, smoke);
+      point.position.set(side * 1.63, 0.88, (index - 2) * 0.7);
+      point.visible = false;
+      group.add(point);
+      flashes.push({ point, flash, smoke, side, index });
+    }
   }
+  group.userData.flashes = flashes;
 
   scene.add(group);
   return group;
@@ -222,6 +299,65 @@ function makeBoat(color) {
 const boatMeshes = Array.from({ length: 8 }, (_, id) =>
   makeBoat(["#ef4444", "#3b82f6", "#22c55e", "#a855f7", "#14b8a6", "#f59e0b", "#64748b", "#ec4899"][id])
 );
+const wakeTrailGeometry = new THREE.PlaneGeometry(0.3, 1.7);
+wakeTrailGeometry.rotateX(-Math.PI / 2);
+const wakeTrail = new THREE.InstancedMesh(wakeTrailGeometry,
+  new THREE.MeshBasicMaterial({ color: "#d5ffff", transparent: true, opacity: 0.24,
+    depthWrite: false, side: THREE.DoubleSide }), 8 * 18 * 2);
+wakeTrail.count = 0;
+wakeTrail.frustumCulled = false;
+scene.add(wakeTrail);
+const wakeTracks = Array.from({ length: 8 }, () => ({ samples: [], timer: 0, x: null, z: null }));
+const wakePosition = new THREE.Vector3();
+const wakeRotation = new THREE.Quaternion();
+const wakeScale = new THREE.Vector3();
+const wakeMatrix = new THREE.Matrix4();
+const upAxis = new THREE.Vector3(0, 1, 0);
+let wakeRound = null;
+
+function updateWakeTrail(dt) {
+  if (wakeRound !== state.round) {
+    for (const track of wakeTracks) { track.samples.length = 0; track.x = null; track.z = null; }
+    wakeRound = state.round;
+  }
+  let instance = 0;
+  for (const boat of state.boats) {
+    const track = wakeTracks[boat.id];
+    const mesh = boatMeshes[boat.id];
+    track.timer += dt;
+    const moved = track.x === null ? 0 : Math.hypot(mesh.position.x - track.x, mesh.position.z - track.z);
+    if (moved > 10) track.samples.length = 0;
+    if (boat.alive && boat.speed > 2 && (track.x === null || moved > 0.48) && track.timer > 0.14) {
+      track.samples.push({
+        x: mesh.position.x - Math.sin(mesh.rotation.y) * 2.1,
+        z: mesh.position.z - Math.cos(mesh.rotation.y) * 2.1,
+        heading: mesh.rotation.y, age: 0,
+      });
+      if (track.samples.length > 18) track.samples.shift();
+      track.x = mesh.position.x;
+      track.z = mesh.position.z;
+      track.timer = 0;
+    }
+    for (let index = track.samples.length - 1; index >= 0; index--) {
+      const sample = track.samples[index];
+      sample.age += dt;
+      if (sample.age >= 2.8) { track.samples.splice(index, 1); continue; }
+      const fade = Math.pow(1 - sample.age / 2.8, 1.5);
+      wakeRotation.setFromAxisAngle(upAxis, sample.heading);
+      wakeScale.set(0.55 + fade * 0.7, 1, 0.65 + fade * 0.6);
+      for (const side of [-1, 1]) {
+        wakePosition.set(sample.x + Math.cos(sample.heading) * side * 0.85, 0.04,
+          sample.z - Math.sin(sample.heading) * side * 0.85);
+        wakeScale.x = fade * 1.2;
+        wakeScale.z = fade * 1.1;
+        wakeMatrix.compose(wakePosition, wakeRotation, wakeScale);
+        wakeTrail.setMatrixAt(instance++, wakeMatrix);
+      }
+    }
+  }
+  wakeTrail.count = instance;
+  wakeTrail.instanceMatrix.needsUpdate = true;
+}
 
 const crateMat = new THREE.MeshStandardMaterial({
   color: "#ffc857",
@@ -236,6 +372,7 @@ const crateMeshes = Array.from({ length: 22 }, (_, id) => {
   box.rotation.set(0.22, id * 0.7, 0.15);
   box.castShadow = true;
   group.add(box);
+  group.userData.fallbackBox = box;
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(1.0, 1.2, 20),
     new THREE.MeshBasicMaterial({ color: "#ffe29a", transparent: true, opacity: 0.45, side: THREE.DoubleSide }),
@@ -243,19 +380,103 @@ const crateMeshes = Array.from({ length: 22 }, (_, id) => {
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = -0.55;
   group.add(ring);
+  group.userData.pickupRing = ring;
   scene.add(group);
   return group;
 });
 
-const projectileGeo = new THREE.SphereGeometry(0.38, 10, 8);
+void loadNavalArt().then(applyNavalArt);
+
+function cannonballTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 128;
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#777c79";
+  context.fillRect(0, 0, 128, 128);
+  let seed = 0x5ea2026;
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  for (let i = 0; i < 600; i++) {
+    const shade = Math.floor(50 + random() * 75);
+    context.fillStyle = `rgba(${shade},${shade + 3},${shade + 2},${0.12 + random() * 0.24})`;
+    const size = 0.5 + random() * 3.5;
+    context.fillRect(random() * 128, random() * 128, size, size);
+  }
+  context.strokeStyle = "#3a4240";
+  context.lineWidth = 2.5;
+  context.beginPath();
+  context.moveTo(0, 65);
+  context.bezierCurveTo(40, 62, 82, 68, 128, 65);
+  context.stroke();
+  context.strokeStyle = "#a4aaa1";
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(0, 68);
+  context.bezierCurveTo(40, 65, 82, 71, 128, 68);
+  context.stroke();
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+const projectileTexture = cannonballTexture();
+const projectileGeo = new THREE.SphereGeometry(0.38, 16, 12);
 const projectileMat = new THREE.MeshStandardMaterial({
-  color: "#342014",
-  emissive: "#ff9f1c",
-  emissiveIntensity: 1.35,
-  metalness: 0.42,
-  roughness: 0.24,
+  map: projectileTexture,
+  bumpMap: projectileTexture,
+  bumpScale: 0.035,
+  color: "#d7d9d5",
+  metalness: 0.38,
+  roughness: 0.79,
 });
 const projectileMeshes = new Map();
+const projectileTarget = new THREE.Vector3();
+const pickupEffects = [];
+const pickupRingGeometry = new THREE.RingGeometry(0.58, 0.78, 28);
+const impactRingGeometry = new THREE.RingGeometry(0.68, 0.9, 28);
+const impactSprayGeometry = new THREE.ConeGeometry(0.48, 1.8, 7);
+const impactEffects = [];
+
+function showImpactEffect(x, z, kind = "splash") {
+  if (impactEffects.length >= 48) {
+    const oldest = impactEffects.shift();
+    scene.remove(oldest.group);
+    oldest.ring.material.dispose();
+    oldest.spray.material.dispose();
+  }
+  const strong = kind === "sink";
+  const group = new THREE.Group();
+  const ring = new THREE.Mesh(impactRingGeometry, new THREE.MeshBasicMaterial({
+    color: kind === "hit" ? "#ffe5b0" : "#ccfaff",
+    transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide,
+  }));
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.06;
+  const spray = new THREE.Mesh(impactSprayGeometry, new THREE.MeshBasicMaterial({
+    color: strong ? "#e9f5f2" : kind === "hit" ? "#ffe0ae" : "#bdf6fa",
+    transparent: true, opacity: 0.72, depthWrite: false,
+  }));
+  spray.position.y = 0.8;
+  group.add(ring, spray);
+  group.position.set(x, 0, z);
+  group.scale.setScalar(strong ? 2.4 : kind === "hit" ? 1.35 : 1);
+  scene.add(group);
+  impactEffects.push({ group, ring, spray, age: 0, life: strong ? 1.2 : 0.7 });
+}
+
+function showPickupEffect(mesh) {
+  const ring = new THREE.Mesh(
+    pickupRingGeometry,
+    new THREE.MeshBasicMaterial({ color: "#ffe39b", transparent: true, opacity: 0.7, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(mesh.position.x, 0.08, mesh.position.z);
+  scene.add(ring);
+  pickupEffects.push({ ring, age: 0 });
+}
 
 const monster = new THREE.Group();
 const monsterBody = new THREE.Mesh(
@@ -320,11 +541,11 @@ danger.visible = false;
 scene.add(danger);
 
 const broadsideTargetRing = new THREE.Mesh(
-  new THREE.RingGeometry(1.55, 2.05, 36),
+  new THREE.RingGeometry(1.45, 1.64, 36),
   new THREE.MeshBasicMaterial({
     color: "#ffd166",
     transparent: true,
-    opacity: 0.88,
+    opacity: 0.62,
     side: THREE.DoubleSide,
     depthWrite: false,
   }),
@@ -358,6 +579,90 @@ let throttle = false;
 let previous = performance.now();
 const cameraTarget = new THREE.Vector3();
 const lookTarget = new THREE.Vector3();
+const displayLookTarget = new THREE.Vector3();
+let cameraFollowReady = false;
+const director = {
+  mode: "overview", focusId: null, targetId: null,
+  until: 0, seenEventId: null, round: null, lastTime: -1,
+};
+let lastVisualEventId = null;
+let lastVisualRound = null;
+
+function collectVisualEvents() {
+  if (lastVisualRound !== state.round || lastVisualEventId === null) {
+    lastVisualRound = state.round;
+    lastVisualEventId = state.events[0]?.id ?? 0;
+    return;
+  }
+  for (const event of [...state.events].reverse()) {
+    if (event.id <= lastVisualEventId) continue;
+    const boat = state.boats[event.boatId];
+    if (event.type === "hit" && boat) showImpactEffect(boat.x, boat.z, "hit");
+    if (["sink", "bounty_sink"].includes(event.type) && boat) {
+      showImpactEffect(boat.x, boat.z, "sink");
+    }
+    if (event.type === "monster_kill" && state.monster) {
+      showImpactEffect(state.monster.x, state.monster.z, "sink");
+    }
+  }
+  lastVisualEventId = Math.max(lastVisualEventId, state.events[0]?.id ?? 0);
+}
+
+function selectDirectorShot() {
+  const latestEventId = state.events[0]?.id ?? 0;
+  if (director.round !== state.round || state.time < director.lastTime) {
+    Object.assign(director, {
+      mode: "overview", focusId: null, targetId: null,
+      until: 0, seenEventId: latestEventId, round: state.round,
+    });
+  }
+  director.lastTime = state.time;
+  if (director.seenEventId === null) director.seenEventId = latestEventId;
+  const leaderId = state.order.find((id) => state.boats[id]?.alive) ?? null;
+
+  if (state.monster?.alive) {
+    const current = state.boats[director.focusId];
+    if (director.mode !== "boss" || !current?.alive) {
+      let challenger = null;
+      let distance = Infinity;
+      for (const boat of state.boats) {
+        if (!boat.alive) continue;
+        const next = Math.hypot(boat.x - state.monster.x, boat.z - state.monster.z);
+        if (next < distance) { challenger = boat; distance = next; }
+      }
+      Object.assign(director, {
+        mode: "boss", focusId: challenger?.id ?? null,
+        targetId: null, until: state.time + 6,
+      });
+    }
+    director.seenEventId = latestEventId;
+    return director;
+  }
+
+  const focusAlive = director.focusId === null || state.boats[director.focusId]?.alive;
+  if (state.time < director.until && director.mode !== "boss" && focusAlive) return director;
+
+  const event = state.events.find((item) =>
+    item.id > director.seenEventId && state.time - item.time < 2.4 &&
+    ["sink", "bounty_sink", "monster_kill"].includes(item.type)
+  );
+  director.seenEventId = latestEventId;
+  if (event) {
+    const focusId = Number.isInteger(event.killerId) ? event.killerId : event.boatId;
+    Object.assign(director, {
+      mode: event.type === "monster_kill" ? "leader" : "duel",
+      focusId: state.boats[focusId]?.alive ? focusId : leaderId,
+      targetId: event.type === "monster_kill" ? null : event.boatId,
+      until: state.time + 3.6,
+    });
+  } else {
+    Object.assign(director, {
+      mode: leaderId === null ? "overview" : "leader",
+      focusId: leaderId, targetId: null, until: state.time + 5,
+    });
+  }
+  return director;
+}
 
 try {
   token = localStorage.getItem("sea:token") || "";
@@ -458,6 +763,7 @@ function steerFromPointer(event) {
 }
 
 steerPad.addEventListener("pointerdown", (event) => {
+  if (steerPointer !== null) return;
   steerPointer = event.pointerId;
   steerPad.setPointerCapture(event.pointerId);
   steerFromPointer(event);
@@ -476,21 +782,42 @@ for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
 }
 
 const throttleButton = $("throttle");
+let throttlePointer = null;
 const setThrottle = (value) => {
   throttle = value;
   throttleButton.classList.toggle("pressed", value);
   sendInput();
 };
 throttleButton.addEventListener("pointerdown", (event) => {
+  if (throttlePointer !== null) return;
+  throttlePointer = event.pointerId;
   throttleButton.setPointerCapture(event.pointerId);
   setThrottle(true);
 });
 for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
-  throttleButton.addEventListener(type, () => setThrottle(false));
+  throttleButton.addEventListener(type, (event) => {
+    if (event.pointerId !== throttlePointer) return;
+    throttlePointer = null;
+    setThrottle(false);
+  });
 }
 
+function resetControls() {
+  steerPointer = null;
+  throttlePointer = null;
+  steer = 0;
+  throttle = false;
+  steerThumb.style.transform = "translateX(0)";
+  throttleButton.classList.remove("pressed");
+  sendInput();
+}
+addEventListener("blur", resetControls);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) resetControls();
+});
+
 addEventListener("keydown", (event) => {
-  if (isDisplay || event.repeat) return;
+  if (isDisplay || event.repeat || document.body.classList.contains("upgrading")) return;
   if (event.code === "ArrowLeft" || event.code === "KeyA") steer = -1;
   if (event.code === "ArrowRight" || event.code === "KeyD") steer = 1;
   if (event.code === "Space" || event.code === "ArrowUp") throttle = true;
@@ -538,6 +865,7 @@ function findBroadsideLock(boat) {
 
 function updateUi() {
   if (!state) return;
+  document.body.classList.toggle("battle-live", state.phase === "racing");
   const phaseLabel = {
     demo: "AI 海域巡游",
     lobby: "等待开战",
@@ -580,7 +908,9 @@ function updateUi() {
     list.append(li);
   }
 
-  $("monster-warning").hidden = !(state.monster?.alive);
+  const monsterArrival = state.events.find((event) => event.type === "monster_spawn");
+  $("monster-warning").hidden = !(state.monster?.alive && monsterArrival &&
+    state.time - monsterArrival.time < 3);
   const boss = $("monster-boss");
   boss.hidden = !(state.monster?.alive);
   if (state.monster?.alive) {
@@ -650,6 +980,7 @@ function renderUpgrade(choices) {
   if (key === currentChoicesKey) return;
   currentChoicesKey = key;
   document.body.classList.toggle("upgrading", choices.length > 0);
+  if (choices.length) resetControls();
   const root = $("upgrade-options");
   root.replaceChildren();
 
@@ -672,14 +1003,23 @@ function syncProjectiles() {
     if (!mesh) {
       mesh = new THREE.Mesh(projectileGeo, projectileMat);
       mesh.castShadow = true;
+      mesh.userData.fresh = true;
       scene.add(mesh);
       projectileMeshes.set(projectile.id, mesh);
     }
-    mesh.position.set(projectile.x, 0.68, projectile.z);
+    projectileTarget.set(projectile.x, 0.68, projectile.z);
+    mesh.position.lerp(projectileTarget, 0.72);
+    if (mesh.userData.fresh) {
+      mesh.position.set(projectile.x, 0.68, projectile.z);
+      mesh.userData.fresh = false;
+    }
+    mesh.rotation.x += 0.2;
+    mesh.rotation.z += 0.13;
     mesh.scale.setScalar(isDisplay ? 1.35 : 1);
   }
   for (const [id, mesh] of projectileMeshes) {
     if (active.has(id)) continue;
+    showImpactEffect(mesh.position.x, mesh.position.z);
     scene.remove(mesh);
     projectileMeshes.delete(id);
   }
@@ -691,42 +1031,106 @@ function animate(now) {
   previous = now;
 
   if (state) {
+    collectVisualEvents();
     for (const boat of state.boats) {
       const mesh = boatMeshes[boat.id];
-      mesh.visible = boat.alive;
-      if (!boat.alive) continue;
+      updateShipArt(mesh, boat, navalArt);
+      if (boat.alive) mesh.userData.sinkAge = 0;
+      else if (mesh.userData.wasAlive) mesh.userData.sinkAge = dt;
+      else mesh.userData.sinkAge = Math.min(1.3, (mesh.userData.sinkAge ?? 1.3) + dt);
+      mesh.userData.wasAlive = boat.alive;
+      const sink = boat.alive ? 0 : Math.min(1, mesh.userData.sinkAge / 1.2);
+      mesh.visible = boat.alive || sink < 1;
+      if (!mesh.visible) continue;
       mesh.position.x += (boat.x - mesh.position.x) * Math.min(1, dt * 12);
       mesh.position.z += (boat.z - mesh.position.z) * Math.min(1, dt * 12);
-      mesh.position.y = 0.12 + Math.sin(now * 0.0025 + boat.id) * 0.08;
+      mesh.position.y = 0.12 + Math.sin(now * 0.0025 + boat.id) * 0.08 - sink * 2.8;
       let delta = boat.heading - mesh.rotation.y;
       while (delta > Math.PI) delta -= Math.PI * 2;
       while (delta < -Math.PI) delta += Math.PI * 2;
       mesh.rotation.y += delta * Math.min(1, dt * 10);
+      mesh.rotation.x = Math.sin(now * 0.0018 + boat.id) * 0.025;
+      mesh.rotation.z += ((boat.alive ? Math.max(-0.11, Math.min(0.11, -delta * 0.24)) : sink * 0.65)
+        - mesh.rotation.z) * Math.min(1, dt * 7);
       mesh.scale.setScalar((0.86 + boat.radius * 0.12) * (isDisplay ? 1.24 : 1));
-      mesh.userData.wake.material.opacity = 0.12 + Math.min(0.42, boat.speed / 34);
+      mesh.userData.wakeMaterial.opacity = boat.alive ? 0.07 + Math.min(0.20, boat.speed / 70) : 0;
 
       const fireAge = state.time - (boat.lastFireAt ?? -999);
       const firing = fireAge >= 0 && fireAge < 0.16;
-      mesh.userData.flashLeft.visible = firing && boat.lastFireSide < 0;
-      mesh.userData.flashRight.visible = firing && boat.lastFireSide > 0;
-      if (firing) {
-        const flashScale = 0.75 + (1 - fireAge / 0.16) * 1.4;
-        (boat.lastFireSide < 0 ? mesh.userData.flashLeft : mesh.userData.flashRight)
-          .scale.setScalar(flashScale);
+      for (const flash of mesh.userData.flashes) {
+        flash.point.visible = boat.alive && firing && flash.side === boat.lastFireSide &&
+          flash.index < boat.cannonCount;
+        if (flash.point.visible) {
+          const offset = Math.max(0, fireAge - flash.index * 0.018);
+          flash.point.position.z = (flash.index - (boat.cannonCount - 1) / 2) * 0.72;
+          flash.point.scale.setScalar(0.75 + (1 - offset / 0.16) * 1.1);
+          flash.flash.scale.setScalar(Math.max(0.05, 1 - offset / 0.16));
+          flash.smoke.scale.setScalar(0.7 + offset * 7);
+        }
       }
 
       const hitAge = state.time - (boat.lastHitAt ?? -999);
       const hitGlow = hitAge >= 0 && hitAge < 0.24 ? 1 - hitAge / 0.24 : 0;
-      mesh.userData.hullMat.emissive.setRGB(hitGlow * 0.9, hitGlow * 0.14, hitGlow * 0.05);
-      mesh.userData.hullMat.emissiveIntensity = hitGlow * 1.7;
+      const hitMaterial = mesh.userData.teamMaterial ?? mesh.userData.hullMat;
+      hitMaterial.emissive.setRGB(hitGlow * 0.9, hitGlow * 0.14, hitGlow * 0.05);
+      hitMaterial.emissiveIntensity = hitGlow * 1.7;
     }
+    updateWakeTrail(dt);
 
     for (const crate of state.crates) {
       const mesh = crateMeshes[crate.id];
+      const wasActive = mesh.userData.wasActive === true;
       mesh.visible = crate.active;
-      if (!crate.active) continue;
-      mesh.position.set(crate.x, 0.78 + Math.sin(now * 0.003 + crate.id) * 0.22, crate.z);
-      mesh.rotation.y += dt * 0.8;
+      mesh.userData.wasActive = crate.active;
+      if (!crate.active) {
+        if (wasActive) showPickupEffect(mesh);
+        continue;
+      }
+      const bob = 0.78 + Math.sin(now * 0.003 + crate.id) * 0.22;
+      if (!wasActive) mesh.position.set(crate.x, bob, crate.z);
+      else {
+        const follow = 1 - Math.exp(-dt * 16);
+        mesh.position.x += (crate.x - mesh.position.x) * follow;
+        mesh.position.z += (crate.z - mesh.position.z) * follow;
+        mesh.position.y += (bob - mesh.position.y) * follow;
+      }
+      let nearestDistance = 8;
+      for (const boat of state.boats) {
+        if (!boat.alive) continue;
+        nearestDistance = Math.min(nearestDistance,
+          Math.hypot(boat.x - crate.x, boat.z - crate.z));
+      }
+      const magnet = Math.max(0, (8 - nearestDistance) / 8);
+      mesh.rotation.y += dt * (0.8 + magnet * 2.2);
+      mesh.scale.setScalar(1 + magnet * 0.16 + Math.sin(now * 0.009 + crate.id) * magnet * 0.04);
+      mesh.userData.pickupRing.scale.setScalar(1 + magnet * 0.5);
+      mesh.userData.pickupRing.material.opacity = 0.25 + magnet * 0.55;
+    }
+
+    for (let i = pickupEffects.length - 1; i >= 0; i--) {
+      const effect = pickupEffects[i];
+      effect.age += dt;
+      effect.ring.scale.setScalar(1 + effect.age * 5);
+      effect.ring.material.opacity = Math.max(0, 0.7 * (1 - effect.age / 0.35));
+      if (effect.age < 0.35) continue;
+      scene.remove(effect.ring);
+      effect.ring.material.dispose();
+      pickupEffects.splice(i, 1);
+    }
+
+    for (let i = impactEffects.length - 1; i >= 0; i--) {
+      const effect = impactEffects[i];
+      effect.age += dt;
+      const progress = Math.min(1, effect.age / effect.life);
+      effect.ring.scale.setScalar(1 + progress * 3.8);
+      effect.ring.material.opacity = 0.8 * (1 - progress);
+      effect.spray.scale.set(1 + progress * 0.5, 1 - progress, 1 + progress * 0.5);
+      effect.spray.material.opacity = 0.72 * (1 - progress);
+      if (progress < 1) continue;
+      scene.remove(effect.group);
+      effect.ring.material.dispose();
+      effect.spray.material.dispose();
+      impactEffects.splice(i, 1);
     }
 
     syncProjectiles();
@@ -779,9 +1183,9 @@ function animate(now) {
       safeZoneRing.scale.setScalar(safeRadius);
       const pulse = 0.88 + Math.sin(now * 0.006) * 0.08;
       safeZoneRing.material.opacity = 0.56 + pulse * 0.2;
-      waterMat.color.copy(waterNormalColor).lerp(waterStormColor, 0.58);
+      waterMat.uniforms.storm.value += (1 - waterMat.uniforms.storm.value) * Math.min(1, dt * 2.5);
     } else {
-      waterMat.color.lerp(waterNormalColor, Math.min(1, dt * 2.5));
+      waterMat.uniforms.storm.value += (0 - waterMat.uniforms.storm.value) * Math.min(1, dt * 2.5);
     }
 
     broadsideTargetRing.visible = false;
@@ -791,120 +1195,85 @@ function animate(now) {
         broadsideTargetRing.visible = true;
         broadsideTargetRing.position.set(lock.target.x, 0.08, lock.target.z);
         const targetRadius = lock.kind === "monster" ? 1.9 : (lock.target.radius ?? 1.15);
-        const scale = targetRadius * (1.35 + Math.sin(now * 0.01) * 0.08);
+        const scale = targetRadius * (1.12 + Math.sin(now * 0.01) * 0.05);
         broadsideTargetRing.scale.setScalar(scale);
       }
     }
 
     if (isDisplay) {
-      const leader = state.boats[state.order[0]] ?? state.boats[0];
-      const recent = state.events.find((event) =>
-        state.time - event.time < 2.6 &&
-        [
-          "sink", "broadside", "hit", "collision",
-          "monster_spawn", "monster_warning", "monster_kill", "stage",
-        ].includes(event.type)
-      );
-      const eventFocusId = Number.isInteger(recent?.killerId)
-        ? recent.killerId
-        : Number.isInteger(recent?.attackerId)
-          ? recent.attackerId
-          : Number.isInteger(recent?.boatId)
-            ? recent.boatId
-            : null;
-      const eventTargetId = Number.isInteger(recent?.targetId)
-        ? recent.targetId
-        : (
-            recent?.type === "hit" && Number.isInteger(recent?.boatId)
-              ? recent.boatId
-              : null
-          );
-      const eventBoat = eventFocusId !== null ? state.boats[eventFocusId] : null;
-      const targetBoat = eventTargetId !== null ? state.boats[eventTargetId] : null;
-      const focusBoat = eventBoat?.alive ? eventBoat : leader;
+      const shot = selectDirectorShot();
+      const focusBoat = state.boats[shot.focusId];
+      const targetBoat = state.boats[shot.targetId];
+      let focusX = focusBoat?.x ?? 0;
+      let focusZ = focusBoat?.z ?? 0;
+      let cameraHeight = 37;
+      let fov = 50;
 
-      let focusX = focusBoat.x;
-      let focusZ = focusBoat.z;
-      let cameraHeight = state.stage === "maelstrom" ? 40 : 36;
-      let fov = state.stage === "maelstrom" ? 53 : 49;
-
-      if (targetBoat?.alive) {
-        focusX = (focusBoat.x + targetBoat.x) * 0.5;
-        focusZ = (focusBoat.z + targetBoat.z) * 0.5;
+      if (shot.mode === "overview") {
+        focusX = 0;
+        focusZ = 0;
+        cameraHeight = 51;
+        fov = 55;
+      } else if (shot.mode === "duel" && targetBoat && focusBoat) {
         const separation = Math.hypot(focusBoat.x - targetBoat.x, focusBoat.z - targetBoat.z);
-        cameraHeight = Math.max(27, Math.min(38, 25 + separation * 0.48));
-        fov = Math.max(44, Math.min(52, 44 + separation * 0.18));
-      }
-
-      if (state.monster?.alive) {
-        // Boss phases should read as a shared encounter, not a normal leader
-        // follow with a boss UI floating over an off-screen monster. Always
-        // keep the boss and its nearest living challenger in the same frame.
-        const challenger = state.boats
-          .filter((boat) => boat.alive)
-          .map((boat) => ({
-            boat,
-            distance: Math.hypot(
-              boat.x - state.monster.x,
-              boat.z - state.monster.z,
-            ),
-          }))
-          .sort((a, b) => a.distance - b.distance)[0];
-
-        if (challenger) {
-          const separation = challenger.distance;
-          focusX = state.monster.x * 0.58 + challenger.boat.x * 0.42;
-          focusZ = state.monster.z * 0.58 + challenger.boat.z * 0.42;
-          cameraHeight = Math.max(28, Math.min(38, 25 + separation * 0.42));
-          fov = Math.max(45, Math.min(53, 45 + separation * 0.18));
-        } else {
-          focusX = state.monster.x;
-          focusZ = state.monster.z;
-          cameraHeight = 30;
-          fov = 47;
+        if (separation < 38) {
+          focusX = (focusBoat.x + targetBoat.x) * 0.5;
+          focusZ = (focusBoat.z + targetBoat.z) * 0.5;
+          cameraHeight = Math.max(31, Math.min(43, 27 + separation * 0.42));
+          fov = Math.max(48, Math.min(55, 47 + separation * 0.18));
         }
+      } else if (shot.mode === "boss" && state.monster?.alive) {
+        const monster = state.monster;
+        const separation = focusBoat
+          ? Math.hypot(focusBoat.x - monster.x, focusBoat.z - monster.z) : 0;
+        focusX = focusBoat ? (monster.x + focusBoat.x) * 0.5 : monster.x;
+        focusZ = focusBoat ? (monster.z + focusBoat.z) * 0.5 : monster.z;
+        cameraHeight = Math.max(40, Math.min(55, 38 + separation * 0.55));
+        fov = Math.max(54, Math.min(63, 52 + separation * 0.25));
       }
 
       cameraTarget.set(focusX + 15, cameraHeight, focusZ + 18);
       lookTarget.set(focusX, 1.0, focusZ);
-      camera.position.lerp(cameraTarget, 1 - Math.exp(-dt * 2.9));
-      camera.lookAt(lookTarget);
-      camera.fov = fov;
+      camera.position.lerp(cameraTarget, 1 - Math.exp(-dt * 1.8));
+      displayLookTarget.lerp(lookTarget, 1 - Math.exp(-dt * 2.2));
+      camera.lookAt(displayLookTarget);
+      camera.fov += (fov - camera.fov) * (1 - Math.exp(-dt * 2));
       try {
         window.__seaBroadcast = {
-          focus: recent?.type ?? "leader",
+          focus: shot.mode,
           boss: Boolean(state.monster?.alive),
-          fov,
+          fov: camera.fov,
           height: cameraHeight,
         };
       } catch {}
     } else if (myId !== null && state.boats[myId]) {
       const me = state.boats[myId];
-      const backX = -Math.sin(me.heading) * 9;
-      const backZ = -Math.cos(me.heading) * 9;
-      cameraTarget.set(me.x + backX, 8.5, me.z + backZ);
-      lookTarget.set(
-        me.x + Math.sin(me.heading) * 8,
-        0.8,
-        me.z + Math.cos(me.heading) * 8,
-      );
-      camera.position.lerp(cameraTarget, 1 - Math.exp(-dt * 5));
+      cameraTarget.set(me.x, 38, me.z + 24);
+      lookTarget.set(me.x, 0.8, me.z);
+      if (!cameraFollowReady || camera.position.distanceToSquared(cameraTarget) > 35 * 35) {
+        camera.position.copy(cameraTarget);
+        cameraFollowReady = true;
+      } else camera.position.lerp(cameraTarget, 1 - Math.exp(-dt * 6));
       camera.lookAt(lookTarget);
-      camera.fov = 64 + (throttle ? 5 : 0);
     } else {
-      cameraTarget.set(0, 47, 48);
+      cameraFollowReady = false;
+      cameraTarget.set(0, 38, 24);
       camera.position.lerp(cameraTarget, 1 - Math.exp(-dt * 2));
       camera.lookAt(0, 0, 0);
     }
     camera.updateProjectionMatrix();
   }
 
-  water.material.roughness = 0.16 + Math.sin(now * 0.00045) * 0.035;
+  waterMat.uniforms.time.value = now * .001;
   renderer.render(scene, camera);
 }
 
 addEventListener("resize", () => {
-  camera.aspect = innerWidth / innerHeight;
+  if (isDisplay) camera.aspect = innerWidth / innerHeight;
+  else {
+    camera.left = -phoneSpan * innerWidth / innerHeight / 2;
+    camera.right = -camera.left;
+  }
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });

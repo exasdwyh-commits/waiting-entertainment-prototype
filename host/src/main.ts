@@ -142,7 +142,7 @@ function gameCard(
     ? "已有活动场次"
     : unavailable
       ? "未配置游戏目录"
-      : "开放本轮报名";
+      : "启动并开放报名";
   const runtimeClass =
     runtime?.state === "failed" || runtime?.state === "unhealthy"
       ? "runtime-badge runtime-badge--error"
@@ -259,16 +259,17 @@ function managementCard(
   const canOpen = authorized &&
     (runtime?.state === "running" || runtime?.state === "embedded");
   const log = runtimeLogText.get(game.id);
-  const runtimeActions = isProcess && authorized
+  const runtimeActions = authorized
     ? '<div class="manage-actions">' +
         (runtime?.state === "running"
-          ? '<button class="secondary" data-runtime-stop="' + esc(game.id) + '" ' +
+          ? (isProcess ? '<button class="secondary" data-runtime-stop="' + esc(game.id) + '" ' +
               ((!runtime?.managed || stopBlocked) ? "disabled" : "") + '>' +
-              (!runtime?.managed ? "外部进程" : stopBlocked ? "场次运行中" : "停止进程") + '</button>'
+              (!runtime?.managed ? "外部进程" : stopBlocked ? "场次运行中" : "停止进程") + '</button>' :
+              '<span class="manage-settings__hint">内嵌服务持续运行</span>')
           : '<button class="primary" data-runtime-start="' + esc(game.id) + '" ' +
-              (!runtime?.configured ? "disabled" : "") + '>启动 / 预热</button>') +
+              (!runtime?.configured ? "disabled" : "") + '>' + (isProcess ? "启动 / 预热" : "检查并预热") + '</button>') +
         '<button class="secondary" data-runtime-check="' + esc(game.id) + '">健康检查</button>' +
-        '<button class="ghost" data-runtime-logs="' + esc(game.id) + '">日志</button>' +
+        (isProcess ? '<button class="ghost" data-runtime-logs="' + esc(game.id) + '">日志</button>' : '') +
       '</div>'
     : '';
 
@@ -333,7 +334,7 @@ function managementCard(
     runtimeActions +
     '<div class="manage-links">' +
       (canOpen
-        ? '<a href="' + esc(entryUrl(game, "display")) + '" target="_blank">打开大屏 ↗</a>' +
+        ? '<a href="' + esc(location.protocol + "//" + location.hostname + ":5176") + '" target="_blank">打开大屏主控 ↗</a>' +
           '<a href="' + esc(entryUrl(game, "player")) + '" target="_blank">打开玩家端 ↗</a>'
         : '<span>运行后开放预览入口</span>') +
     '</div>' +
@@ -515,7 +516,9 @@ async function controlRuntime(gameId: string, action: "start" | "stop") {
       snapshot = { ...snapshot, runtimes: next };
     }
     await refresh(true);
-    toast(action === "start" ? "游戏运行时已启动" : "游戏运行时已停止");
+    toast(body.runtime.kind === "embedded"
+      ? "餐桌推推王内嵌服务已就绪"
+      : action === "start" ? "游戏运行时已启动" : "游戏运行时已停止");
   } catch (error) {
     toast(error instanceof Error ? error.message : "运行时操作失败", true);
   } finally {

@@ -1,5 +1,6 @@
 import { io } from "socket.io-client";
 import type { GameEvent, MatchSnapshot } from "@waiting/shared";
+import { characterForSeat } from "@waiting/shared";
 import { PersonalGameView } from "./PersonalGameView";
 import { AudioFx } from "./AudioFx";
 import "./style.css";
@@ -224,7 +225,8 @@ socket.on("connect", () => {
       if (response.sessionId) localStorage.setItem(SESSION_KEY, response.sessionId);
       ownedPlayerId = response.playerId;
       personalView.setOwnedPlayer(ownedPlayerId);
-      identity.textContent = response.name || defaultName;
+      const seat = Number(response.playerId.split("-")[1] ?? 0);
+      identity.textContent = `${response.name || defaultName} · ${characterForSeat(seat).name}`;
       status.textContent = response.recovered ? "已恢复控制" : "已加入";
       status.classList.add("online");
     },

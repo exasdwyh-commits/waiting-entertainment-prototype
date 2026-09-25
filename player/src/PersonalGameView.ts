@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { TABLE_PUSH_GEOMETRY } from "@waiting/shared";
+import { TABLE_PUSH_GEOMETRY, characterForSeat } from "@waiting/shared";
 import type { MatchSnapshot, PlayerSnapshot, PlayerState } from "@waiting/shared";
 import { createCharacterVisual, type CharacterVisual } from "./CharacterVisual";
 
@@ -182,7 +182,7 @@ export class PersonalGameView {
       const height = Math.max(1, this.container.clientHeight);
       this.lastWidth = width;
       this.lastHeight = height;
-      this.renderer.setSize(width, height, false);
+      this.renderer.setSize(width, height);
       this.camera.aspect = width / height;
       this.camera.updateProjectionMatrix();
     };
@@ -236,7 +236,7 @@ export class PersonalGameView {
     if (Math.abs(nextRatio - this.currentPixelRatio) >= 0.04) {
       this.currentPixelRatio = nextRatio;
       this.renderer.setPixelRatio(this.currentPixelRatio);
-      this.renderer.setSize(this.lastWidth, this.lastHeight, false);
+      this.renderer.setSize(this.lastWidth, this.lastHeight);
     }
 
     this.frameCounter = 0;
@@ -336,19 +336,7 @@ export class PersonalGameView {
 
   private createActor(player: PlayerSnapshot) {
     const index = Number(player.id.split("-")[1] ?? 0);
-    const palette = [
-      0x38bdf8,
-      0xfb7185,
-      0xa78bfa,
-      0x4ade80,
-      0xfacc15,
-      0xf97316,
-      0x22d3ee,
-      0xe879f9,
-      0xf43f5e,
-      0x84cc16,
-    ];
-    const tint = palette[index % palette.length];
+    const tint = characterForSeat(index).color;
 
     const root = new THREE.Group();
     root.position.set(...player.position);

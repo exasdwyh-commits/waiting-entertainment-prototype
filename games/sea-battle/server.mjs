@@ -19,6 +19,7 @@ import {
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const THREE_MODULE = fileURLToPath(import.meta.resolve("three"));
 const THREE_CORE = resolve(dirname(THREE_MODULE), "three.core.js");
+const THREE_ADDONS = resolve(dirname(THREE_MODULE), "../examples/jsm");
 
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -27,14 +28,24 @@ const TYPES = {
   ".css": "text/css; charset=utf-8",
   ".png": "image/png",
   ".svg": "image/svg+xml",
+  ".glb": "model/gltf-binary",
 };
 
 const staticFiles = new Map([
   ["/", ["public/index.html", "text/html; charset=utf-8"]],
   ["/display", ["public/index.html", "text/html; charset=utf-8"]],
   ["/app.mjs", ["public/app.mjs", "text/javascript; charset=utf-8"]],
+  ["/naval-art.mjs", ["public/naval-art.mjs", "text/javascript; charset=utf-8"]],
   ["/style.css", ["public/style.css", "text/css; charset=utf-8"]],
 ]);
+
+for (const name of [
+  ...Array.from({ length: 5 }, (_, index) => `ship-stage-${index + 1}`),
+  "island-palm", "island-crag", "reef", "buoy", "supply-crate",
+]) {
+  staticFiles.set(`/assets/naval/${name}.glb`,
+    [`public/assets/naval/${name}.glb`, TYPES[".glb"]]);
+}
 
 function sendJson(res, body, status = 200) {
   res.writeHead(status, {
@@ -97,6 +108,18 @@ export async function createSeaBattle({
         res.end(await readFile(
           url.pathname.endsWith("three.core.js") ? THREE_CORE : THREE_MODULE,
         ));
+        return;
+      }
+      const addon = {
+        "/three/addons/loaders/GLTFLoader.js": "loaders/GLTFLoader.js",
+        "/three/addons/utils/BufferGeometryUtils.js": "utils/BufferGeometryUtils.js",
+      }[url.pathname];
+      if (addon) {
+        res.writeHead(200, {
+          "content-type": "text/javascript; charset=utf-8",
+          "cache-control": "public, max-age=3600",
+        });
+        res.end(await readFile(resolve(THREE_ADDONS, addon)));
         return;
       }
       const entry = staticFiles.get(url.pathname);
